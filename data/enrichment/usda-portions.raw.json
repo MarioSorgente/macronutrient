@@ -1,0 +1,1007 @@
+{
+  "almond_flour": {
+    "fdc_id": 2261420,
+    "usda_description": "Flour, almond",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 15,
+        "amount": 1
+      }
+    ]
+  },
+  "apple_raw": {
+    "fdc_id": 1750341,
+    "usda_description": "Apples, gala, with skin, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 140,
+        "amount": 1
+      }
+    ]
+  },
+  "asparagus_cooked": {
+    "fdc_id": 168390,
+    "usda_description": "Asparagus, cooked, boiled, drained",
+    "portions": [
+      {
+        "label": "spears (1/2\" base)",
+        "gramWeight": 60,
+        "amount": 4
+      },
+      {
+        "label": "cup",
+        "gramWeight": 90,
+        "amount": 0.5
+      }
+    ]
+  },
+  "avocado_raw": {
+    "fdc_id": 2710824,
+    "usda_description": "Avocado, Hass, peeled, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 140,
+        "amount": 1
+      }
+    ]
+  },
+  "baharat_blend_negrita": {
+    "fdc_id": 170924,
+    "usda_description": "Spices, curry powder",
+    "portions": [
+      {
+        "label": "tsp",
+        "gramWeight": 2,
+        "amount": 1
+      },
+      {
+        "label": "tbsp",
+        "gramWeight": 6.3,
+        "amount": 1
+      }
+    ]
+  },
+  "bali_spice_blend_negrita": {
+    "fdc_id": 170924,
+    "usda_description": "Spices, curry powder",
+    "portions": [
+      {
+        "label": "tsp",
+        "gramWeight": 2,
+        "amount": 1
+      },
+      {
+        "label": "tbsp",
+        "gramWeight": 6.3,
+        "amount": 1
+      }
+    ]
+  },
+  "basil_fresh": {
+    "fdc_id": 172232,
+    "usda_description": "Basil, fresh",
+    "portions": [
+      {
+        "label": "tbsp, chopped",
+        "gramWeight": 5.3,
+        "amount": 2
+      },
+      {
+        "label": "leaves",
+        "gramWeight": 2.5,
+        "amount": 5
+      },
+      {
+        "label": "cup leaves, whole",
+        "gramWeight": 6,
+        "amount": 0.25
+      }
+    ]
+  },
+  "beef_ground_90_10_raw": {
+    "fdc_id": 2514743,
+    "usda_description": "Beef, ground, 90% lean meat / 10% fat, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 114,
+        "amount": 1
+      }
+    ]
+  },
+  "wagyu_ground_raw_proxy": {
+    "fdc_id": 2514743,
+    "usda_description": "Beef, ground, 90% lean meat / 10% fat, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 114,
+        "amount": 1
+      }
+    ]
+  },
+  "beef_tenderloin_raw": {
+    "fdc_id": 2727573,
+    "usda_description": "Beef, tenderloin steak, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 114,
+        "amount": 1
+      }
+    ]
+  },
+  "blueberries_raw": {
+    "fdc_id": 2346411,
+    "usda_description": "Blueberries, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 140,
+        "amount": 1
+      }
+    ]
+  },
+  "broccoli_boiled": {
+    "fdc_id": 169967,
+    "usda_description": "Broccoli, cooked, boiled, drained, without salt",
+    "portions": [
+      {
+        "label": "stalk, large (11\"-12\" long)",
+        "gramWeight": 280,
+        "amount": 1
+      },
+      {
+        "label": "spear (about 5\" long)",
+        "gramWeight": 37,
+        "amount": 1
+      },
+      {
+        "label": "cup, chopped",
+        "gramWeight": 78,
+        "amount": 0.5
+      },
+      {
+        "label": "stalk, medium (7-1/2\" - 8\" long)",
+        "gramWeight": 180,
+        "amount": 1
+      },
+      {
+        "label": "stalk, small (5\" long)",
+        "gramWeight": 140,
+        "amount": 1
+      }
+    ]
+  },
+  "buckwheat_cooked": {
+    "fdc_id": 170686,
+    "usda_description": "Buckwheat groats, roasted, cooked",
+    "portions": [
+      {
+        "label": "cup",
+        "gramWeight": 168,
+        "amount": 1
+      }
+    ]
+  },
+  "carrot_raw": {
+    "fdc_id": 2258586,
+    "usda_description": "Carrots, mature, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 85,
+        "amount": 1
+      }
+    ]
+  },
+  "cheese_parmesan": {
+    "fdc_id": 2259795,
+    "usda_description": "Cheese, parmesan, grated, refrigerated",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 5,
+        "amount": 1
+      }
+    ]
+  },
+  "chicken_breast_raw": {
+    "fdc_id": 2646170,
+    "usda_description": "Chicken, breast, boneless, skinless, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 114,
+        "amount": 1
+      }
+    ]
+  },
+  "cinnamon_ground": {
+    "fdc_id": 171320,
+    "usda_description": "Spices, cinnamon, ground",
+    "portions": [
+      {
+        "label": "tsp",
+        "gramWeight": 2.6,
+        "amount": 1
+      },
+      {
+        "label": "tbsp",
+        "gramWeight": 7.8,
+        "amount": 1
+      }
+    ]
+  },
+  "cocoa_powder_unsweetened": {
+    "fdc_id": 169593,
+    "usda_description": "Cocoa, dry powder, unsweetened",
+    "portions": [
+      {
+        "label": "tbsp",
+        "gramWeight": 5.4,
+        "amount": 1
+      },
+      {
+        "label": "cup",
+        "gramWeight": 86,
+        "amount": 1
+      }
+    ]
+  },
+  "coconut_oil": {
+    "fdc_id": 330458,
+    "usda_description": "Oil, coconut",
+    "portions": [
+      {
+        "label": "liquid oil tablespoon",
+        "gramWeight": 11.6,
+        "amount": 1
+      }
+    ]
+  },
+  "corn_sweet_cooked": {
+    "fdc_id": 169999,
+    "usda_description": "Corn, sweet, yellow, cooked, boiled, drained, without salt",
+    "portions": [
+      {
+        "label": "ear small (5-1/2\" to 6-1/2\" long)",
+        "gramWeight": 89,
+        "amount": 1
+      },
+      {
+        "label": "cup cut",
+        "gramWeight": 149,
+        "amount": 1
+      },
+      {
+        "label": "baby ear",
+        "gramWeight": 8,
+        "amount": 1
+      },
+      {
+        "label": "ear medium (6-3/4\" to 7-1/2\" long)",
+        "gramWeight": 103,
+        "amount": 1
+      },
+      {
+        "label": "ear large (7-3/4\" to 9\" long)",
+        "gramWeight": 118,
+        "amount": 1
+      }
+    ]
+  },
+  "cucumber_raw": {
+    "fdc_id": 2346406,
+    "usda_description": "Cucumber, with peel, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 85,
+        "amount": 1
+      }
+    ]
+  },
+  "dates_medjool": {
+    "fdc_id": 168191,
+    "usda_description": "Dates, medjool",
+    "portions": [
+      {
+        "label": "date, pitted",
+        "gramWeight": 24,
+        "amount": 1
+      }
+    ]
+  },
+  "egg_white_raw": {
+    "fdc_id": 172183,
+    "usda_description": "Egg, white, raw, fresh",
+    "portions": [
+      {
+        "label": "cup",
+        "gramWeight": 243,
+        "amount": 1
+      },
+      {
+        "label": "large",
+        "gramWeight": 33,
+        "amount": 1
+      }
+    ]
+  },
+  "egg_whole_fried": {
+    "fdc_id": 173423,
+    "usda_description": "Egg, whole, cooked, fried",
+    "portions": [
+      {
+        "label": "large",
+        "gramWeight": 46,
+        "amount": 1
+      }
+    ]
+  },
+  "egg_whole_hard_boiled": {
+    "fdc_id": 173424,
+    "usda_description": "Egg, whole, cooked, hard-boiled",
+    "portions": [
+      {
+        "label": "tbsp",
+        "gramWeight": 8.5,
+        "amount": 1
+      },
+      {
+        "label": "cup, chopped",
+        "gramWeight": 136,
+        "amount": 1
+      },
+      {
+        "label": "large",
+        "gramWeight": 50,
+        "amount": 1
+      }
+    ]
+  },
+  "extra_virgin_olive_oil": {
+    "fdc_id": 171413,
+    "usda_description": "Oil, olive, salad or cooking",
+    "portions": [
+      {
+        "label": "tablespoon",
+        "gramWeight": 13.5,
+        "amount": 1
+      },
+      {
+        "label": "tsp",
+        "gramWeight": 4.5,
+        "amount": 1
+      },
+      {
+        "label": "cup",
+        "gramWeight": 216,
+        "amount": 1
+      }
+    ]
+  },
+  "garlic_raw": {
+    "fdc_id": 1104647,
+    "usda_description": "Garlic, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 85,
+        "amount": 1
+      }
+    ]
+  },
+  "honey": {
+    "fdc_id": 169640,
+    "usda_description": "Honey",
+    "portions": [
+      {
+        "label": "cup",
+        "gramWeight": 339,
+        "amount": 1
+      },
+      {
+        "label": "tbsp",
+        "gramWeight": 21,
+        "amount": 1
+      },
+      {
+        "label": "packet (0.5 oz)",
+        "gramWeight": 14,
+        "amount": 1
+      }
+    ]
+  },
+  "ice_cream_generic": {
+    "fdc_id": 167575,
+    "usda_description": "Ice creams, vanilla",
+    "portions": [
+      {
+        "label": "serving 1/2 cup",
+        "gramWeight": 66,
+        "amount": 1
+      }
+    ]
+  },
+  "ice_cream_vanilla": {
+    "fdc_id": 167575,
+    "usda_description": "Ice creams, vanilla",
+    "portions": [
+      {
+        "label": "serving 1/2 cup",
+        "gramWeight": 66,
+        "amount": 1
+      }
+    ]
+  },
+  "iceberg_or_mixed_lettuce": {
+    "fdc_id": 2346388,
+    "usda_description": "Lettuce, iceberg, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 85,
+        "amount": 1
+      }
+    ]
+  },
+  "kefir_lowfat_plain": {
+    "fdc_id": 170904,
+    "usda_description": "Kefir, lowfat, plain, LIFEWAY",
+    "portions": [
+      {
+        "label": "bottle",
+        "gramWeight": 971,
+        "amount": 1
+      },
+      {
+        "label": "cup",
+        "gramWeight": 243,
+        "amount": 1
+      }
+    ]
+  },
+  "lettuce_green_leaf": {
+    "fdc_id": 2346391,
+    "usda_description": "Lettuce, leaf, green, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 85,
+        "amount": 1
+      }
+    ]
+  },
+  "lettuce_romaine": {
+    "fdc_id": 2346389,
+    "usda_description": "Lettuce, romaine, green, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 85,
+        "amount": 1
+      }
+    ]
+  },
+  "lime_raw_proxy": {
+    "fdc_id": 168155,
+    "usda_description": "Limes, raw",
+    "portions": [
+      {
+        "label": "fruit (2\" dia)",
+        "gramWeight": 67,
+        "amount": 1
+      },
+      {
+        "label": "NLEA serving",
+        "gramWeight": 67,
+        "amount": 1
+      }
+    ]
+  },
+  "mushrooms_white_proxy": {
+    "fdc_id": 1999629,
+    "usda_description": "Mushrooms, white button",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 85,
+        "amount": 1
+      }
+    ]
+  },
+  "negrita_island_sauce": {
+    "fdc_id": 171402,
+    "usda_description": "Salad dressing, thousand island, commercial, regular",
+    "portions": [
+      {
+        "label": "cup",
+        "gramWeight": 250,
+        "amount": 1
+      },
+      {
+        "label": "serving (2 tbsp)",
+        "gramWeight": 30,
+        "amount": 1
+      },
+      {
+        "label": "tbsp",
+        "gramWeight": 16,
+        "amount": 1
+      }
+    ]
+  },
+  "oats_rolled": {
+    "fdc_id": 2346396,
+    "usda_description": "Oats, whole grain, rolled, old fashioned",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 40,
+        "amount": 1
+      }
+    ]
+  },
+  "onion_yellow_raw": {
+    "fdc_id": 790646,
+    "usda_description": "Onions, yellow, raw",
+    "portions": [
+      {
+        "label": "Edible Onion",
+        "gramWeight": 143,
+        "amount": 1
+      },
+      {
+        "label": "RACC",
+        "gramWeight": 85,
+        "amount": 1
+      }
+    ]
+  },
+  "pancake_base_prepared_proxy": {
+    "fdc_id": 175009,
+    "usda_description": "Pancakes, plain, prepared from recipe",
+    "portions": [
+      {
+        "label": "pancake (6\" dia)",
+        "gramWeight": 77,
+        "amount": 1
+      },
+      {
+        "label": "pancake (4\" dia)",
+        "gramWeight": 38,
+        "amount": 1
+      },
+      {
+        "label": "oz",
+        "gramWeight": 28.35,
+        "amount": 1
+      }
+    ]
+  },
+  "paratha_wholewheat": {
+    "fdc_id": 174076,
+    "usda_description": "Bread, paratha, whole wheat, commercially prepared, frozen",
+    "portions": [
+      {
+        "label": "piece",
+        "gramWeight": 79,
+        "amount": 1
+      }
+    ]
+  },
+  "parsley_fresh": {
+    "fdc_id": 170416,
+    "usda_description": "Parsley, fresh",
+    "portions": [
+      {
+        "label": "cup chopped",
+        "gramWeight": 60,
+        "amount": 1
+      },
+      {
+        "label": "tbsp",
+        "gramWeight": 3.8,
+        "amount": 1
+      },
+      {
+        "label": "sprigs",
+        "gramWeight": 10,
+        "amount": 10
+      }
+    ]
+  },
+  "pepper_black": {
+    "fdc_id": 170931,
+    "usda_description": "Spices, pepper, black",
+    "portions": [
+      {
+        "label": "tbsp, ground",
+        "gramWeight": 6.9,
+        "amount": 1
+      },
+      {
+        "label": "dash",
+        "gramWeight": 0.1,
+        "amount": 1
+      },
+      {
+        "label": "tsp, ground",
+        "gramWeight": 2.3,
+        "amount": 1
+      },
+      {
+        "label": "tsp, whole",
+        "gramWeight": 2.9,
+        "amount": 1
+      }
+    ]
+  },
+  "pepper_red_raw": {
+    "fdc_id": 2258590,
+    "usda_description": "Peppers, bell, red, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 85,
+        "amount": 1
+      }
+    ]
+  },
+  "pickled_ginger": {
+    "fdc_id": 169765,
+    "usda_description": "Ginger root, pickled, canned, with artificial sweetener",
+    "portions": [
+      {
+        "label": "tablespoon",
+        "gramWeight": 25,
+        "amount": 2
+      }
+    ]
+  },
+  "pita_bread_white": {
+    "fdc_id": 174915,
+    "usda_description": "Bread, pita, white, enriched",
+    "portions": [
+      {
+        "label": "pita, small  (4\" dia)",
+        "gramWeight": 28,
+        "amount": 1
+      },
+      {
+        "label": "pita, large (6-1/2\" dia)",
+        "gramWeight": 60,
+        "amount": 1
+      }
+    ]
+  },
+  "potato_bun_proxy": {
+    "fdc_id": 172796,
+    "usda_description": "Rolls, hamburger or hotdog, plain",
+    "portions": [
+      {
+        "label": "oz",
+        "gramWeight": 28.35,
+        "amount": 1
+      },
+      {
+        "label": "roll 1 serving",
+        "gramWeight": 44,
+        "amount": 1
+      }
+    ]
+  },
+  "pumpkin_seeds_raw": {
+    "fdc_id": 2515380,
+    "usda_description": "Seeds, pumpkin seeds (pepitas), raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 30,
+        "amount": 1
+      }
+    ]
+  },
+  "rice_jasmine_cooked_proxy": {
+    "fdc_id": 168935,
+    "usda_description": "Rice, white, long-grain, regular, cooked, unenriched, with salt",
+    "portions": [
+      {
+        "label": "cup",
+        "gramWeight": 158,
+        "amount": 1
+      }
+    ]
+  },
+  "salmon_atlantic_raw": {
+    "fdc_id": 2684441,
+    "usda_description": "Fish, salmon, Atlantic, farm raised, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 115,
+        "amount": 1
+      }
+    ]
+  },
+  "salt_table": {
+    "fdc_id": 173468,
+    "usda_description": "Salt, table",
+    "portions": [
+      {
+        "label": "cup",
+        "gramWeight": 292,
+        "amount": 1
+      },
+      {
+        "label": "tsp",
+        "gramWeight": 6,
+        "amount": 1
+      },
+      {
+        "label": "tbsp",
+        "gramWeight": 18,
+        "amount": 1
+      },
+      {
+        "label": "dash",
+        "gramWeight": 0.4,
+        "amount": 1
+      }
+    ]
+  },
+  "sesame_dressing": {
+    "fdc_id": 171006,
+    "usda_description": "Salad dressing, sesame seed dressing, regular",
+    "portions": [
+      {
+        "label": "tablespoon",
+        "gramWeight": 15,
+        "amount": 1
+      },
+      {
+        "label": "cup",
+        "gramWeight": 245,
+        "amount": 1
+      }
+    ]
+  },
+  "smoked_paprika_proxy": {
+    "fdc_id": 171329,
+    "usda_description": "Spices, paprika",
+    "portions": [
+      {
+        "label": "tbsp",
+        "gramWeight": 6.8,
+        "amount": 1
+      },
+      {
+        "label": "tsp",
+        "gramWeight": 2.3,
+        "amount": 1
+      }
+    ]
+  },
+  "sour_cream_fullfat": {
+    "fdc_id": 2346387,
+    "usda_description": "Cream, sour, full fat",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 30,
+        "amount": 1
+      }
+    ]
+  },
+  "spicy_mayo_proxy": {
+    "fdc_id": 171009,
+    "usda_description": "Salad dressing, mayonnaise, regular",
+    "portions": [
+      {
+        "label": "tbsp",
+        "gramWeight": 13.8,
+        "amount": 1
+      },
+      {
+        "label": "cup",
+        "gramWeight": 220,
+        "amount": 1
+      },
+      {
+        "label": "packet",
+        "gramWeight": 10,
+        "amount": 1
+      }
+    ]
+  },
+  "strawberries_raw": {
+    "fdc_id": 2346409,
+    "usda_description": "Strawberries, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 140,
+        "amount": 1
+      }
+    ]
+  },
+  "teriyaki_sauce": {
+    "fdc_id": 171167,
+    "usda_description": "Sauce, teriyaki, ready-to-serve",
+    "portions": [
+      {
+        "label": "tbsp",
+        "gramWeight": 18,
+        "amount": 1
+      },
+      {
+        "label": "fl oz",
+        "gramWeight": 36,
+        "amount": 1
+      },
+      {
+        "label": "cup",
+        "gramWeight": 288,
+        "amount": 1
+      }
+    ]
+  },
+  "toast_10k_proxy": {
+    "fdc_id": 172689,
+    "usda_description": "Bread, whole-wheat, commercially prepared, toasted",
+    "portions": [
+      {
+        "label": "oz",
+        "gramWeight": 28.35,
+        "amount": 1
+      },
+      {
+        "label": "slice",
+        "gramWeight": 25,
+        "amount": 1
+      }
+    ]
+  },
+  "tomato_raw": {
+    "fdc_id": 1999634,
+    "usda_description": "Tomato, roma",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 85,
+        "amount": 1
+      }
+    ]
+  },
+  "tortilla_flour": {
+    "fdc_id": 173242,
+    "usda_description": "Tortillas, ready-to-bake or -fry, flour, without added calcium",
+    "portions": [
+      {
+        "label": "tortilla (approx 12\" dia)",
+        "gramWeight": 117,
+        "amount": 1
+      },
+      {
+        "label": "tortilla (approx 7-8\" dia)",
+        "gramWeight": 49,
+        "amount": 1
+      },
+      {
+        "label": "oz",
+        "gramWeight": 28.35,
+        "amount": 1
+      },
+      {
+        "label": "tortilla, medium (approx 6\" dia)",
+        "gramWeight": 32,
+        "amount": 1
+      },
+      {
+        "label": "tortilla (approx 10\" dia)",
+        "gramWeight": 72,
+        "amount": 1
+      }
+    ]
+  },
+  "unagi_eel_cooked": {
+    "fdc_id": 174194,
+    "usda_description": "Fish, eel, mixed species, cooked, dry heat",
+    "portions": [
+      {
+        "label": "cubic inch, boneless",
+        "gramWeight": 17,
+        "amount": 1
+      },
+      {
+        "label": "oz, boneless",
+        "gramWeight": 28.35,
+        "amount": 1
+      },
+      {
+        "label": "oz",
+        "gramWeight": 85,
+        "amount": 3
+      },
+      {
+        "label": "oz with bone (yield after bone removed)",
+        "gramWeight": 22,
+        "amount": 1
+      },
+      {
+        "label": "fillet",
+        "gramWeight": 159,
+        "amount": 1
+      }
+    ]
+  },
+  "waffle_base_prepared_proxy": {
+    "fdc_id": 175039,
+    "usda_description": "Waffles, plain, prepared from recipe",
+    "portions": [
+      {
+        "label": "waffle, round (7\" dia)",
+        "gramWeight": 75,
+        "amount": 1
+      },
+      {
+        "label": "oz",
+        "gramWeight": 28.35,
+        "amount": 1
+      }
+    ]
+  },
+  "whey_protein_isolate": {
+    "fdc_id": 173177,
+    "usda_description": "Beverages, Whey protein powder isolate",
+    "portions": [
+      {
+        "label": "scoop",
+        "gramWeight": 86,
+        "amount": 3
+      }
+    ]
+  },
+  "yogurt_plain_lowfat": {
+    "fdc_id": 170886,
+    "usda_description": "Yogurt, plain, low fat",
+    "portions": [
+      {
+        "label": "container (8 oz)",
+        "gramWeight": 227,
+        "amount": 1
+      },
+      {
+        "label": "container (4 oz)",
+        "gramWeight": 113,
+        "amount": 0.5
+      },
+      {
+        "label": "cup (8 fl oz)",
+        "gramWeight": 245,
+        "amount": 1
+      },
+      {
+        "label": "container (6 oz)",
+        "gramWeight": 170,
+        "amount": 1
+      }
+    ]
+  },
+  "zucchini_raw": {
+    "fdc_id": 2685568,
+    "usda_description": "Squash, summer, green, zucchini, includes skin, raw",
+    "portions": [
+      {
+        "label": "RACC",
+        "gramWeight": 85,
+        "amount": 1
+      }
+    ]
+  }
+}

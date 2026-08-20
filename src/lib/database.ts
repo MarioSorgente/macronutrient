@@ -1,18 +1,45 @@
 import rawDatabase from "@data/negrita-database.json";
-import type {
-  Ingredient,
-  MenuRecipe,
-  NutritionDatabase,
+import portionData from "@data/enrichment/portions.json";
+import {
+  GRAM_UNIT,
+  GRAM_UNIT_ID,
+  type Ingredient,
+  type Macros,
+  type MenuRecipe,
+  type NutritionDatabase,
+  type PortionUnit,
 } from "@/types/nutrition";
 
 /**
- * The bundled Negrita database. This is static reference data (91 ingredients +
- * 25 menu recipes) shipped inside the app — no network call is needed to browse
+ * The bundled Negrita database. Static reference data (91 ingredients + 25 menu
+ * recipes) shipped inside the app — no network call is needed to browse
  * ingredients or calculate macros.
+ *
+ * The source JSON is never mutated. Portion units are merged in from the
+ * curated enrichment overlay (data/enrichment/portions.json) so Negrita's
+ * provenance record stays intact and every addition is auditable.
  */
 const database = rawDatabase as unknown as NutritionDatabase;
 
-export const ingredients: Ingredient[] = database.ingredients;
+const portions = (
+  portionData as {
+    ingredients: Record<
+      string,
+      { units: PortionUnit[]; defaultUnitId?: string }
+    >;
+  }
+).ingredients;
+
+export const ingredients: Ingredient[] = database.ingredients.map((base) => {
+  const overlay = portions[base.ingredient_id];
+  return {
+    ...base,
+    // Grams first: always available, always the fallback.
+    units: [GRAM_UNIT, ...(overlay?.units ?? [])],
+    defaultUnitId: overlay?.defaultUnitId ?? GRAM_UNIT_ID,
+  };
+});
+
 export const menuRecipes: MenuRecipe[] = database.menu_recipes;
 export const databaseMeta = {
   name: database.database_name,
@@ -24,12 +51,57 @@ const ingredientById = new Map<string, Ingredient>(
   ingredients.map((ing) => [ing.ingredient_id, ing])
 );
 
+/**
+ * Per-100 g values computed from Negrita's own house recipes, replacing the
+ * estimated proxies for house items. Populated at runtime from the house-recipe
+ * store; empty until the restaurant defines a recipe.
+ */
+let houseOverrides = new Map<string, Macros>();
+
+export function setHouseOverrides(overrides: Map<string, Macros>): void {
+  houseOverrides = overrides;
+}
+
+/** Ingredients that ship with estimated values and no USDA source to fix them. */
+export function isEstimated(ingredient: Ingredient): boolean {
+  return (
+    ingredient.source_status === "estimated_online_proxy" ||
+    ingredient.source_status === "estimated_formula"
+  );
+}
+
+/** True once Negrita has defined a real recipe for this house item. */
+export function hasHouseOverride(ingredientId: string): boolean {
+  return houseOverrides.has(ingredientId);
+}
+
 export function getIngredient(id: string): Ingredient | undefined {
-  return ingredientById.get(id);
+  const base = ingredientById.get(id);
+  if (!base) return undefined;
+  const override = houseOverrides.get(id);
+  if (!override) return base;
+  return {
+    ...base,
+    macros_per_100g: override,
+    source_status: "negrita_recipe",
+  };
+}
+
+/** All ingredients, with any house-recipe overrides applied. */
+export function getAllIngredients(): Ingredient[] {
+  if (houseOverrides.size === 0) return ingredients;
+  return ingredients.map((ing) => getIngredient(ing.ingredient_id) ?? ing);
 }
 
 export function getRecipe(id: string): MenuRecipe | undefined {
   return menuRecipes.find((r) => r.recipe_id === id);
+}
+
+export function getUnit(
+  ingredient: Ingredient,
+  unitId: string
+): PortionUnit | undefined {
+  return ingredient.units.find((u) => u.id === unitId);
 }
 
 /** Distinct ingredient categories, sorted alphabetically. */
@@ -44,19 +116,44 @@ export function categoryLabel(category: string): string {
 }
 
 /**
- * Search ingredients by free text. Matches the display name, the category, and
- * any of the `menu_names` aliases so staff can find items by menu wording.
+ * Token-based search: every token in the query must appear somewhere in the
+ * ingredient's name, category, or menu aliases. This makes partial multi-word
+ * queries work the way people type them — "chick br" finds "Chicken breast".
  */
 export function searchIngredients(
   query: string,
   category: string | null
 ): Ingredient[] {
-  const q = query.trim().toLowerCase();
-  return ingredients.filter((ing) => {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const all = getAllIngredients();
+
+  return all.filter((ing) => {
     if (category && ing.category !== category) return false;
-    if (!q) return true;
-    if (ing.name.toLowerCase().includes(q)) return true;
-    if (ing.category.toLowerCase().includes(q)) return true;
-    return ing.menu_names.some((n) => n.toLowerCase().includes(q));
+    if (!tokens.length) return true;
+    const haystack = [ing.name, ing.category, ...ing.menu_names]
+      .join(" ")
+      .toLowerCase();
+    return tokens.every((token) => haystack.includes(token));
   });
+}
+
+/**
+ * Ranks search results so the most likely match surfaces first: names that
+ * start with the query, then names that contain it, then alias-only matches.
+ */
+export function rankIngredients(
+  results: Ingredient[],
+  query: string
+): Ingredient[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return results;
+  return [...results].sort((a, b) => score(b, q) - score(a, q));
+}
+
+function score(ingredient: Ingredient, query: string): number {
+  const name = ingredient.name.toLowerCase();
+  if (name.startsWith(query)) return 3;
+  if (name.includes(query)) return 2;
+  if (ingredient.menu_names.some((n) => n.toLowerCase().includes(query))) return 1;
+  return 0;
 }

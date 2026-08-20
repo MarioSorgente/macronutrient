@@ -1,0 +1,1202 @@
+{
+  "generated_on": "2026-08-20",
+  "note": "Curated from USDA foodPortions plus hand-added standard weights. Grams remain authoritative for all macro math; units are input helpers.",
+  "ingredients": {
+    "almond_flour": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 15,
+          "source": "usda"
+        }
+      ]
+    },
+    "apple_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 140,
+          "source": "usda"
+        }
+      ]
+    },
+    "asparagus_cooked": {
+      "units": [
+        {
+          "id": "spears_1_2_base",
+          "label": "spears (1/2\" base)",
+          "gramWeight": 15,
+          "source": "usda"
+        },
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 180,
+          "source": "usda"
+        }
+      ]
+    },
+    "avocado_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 140,
+          "source": "usda"
+        }
+      ]
+    },
+    "baharat_blend_negrita": {
+      "units": [
+        {
+          "id": "tsp",
+          "label": "tsp",
+          "gramWeight": 2,
+          "source": "usda"
+        },
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 6.3,
+          "source": "usda"
+        }
+      ]
+    },
+    "bali_spice_blend_negrita": {
+      "units": [
+        {
+          "id": "tsp",
+          "label": "tsp",
+          "gramWeight": 2,
+          "source": "usda"
+        },
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 6.3,
+          "source": "usda"
+        }
+      ]
+    },
+    "basil_fresh": {
+      "units": [
+        {
+          "id": "leaves",
+          "label": "leaves",
+          "gramWeight": 0.5,
+          "source": "usda"
+        },
+        {
+          "id": "tbsp_chopped",
+          "label": "tbsp chopped",
+          "gramWeight": 2.65,
+          "source": "usda"
+        },
+        {
+          "id": "cup_leaves_whole",
+          "label": "cup leaves, whole",
+          "gramWeight": 24,
+          "source": "usda"
+        }
+      ]
+    },
+    "beef_ground_90_10_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 114,
+          "source": "usda"
+        }
+      ]
+    },
+    "wagyu_ground_raw_proxy": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 114,
+          "source": "usda"
+        }
+      ]
+    },
+    "beef_tenderloin_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 114,
+          "source": "usda"
+        }
+      ]
+    },
+    "blueberries_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 140,
+          "source": "usda"
+        }
+      ]
+    },
+    "broccoli_boiled": {
+      "units": [
+        {
+          "id": "spear_about_5_long",
+          "label": "spear (about 5\" long)",
+          "gramWeight": 37,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "stalk_small_5_long",
+          "label": "stalk, small (5\" long)",
+          "gramWeight": 140,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "cup_chopped",
+          "label": "cup chopped",
+          "gramWeight": 156,
+          "source": "usda"
+        },
+        {
+          "id": "stalk_medium_7_1_2_8_long",
+          "label": "stalk, medium (7-1/2\" - 8\" long)",
+          "gramWeight": 180,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "stalk_large_11_12_long",
+          "label": "stalk, large (11\"-12\" long)",
+          "gramWeight": 280,
+          "integerOnly": true,
+          "source": "usda"
+        }
+      ]
+    },
+    "buckwheat_cooked": {
+      "units": [
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 168,
+          "source": "usda"
+        }
+      ]
+    },
+    "carrot_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 85,
+          "source": "usda"
+        }
+      ]
+    },
+    "cheese_parmesan": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 5,
+          "source": "usda"
+        }
+      ]
+    },
+    "chicken_breast_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 114,
+          "source": "usda"
+        }
+      ]
+    },
+    "cinnamon_ground": {
+      "units": [
+        {
+          "id": "tsp",
+          "label": "tsp",
+          "gramWeight": 2.6,
+          "source": "usda"
+        },
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 7.8,
+          "source": "usda"
+        }
+      ]
+    },
+    "cocoa_powder_unsweetened": {
+      "units": [
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 5.4,
+          "source": "usda"
+        },
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 86,
+          "source": "usda"
+        }
+      ]
+    },
+    "coconut_oil": {
+      "units": [
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 11.6,
+          "source": "usda"
+        }
+      ]
+    },
+    "corn_sweet_cooked": {
+      "units": [
+        {
+          "id": "baby_ear",
+          "label": "baby ear",
+          "gramWeight": 8,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "ear_small_5_1_2_to_6_1_2_long",
+          "label": "ear small (5-1/2\" to 6-1/2\" long)",
+          "gramWeight": 89,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "ear_medium_6_3_4_to_7_1_2_long",
+          "label": "ear medium (6-3/4\" to 7-1/2\" long)",
+          "gramWeight": 103,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "ear_large_7_3_4_to_9_long",
+          "label": "ear large (7-3/4\" to 9\" long)",
+          "gramWeight": 118,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "cup_cut",
+          "label": "cup cut",
+          "gramWeight": 149,
+          "source": "usda"
+        }
+      ]
+    },
+    "cucumber_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 85,
+          "source": "usda"
+        }
+      ]
+    },
+    "dates_medjool": {
+      "units": [
+        {
+          "id": "date",
+          "label": "date",
+          "gramWeight": 24,
+          "integerOnly": true,
+          "source": "usda"
+        }
+      ]
+    },
+    "egg_white_raw": {
+      "units": [
+        {
+          "id": "large",
+          "label": "large",
+          "gramWeight": 33,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 243,
+          "source": "usda"
+        }
+      ],
+      "defaultUnitId": "large"
+    },
+    "egg_whole_fried": {
+      "units": [
+        {
+          "id": "large",
+          "label": "large",
+          "gramWeight": 46,
+          "integerOnly": true,
+          "source": "usda"
+        }
+      ],
+      "defaultUnitId": "large"
+    },
+    "egg_whole_hard_boiled": {
+      "units": [
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 8.5,
+          "source": "usda"
+        },
+        {
+          "id": "large",
+          "label": "large",
+          "gramWeight": 50,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "cup_chopped",
+          "label": "cup chopped",
+          "gramWeight": 136,
+          "source": "usda"
+        }
+      ],
+      "defaultUnitId": "large"
+    },
+    "extra_virgin_olive_oil": {
+      "units": [
+        {
+          "id": "tsp",
+          "label": "tsp",
+          "gramWeight": 4.5,
+          "source": "usda"
+        },
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 13.5,
+          "source": "usda"
+        },
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 216,
+          "source": "usda"
+        }
+      ]
+    },
+    "garlic_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 85,
+          "source": "usda"
+        }
+      ]
+    },
+    "honey": {
+      "units": [
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 21,
+          "source": "usda"
+        },
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 339,
+          "source": "usda"
+        }
+      ]
+    },
+    "ice_cream_generic": {
+      "units": [
+        {
+          "id": "serving_1_2_cup",
+          "label": "serving 1/2 cup",
+          "gramWeight": 66,
+          "source": "usda"
+        }
+      ]
+    },
+    "ice_cream_vanilla": {
+      "units": [
+        {
+          "id": "serving_1_2_cup",
+          "label": "serving 1/2 cup",
+          "gramWeight": 66,
+          "source": "usda"
+        }
+      ]
+    },
+    "iceberg_or_mixed_lettuce": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 85,
+          "source": "usda"
+        }
+      ]
+    },
+    "kefir_lowfat_plain": {
+      "units": [
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 243,
+          "source": "usda"
+        }
+      ]
+    },
+    "lettuce_green_leaf": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 85,
+          "source": "usda"
+        }
+      ]
+    },
+    "lettuce_romaine": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 85,
+          "source": "usda"
+        }
+      ]
+    },
+    "lime_raw_proxy": {
+      "units": [
+        {
+          "id": "fruit_2_dia",
+          "label": "fruit (2\" dia)",
+          "gramWeight": 67,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 67,
+          "source": "usda"
+        }
+      ]
+    },
+    "mushrooms_white_proxy": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 85,
+          "source": "usda"
+        }
+      ]
+    },
+    "negrita_island_sauce": {
+      "units": [
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 16,
+          "source": "usda"
+        },
+        {
+          "id": "serving_2_tbsp",
+          "label": "serving (2 tbsp)",
+          "gramWeight": 30,
+          "source": "usda"
+        },
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 250,
+          "source": "usda"
+        }
+      ]
+    },
+    "oats_rolled": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 40,
+          "source": "usda"
+        }
+      ]
+    },
+    "onion_yellow_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 85,
+          "source": "usda"
+        },
+        {
+          "id": "onion",
+          "label": "onion",
+          "gramWeight": 143,
+          "integerOnly": true,
+          "source": "usda"
+        }
+      ]
+    },
+    "pancake_base_prepared_proxy": {
+      "units": [
+        {
+          "id": "pancake_4_dia",
+          "label": "pancake (4\" dia)",
+          "gramWeight": 38,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "pancake_6_dia",
+          "label": "pancake (6\" dia)",
+          "gramWeight": 77,
+          "integerOnly": true,
+          "source": "usda"
+        }
+      ]
+    },
+    "paratha_wholewheat": {
+      "units": [
+        {
+          "id": "piece",
+          "label": "piece",
+          "gramWeight": 79,
+          "integerOnly": true,
+          "source": "usda"
+        }
+      ],
+      "defaultUnitId": "piece"
+    },
+    "parsley_fresh": {
+      "units": [
+        {
+          "id": "sprigs",
+          "label": "sprigs",
+          "gramWeight": 1,
+          "source": "usda"
+        },
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 3.8,
+          "source": "usda"
+        },
+        {
+          "id": "cup_chopped",
+          "label": "cup chopped",
+          "gramWeight": 60,
+          "source": "usda"
+        }
+      ]
+    },
+    "pepper_black": {
+      "units": [
+        {
+          "id": "tsp_ground",
+          "label": "tsp, ground",
+          "gramWeight": 2.3,
+          "source": "usda"
+        },
+        {
+          "id": "tsp_whole",
+          "label": "tsp, whole",
+          "gramWeight": 2.9,
+          "source": "usda"
+        },
+        {
+          "id": "tbsp_ground",
+          "label": "tbsp, ground",
+          "gramWeight": 6.9,
+          "source": "usda"
+        }
+      ]
+    },
+    "pepper_red_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 85,
+          "source": "usda"
+        }
+      ]
+    },
+    "pickled_ginger": {
+      "units": [
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 12.5,
+          "source": "usda"
+        }
+      ]
+    },
+    "pita_bread_white": {
+      "units": [
+        {
+          "id": "pita_small_4_dia",
+          "label": "pita, small (4\" dia)",
+          "gramWeight": 28,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "pita_large_6_1_2_dia",
+          "label": "pita, large (6-1/2\" dia)",
+          "gramWeight": 60,
+          "integerOnly": true,
+          "source": "usda"
+        }
+      ],
+      "defaultUnitId": "pita_large_6_1_2_dia"
+    },
+    "potato_bun_proxy": {
+      "units": [
+        {
+          "id": "roll",
+          "label": "roll",
+          "gramWeight": 44,
+          "integerOnly": true,
+          "source": "usda"
+        }
+      ],
+      "defaultUnitId": "roll"
+    },
+    "pumpkin_seeds_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 30,
+          "source": "usda"
+        }
+      ]
+    },
+    "rice_jasmine_cooked_proxy": {
+      "units": [
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 158,
+          "source": "usda"
+        }
+      ]
+    },
+    "salmon_atlantic_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 115,
+          "source": "usda"
+        }
+      ]
+    },
+    "salt_table": {
+      "units": [
+        {
+          "id": "tsp",
+          "label": "tsp",
+          "gramWeight": 6,
+          "source": "usda"
+        },
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 18,
+          "source": "usda"
+        },
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 292,
+          "source": "usda"
+        }
+      ]
+    },
+    "sesame_dressing": {
+      "units": [
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 15,
+          "source": "usda"
+        },
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 245,
+          "source": "usda"
+        }
+      ]
+    },
+    "smoked_paprika_proxy": {
+      "units": [
+        {
+          "id": "tsp",
+          "label": "tsp",
+          "gramWeight": 2.3,
+          "source": "usda"
+        },
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 6.8,
+          "source": "usda"
+        }
+      ]
+    },
+    "sour_cream_fullfat": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 30,
+          "source": "usda"
+        }
+      ]
+    },
+    "spicy_mayo_proxy": {
+      "units": [
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 13.8,
+          "source": "usda"
+        },
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 220,
+          "source": "usda"
+        }
+      ]
+    },
+    "strawberries_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 140,
+          "source": "usda"
+        }
+      ]
+    },
+    "teriyaki_sauce": {
+      "units": [
+        {
+          "id": "tbsp",
+          "label": "tbsp",
+          "gramWeight": 18,
+          "source": "usda"
+        },
+        {
+          "id": "cup",
+          "label": "cup",
+          "gramWeight": 288,
+          "source": "usda"
+        }
+      ]
+    },
+    "toast_10k_proxy": {
+      "units": [
+        {
+          "id": "slice",
+          "label": "slice",
+          "gramWeight": 25,
+          "integerOnly": true,
+          "source": "usda"
+        }
+      ],
+      "defaultUnitId": "slice"
+    },
+    "tomato_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 85,
+          "source": "usda"
+        }
+      ]
+    },
+    "tortilla_flour": {
+      "units": [
+        {
+          "id": "tortilla_medium_approx_6_dia",
+          "label": "tortilla, medium (approx 6\" dia)",
+          "gramWeight": 32,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "tortilla_approx_7_8_dia",
+          "label": "tortilla (approx 7-8\" dia)",
+          "gramWeight": 49,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "tortilla_approx_10_dia",
+          "label": "tortilla (approx 10\" dia)",
+          "gramWeight": 72,
+          "integerOnly": true,
+          "source": "usda"
+        },
+        {
+          "id": "tortilla_approx_12_dia",
+          "label": "tortilla (approx 12\" dia)",
+          "gramWeight": 117,
+          "integerOnly": true,
+          "source": "usda"
+        }
+      ],
+      "defaultUnitId": "tortilla_medium_approx_6_dia"
+    },
+    "unagi_eel_cooked": {
+      "units": [
+        {
+          "id": "cubic_inch_boneless",
+          "label": "cubic inch, boneless",
+          "gramWeight": 17,
+          "source": "usda"
+        },
+        {
+          "id": "oz_with_bone_yield_after_bone_re",
+          "label": "oz with bone (yield after bone removed)",
+          "gramWeight": 22,
+          "source": "usda"
+        },
+        {
+          "id": "oz_boneless",
+          "label": "oz, boneless",
+          "gramWeight": 28.35,
+          "source": "usda"
+        },
+        {
+          "id": "fillet",
+          "label": "fillet",
+          "gramWeight": 159,
+          "source": "usda"
+        }
+      ]
+    },
+    "waffle_base_prepared_proxy": {
+      "units": [
+        {
+          "id": "waffle_round_7_dia",
+          "label": "waffle, round (7\" dia)",
+          "gramWeight": 75,
+          "integerOnly": true,
+          "source": "usda"
+        }
+      ]
+    },
+    "whey_protein_isolate": {
+      "units": [
+        {
+          "id": "scoop",
+          "label": "scoop",
+          "gramWeight": 28.67,
+          "source": "usda"
+        }
+      ]
+    },
+    "yogurt_plain_lowfat": {
+      "units": [
+        {
+          "id": "container_6_oz",
+          "label": "container (6 oz)",
+          "gramWeight": 170,
+          "source": "usda"
+        },
+        {
+          "id": "container_4_oz",
+          "label": "container (4 oz)",
+          "gramWeight": 226,
+          "source": "usda"
+        },
+        {
+          "id": "container_8_oz",
+          "label": "container (8 oz)",
+          "gramWeight": 227,
+          "source": "usda"
+        },
+        {
+          "id": "cup_8_fl_oz",
+          "label": "cup (8 fl oz)",
+          "gramWeight": 245,
+          "source": "usda"
+        }
+      ]
+    },
+    "zucchini_raw": {
+      "units": [
+        {
+          "id": "serving",
+          "label": "serving",
+          "gramWeight": 85,
+          "source": "usda"
+        }
+      ]
+    },
+    "banana_raw": {
+      "units": [
+        {
+          "label": "medium banana",
+          "gramWeight": 118,
+          "integerOnly": true,
+          "id": "medium_banana",
+          "source": "curated"
+        }
+      ],
+      "defaultUnitId": "medium_banana"
+    },
+    "cheese_american": {
+      "units": [
+        {
+          "label": "slice",
+          "gramWeight": 21,
+          "integerOnly": true,
+          "id": "slice",
+          "source": "curated"
+        }
+      ]
+    },
+    "cheese_cottage_lowfat": {
+      "units": [
+        {
+          "label": "cup",
+          "gramWeight": 226,
+          "id": "cup",
+          "source": "curated"
+        }
+      ]
+    },
+    "greek_yogurt_nonfat": {
+      "units": [
+        {
+          "label": "tbsp",
+          "gramWeight": 15,
+          "id": "tbsp",
+          "source": "curated"
+        },
+        {
+          "label": "cup",
+          "gramWeight": 245,
+          "id": "cup",
+          "source": "curated"
+        }
+      ]
+    },
+    "milk_whole": {
+      "units": [
+        {
+          "label": "tbsp",
+          "gramWeight": 15,
+          "id": "tbsp",
+          "source": "curated"
+        },
+        {
+          "label": "cup",
+          "gramWeight": 244,
+          "id": "cup",
+          "source": "curated"
+        }
+      ]
+    },
+    "hummus": {
+      "units": [
+        {
+          "label": "tbsp",
+          "gramWeight": 15,
+          "id": "tbsp",
+          "source": "curated"
+        }
+      ]
+    },
+    "mustard_yellow": {
+      "units": [
+        {
+          "label": "tsp",
+          "gramWeight": 5,
+          "id": "tsp",
+          "source": "curated"
+        },
+        {
+          "label": "tbsp",
+          "gramWeight": 15,
+          "id": "tbsp",
+          "source": "curated"
+        }
+      ]
+    },
+    "peanut_butter_creamy": {
+      "units": [
+        {
+          "label": "tbsp",
+          "gramWeight": 16,
+          "id": "tbsp",
+          "source": "curated"
+        }
+      ]
+    },
+    "nuts_almonds_roasted": {
+      "units": [
+        {
+          "label": "almond",
+          "gramWeight": 1.2,
+          "integerOnly": true,
+          "id": "almond",
+          "source": "curated"
+        }
+      ]
+    },
+    "kalamata_olives_proxy": {
+      "units": [
+        {
+          "label": "olive",
+          "gramWeight": 4,
+          "integerOnly": true,
+          "id": "olive",
+          "source": "curated"
+        }
+      ]
+    },
+    "halkidiki_olives_proxy": {
+      "units": [
+        {
+          "label": "olive",
+          "gramWeight": 4,
+          "integerOnly": true,
+          "id": "olive",
+          "source": "curated"
+        }
+      ]
+    },
+    "scallops_sea_raw": {
+      "units": [
+        {
+          "label": "scallop",
+          "gramWeight": 30,
+          "integerOnly": true,
+          "id": "scallop",
+          "source": "curated"
+        }
+      ]
+    },
+    "tomato_cherry_raw": {
+      "units": [
+        {
+          "label": "cherry tomato",
+          "gramWeight": 17,
+          "integerOnly": true,
+          "id": "cherry_tomato",
+          "source": "curated"
+        }
+      ]
+    },
+    "jalapeno_raw": {
+      "units": [
+        {
+          "label": "pepper",
+          "gramWeight": 14,
+          "integerOnly": true,
+          "id": "pepper",
+          "source": "curated"
+        }
+      ]
+    },
+    "chili_raw_proxy": {
+      "units": [
+        {
+          "label": "chili",
+          "gramWeight": 6,
+          "integerOnly": true,
+          "id": "chili",
+          "source": "curated"
+        }
+      ]
+    },
+    "pickles_cucumber_dill": {
+      "units": [
+        {
+          "label": "slice",
+          "gramWeight": 6,
+          "integerOnly": true,
+          "id": "slice",
+          "source": "curated"
+        },
+        {
+          "label": "spear",
+          "gramWeight": 30,
+          "integerOnly": true,
+          "id": "spear",
+          "source": "curated"
+        }
+      ]
+    },
+    "chimichurri_negrita": {
+      "units": [
+        {
+          "label": "tbsp",
+          "gramWeight": 15,
+          "id": "tbsp",
+          "source": "curated"
+        }
+      ]
+    },
+    "peri_peri_sauce_negrita": {
+      "units": [
+        {
+          "label": "tbsp",
+          "gramWeight": 15,
+          "id": "tbsp",
+          "source": "curated"
+        }
+      ]
+    },
+    "tzatziki_proxy": {
+      "units": [
+        {
+          "label": "tbsp",
+          "gramWeight": 15,
+          "id": "tbsp",
+          "source": "curated"
+        }
+      ]
+    },
+    "shio_kombu_marinade_negrita": {
+      "units": [
+        {
+          "label": "tbsp",
+          "gramWeight": 15,
+          "id": "tbsp",
+          "source": "curated"
+        }
+      ]
+    }
+  }
+}

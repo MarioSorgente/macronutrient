@@ -5,26 +5,28 @@ import { Minus, Plus, Trash2 } from "lucide-react";
 import type { DishItem } from "@/lib/storage/types";
 import { getIngredient, categoryLabel } from "@/lib/database";
 import { perItemMacros } from "@/lib/calc";
+import { findUnit, normalizeQuantity, stepFor, unitsFor } from "@/lib/units";
+import { GRAM_UNIT_ID } from "@/types/nutrition";
 import { grams as fmtGrams, round0, round1 } from "@/lib/format";
-
-const STEP = 10;
 
 export default function DishItemRow({
   item,
-  onSetGrams,
+  onSetQuantity,
+  onSetUnit,
   onRemove,
 }: {
   item: DishItem;
-  onSetGrams: (grams: number) => void;
+  onSetQuantity: (quantity: number) => void;
+  onSetUnit: (unitId: string) => void;
   onRemove: () => void;
 }) {
   const ingredient = getIngredient(item.ingredientId);
-  const [draft, setDraft] = useState<string>(fmtGrams(item.grams));
+  const [draft, setDraft] = useState<string>(fmtGrams(item.quantity));
 
-  // Keep the field in sync when grams change from elsewhere (e.g. steppers).
+  // Keep the field in sync when the amount changes elsewhere (steppers, units).
   useEffect(() => {
-    setDraft(fmtGrams(item.grams));
-  }, [item.grams]);
+    setDraft(fmtGrams(item.quantity));
+  }, [item.quantity, item.unitId]);
 
   if (!ingredient) {
     return (
@@ -37,10 +39,19 @@ export default function DishItemRow({
     );
   }
 
+  const units = unitsFor(ingredient);
+  const unit = findUnit(ingredient, item.unitId);
+  const step = stepFor(unit);
   const contributed = perItemMacros(ingredient, item.grams);
+  const showGramHint = unit.id !== GRAM_UNIT_ID;
+
   const commit = (raw: string) => {
-    const n = parseFloat(raw);
-    onSetGrams(Number.isFinite(n) && n >= 0 ? n : 0);
+    const parsed = parseFloat(raw);
+    const next = normalizeQuantity(unit, Number.isFinite(parsed) ? parsed : 0);
+    // Snap the field to the value actually stored, so a rejected fraction on a
+    // countable unit ("2.4 eggs") visibly becomes the whole number we kept.
+    setDraft(fmtGrams(next));
+    onSetQuantity(next);
   };
 
   return (
@@ -62,39 +73,65 @@ export default function DishItemRow({
         </button>
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-3">
-        {/* Grams stepper */}
-        <div className="flex items-center rounded-lg border border-cream-deep bg-white">
-          <button
-            type="button"
-            onClick={() => onSetGrams(Math.max(0, item.grams - STEP))}
-            className="grid h-8 w-8 place-items-center rounded-l-lg text-charcoal-soft hover:bg-cream-deep"
-            aria-label="Decrease grams"
-          >
-            <Minus size={14} />
-          </button>
-          <input
-            type="number"
-            inputMode="decimal"
-            min={0}
-            className="no-spin w-16 border-x border-cream-deep bg-white py-1 text-center text-sm font-600 tabular-nums text-charcoal outline-none"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={(e) => commit(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-            }}
-            aria-label={`Grams of ${ingredient.name}`}
-          />
-          <button
-            type="button"
-            onClick={() => onSetGrams(item.grams + STEP)}
-            className="grid h-8 w-8 place-items-center rounded-r-lg text-charcoal-soft hover:bg-cream-deep"
-            aria-label="Increase grams"
-          >
-            <Plus size={14} />
-          </button>
-          <span className="px-2 text-xs font-600 text-charcoal-soft">g</span>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {/* Amount stepper */}
+          <div className="flex items-center rounded-lg border border-cream-deep bg-white">
+            <button
+              type="button"
+              onClick={() => onSetQuantity(Math.max(0, item.quantity - step))}
+              className="grid h-8 w-8 place-items-center rounded-l-lg text-charcoal-soft hover:bg-cream-deep"
+              aria-label="Decrease amount"
+            >
+              <Minus size={14} />
+            </button>
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step={step}
+              className="no-spin w-14 border-x border-cream-deep bg-white py-1 text-center text-sm font-600 tabular-nums text-charcoal outline-none"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={(e) => commit(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              }}
+              aria-label={`Amount of ${ingredient.name}`}
+            />
+            <button
+              type="button"
+              onClick={() => onSetQuantity(item.quantity + step)}
+              className="grid h-8 w-8 place-items-center rounded-r-lg text-charcoal-soft hover:bg-cream-deep"
+              aria-label="Increase amount"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+
+          {/* Unit selector — only when the ingredient has more than grams. */}
+          {units.length > 1 ? (
+            <select
+              value={item.unitId}
+              onChange={(e) => onSetUnit(e.target.value)}
+              className="max-w-[9.5rem] truncate rounded-lg border border-cream-deep bg-white px-2 py-1.5 text-xs font-600 text-charcoal outline-none focus:border-tomato-soft"
+              aria-label={`Unit for ${ingredient.name}`}
+            >
+              {units.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-xs font-600 text-charcoal-soft">g</span>
+          )}
+
+          {showGramHint && (
+            <span className="text-[11px] tabular-nums text-charcoal-soft">
+              = {round0(item.grams)} g
+            </span>
+          )}
         </div>
 
         {/* Contribution */}

@@ -8,42 +8,46 @@ import {
   query,
   setDoc,
 } from "firebase/firestore";
-import type { Dish, DishRepository } from "@/lib/storage/types";
+import type { Entity, Repository } from "@/lib/storage/types";
 import { getDb } from "@/lib/storage/firebaseClient";
 
-const COLLECTION = "dishes";
-
 /**
- * Saved-dishes store backed by Cloud Firestore. Prepared for the future: it is
- * only instantiated when NEXT_PUBLIC_STORAGE_BACKEND=firebase and the Firebase
- * env vars are present (see getDishRepository). Implements the same
- * DishRepository contract as the localStorage backend.
+ * Builds a Repository backed by Cloud Firestore: one collection, one document
+ * per entity keyed by its id.
  *
- * Firestore data model: collection "dishes", one document per dish keyed by
- * dish.id, storing the full Dish shape.
+ * Prepared for later — only used when NEXT_PUBLIC_STORAGE_BACKEND=firebase and
+ * the Firebase env vars are present (see getRepository). Importing this module
+ * runs no code; Firebase initialises lazily on the first getDb() call.
  */
-export class FirestoreDishRepository implements DishRepository {
-  async list(): Promise<Dish[]> {
-    const db = getDb();
-    const q = query(collection(db, COLLECTION), orderBy("updatedAt", "desc"));
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => d.data() as Dish);
-  }
+export function createFirestoreRepository<T extends Entity>(
+  collectionName: string
+): Repository<T> {
+  return {
+    async list() {
+      const db = getDb();
+      const q = query(
+        collection(db, collectionName),
+        orderBy("updatedAt", "desc")
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as T);
+    },
 
-  async get(id: string): Promise<Dish | null> {
-    const db = getDb();
-    const snap = await getDoc(doc(db, COLLECTION, id));
-    return snap.exists() ? (snap.data() as Dish) : null;
-  }
+    async get(id) {
+      const db = getDb();
+      const snap = await getDoc(doc(db, collectionName, id));
+      return snap.exists() ? (snap.data() as T) : null;
+    },
 
-  async save(dish: Dish): Promise<Dish> {
-    const db = getDb();
-    await setDoc(doc(db, COLLECTION, dish.id), dish);
-    return dish;
-  }
+    async save(entity) {
+      const db = getDb();
+      await setDoc(doc(db, collectionName, entity.id), entity);
+      return entity;
+    },
 
-  async remove(id: string): Promise<void> {
-    const db = getDb();
-    await deleteDoc(doc(db, COLLECTION, id));
-  }
+    async remove(id) {
+      const db = getDb();
+      await deleteDoc(doc(db, collectionName, id));
+    },
+  };
 }

@@ -15,7 +15,7 @@ type Status = "idle" | "saving" | "saved";
 
 export default function DishBuilder() {
   const router = useRouter();
-  const { editingId, name, items, setName, setGrams, removeItem, reset } =
+  const { editingId, name, items, setName, setQuantity, setUnit, removeItem, reset } =
     useDishBuilder();
 
   const [templateOpen, setTemplateOpen] = useState(false);
@@ -65,7 +65,7 @@ export default function DishBuilder() {
   }
 
   return (
-    <section className="flex flex-col rounded-xl2 border border-cream-deep bg-white/60 p-4 shadow-card">
+    <section className="flex min-w-0 flex-col rounded-xl2 border border-cream-deep bg-white/60 p-4 shadow-card">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="font-display text-lg font-700 text-charcoal">Your dish</h2>
         <div className="flex items-center gap-1.5">
@@ -121,7 +121,8 @@ export default function DishBuilder() {
           <DishItemRow
             key={item.ingredientId}
             item={item}
-            onSetGrams={(g) => setGrams(item.ingredientId, g)}
+            onSetQuantity={(q) => setQuantity(item.ingredientId, q)}
+            onSetUnit={(unitId) => setUnit(item.ingredientId, unitId)}
             onRemove={() => removeItem(item.ingredientId)}
           />
         ))}

@@ -1,0 +1,2739 @@
+{
+  "generated_on": "2026-08-20",
+  "threshold": 0.05,
+  "ingredients_checked": 71,
+  "ingredients_with_flagged_fields": 0,
+  "unlinked_ingredients": [
+    "berry_compote_stevia_proxy",
+    "chimichurri_negrita",
+    "grilled_mixed_vegetables_proxy",
+    "peri_peri_sauce_negrita",
+    "seasonal_fruit_mix_proxy",
+    "shio_kombu_marinade_negrita",
+    "syrniki_negrita",
+    "tzatziki_proxy"
+  ],
+  "rows": [
+    {
+      "ingredient_id": "almond_flour",
+      "name": "Almond flour",
+      "fdc_id": 2261420,
+      "usda_description": "Flour, almond",
+      "fields": {
+        "energy_kcal": {
+          "current": 622,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 26.2,
+          "usda": 26.244,
+          "diff": 0.044,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 16.2,
+          "usda": 16.249,
+          "diff": 0.049,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 50.2,
+          "usda": 50.23,
+          "diff": 0.03,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 9.27,
+          "usda": 9.266,
+          "diff": -0.004,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "apple_raw",
+      "name": "Apple, raw, with skin",
+      "fdc_id": 1750341,
+      "usda_description": "Apples, gala, with skin, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 61,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 0.133,
+          "usda": 0.133,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 14.8,
+          "usda": 14.768,
+          "diff": -0.032,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.15,
+          "usda": 0.15,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 2.11,
+          "usda": 2.109,
+          "diff": -0.001,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "asparagus_cooked",
+      "name": "Asparagus, cooked",
+      "fdc_id": 168390,
+      "usda_description": "Asparagus, cooked, boiled, drained",
+      "fields": {
+        "energy_kcal": {
+          "current": 22,
+          "usda": 22,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 2.4,
+          "usda": 2.4,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 4.11,
+          "usda": 4.11,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.22,
+          "usda": 0.22,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 2,
+          "usda": 2,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "avocado_raw",
+      "name": "Avocado, Hass, raw",
+      "fdc_id": 2710824,
+      "usda_description": "Avocado, Hass, peeled, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 223,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 1.81,
+          "usda": 1.813,
+          "diff": 0.002,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 8.32,
+          "usda": 8.323,
+          "diff": 0.003,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 20.3,
+          "usda": 20.31,
+          "diff": 0.01,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 6.7,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "baharat_blend_negrita",
+      "name": "Negrita baharat blend",
+      "fdc_id": 170924,
+      "usda_description": "Spices, curry powder",
+      "fields": {
+        "energy_kcal": {
+          "current": 325,
+          "usda": 325,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 14.29,
+          "usda": 14.29,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 55.83,
+          "usda": 55.83,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 14.01,
+          "usda": 14.01,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 53.2,
+          "usda": 53.2,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "bali_spice_blend_negrita",
+      "name": "Negrita Bali spice blend",
+      "fdc_id": 170924,
+      "usda_description": "Spices, curry powder",
+      "fields": {
+        "energy_kcal": {
+          "current": 325,
+          "usda": 325,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 14.29,
+          "usda": 14.29,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 55.83,
+          "usda": 55.83,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 14.01,
+          "usda": 14.01,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 53.2,
+          "usda": 53.2,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "banana_bread_negrita",
+      "name": "Negrita protein banana bread",
+      "fdc_id": 2101291,
+      "usda_description": "BANANA BREAD",
+      "fields": {
+        "energy_kcal": {
+          "current": 451,
+          "usda": 451,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 11.76,
+          "usda": 11.76,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 58.82,
+          "usda": 58.82,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 21.57,
+          "usda": 21.57,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 9.8,
+          "usda": 9.8,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "basil_fresh",
+      "name": "Basil, fresh",
+      "fdc_id": 172232,
+      "usda_description": "Basil, fresh",
+      "fields": {
+        "energy_kcal": {
+          "current": 23,
+          "usda": 23,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 3.15,
+          "usda": 3.15,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 2.65,
+          "usda": 2.65,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.64,
+          "usda": 0.64,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 1.6,
+          "usda": 1.6,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "beef_ground_90_10_raw",
+      "name": "Ground beef, 90% lean / 10% fat, raw",
+      "fdc_id": 2514743,
+      "usda_description": "Beef, ground, 90% lean meat / 10% fat, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 185,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 18.2,
+          "usda": 18.156,
+          "diff": -0.044,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 12.8,
+          "usda": 12.85,
+          "diff": 0.05,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "wagyu_ground_raw_proxy",
+      "name": "Wagyu ground beef, raw - 90/10 proxy",
+      "fdc_id": 2514743,
+      "usda_description": "Beef, ground, 90% lean meat / 10% fat, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 185,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 18.2,
+          "usda": 18.156,
+          "diff": -0.044,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 12.8,
+          "usda": 12.85,
+          "diff": 0.05,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "beef_tenderloin_raw",
+      "name": "Beef tenderloin steak, raw",
+      "fdc_id": 2727573,
+      "usda_description": "Beef, tenderloin steak, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 143,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 21.1,
+          "usda": 21.094,
+          "diff": -0.006,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0.18,
+          "usda": 0.18,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 6.46,
+          "usda": 6.456,
+          "diff": -0.004,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "blueberries_raw",
+      "name": "Blueberries, raw",
+      "fdc_id": 2346411,
+      "usda_description": "Blueberries, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 63.9,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 0.703,
+          "usda": 0.703,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 14.6,
+          "usda": 14.572,
+          "diff": -0.028,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.306,
+          "usda": 0.306,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 2.4,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "broccoli_boiled",
+      "name": "Broccoli, boiled",
+      "fdc_id": 169967,
+      "usda_description": "Broccoli, cooked, boiled, drained, without salt",
+      "fields": {
+        "energy_kcal": {
+          "current": 35,
+          "usda": 35,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 2.38,
+          "usda": 2.38,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 7.18,
+          "usda": 7.18,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.41,
+          "usda": 0.41,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 3.3,
+          "usda": 3.3,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "buckwheat_cooked",
+      "name": "Buckwheat groats, cooked",
+      "fdc_id": 170686,
+      "usda_description": "Buckwheat groats, roasted, cooked",
+      "fields": {
+        "energy_kcal": {
+          "current": 92,
+          "usda": 92,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 3.38,
+          "usda": 3.38,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 19.94,
+          "usda": 19.94,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.62,
+          "usda": 0.62,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 2.7,
+          "usda": 2.7,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "carrot_raw",
+      "name": "Carrot, raw",
+      "fdc_id": 2258586,
+      "usda_description": "Carrots, mature, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 48,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 0.941,
+          "usda": 0.941,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 10.3,
+          "usda": 10.268,
+          "diff": -0.032,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.351,
+          "usda": 0.351,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 3.1,
+          "usda": 3.095,
+          "diff": -0.005,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "cheese_parmesan",
+      "name": "Parmesan cheese, grated",
+      "fdc_id": 2259795,
+      "usda_description": "Cheese, parmesan, grated, refrigerated",
+      "fields": {
+        "energy_kcal": {
+          "current": 403,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 30.1,
+          "usda": 30.139,
+          "diff": 0.039,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 4.33,
+          "usda": 4.332,
+          "diff": 0.002,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 29.5,
+          "usda": 29.5,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "chicken_breast_raw",
+      "name": "Chicken breast, boneless, skinless, raw",
+      "fdc_id": 2646170,
+      "usda_description": "Chicken, breast, boneless, skinless, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 106,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 22.5,
+          "usda": 22.525,
+          "diff": 0.025,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 1.93,
+          "usda": 1.934,
+          "diff": 0.004,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "chili_raw_proxy",
+      "name": "Fresh chili - serrano pepper proxy",
+      "fdc_id": 2747663,
+      "usda_description": "Peppers, serrano, seeded, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 29.2,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 0.856,
+          "usda": 0.856,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 6.14,
+          "usda": 6.136,
+          "diff": -0.004,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.141,
+          "usda": 0.141,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 2.52,
+          "usda": 2.521,
+          "diff": 0.001,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "cinnamon_ground",
+      "name": "Cinnamon, ground",
+      "fdc_id": 171320,
+      "usda_description": "Spices, cinnamon, ground",
+      "fields": {
+        "energy_kcal": {
+          "current": 247,
+          "usda": 247,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 3.99,
+          "usda": 3.99,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 80.59,
+          "usda": 80.59,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 1.24,
+          "usda": 1.24,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 53.1,
+          "usda": 53.1,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "cocoa_powder_unsweetened",
+      "name": "Cocoa powder, unsweetened",
+      "fdc_id": 169593,
+      "usda_description": "Cocoa, dry powder, unsweetened",
+      "fields": {
+        "energy_kcal": {
+          "current": 228,
+          "usda": 228,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 19.6,
+          "usda": 19.6,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 57.9,
+          "usda": 57.9,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 13.7,
+          "usda": 13.7,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 37,
+          "usda": 37,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "coconut_oil",
+      "name": "Coconut oil",
+      "fdc_id": 330458,
+      "usda_description": "Oil, coconut",
+      "fields": {
+        "energy_kcal": {
+          "current": 833,
+          "usda": 833,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0.84,
+          "usda": 0.84,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 99.1,
+          "usda": 99.1,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "corn_sweet_cooked",
+      "name": "Sweet corn, cooked",
+      "fdc_id": 169999,
+      "usda_description": "Corn, sweet, yellow, cooked, boiled, drained, without salt",
+      "fields": {
+        "energy_kcal": {
+          "current": 96,
+          "usda": 96,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 3.41,
+          "usda": 3.41,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 20.98,
+          "usda": 20.98,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 1.5,
+          "usda": 1.5,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 2.4,
+          "usda": 2.4,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "cucumber_raw",
+      "name": "Cucumber, with peel, raw",
+      "fdc_id": 2346406,
+      "usda_description": "Cucumber, with peel, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 15.9,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 0.625,
+          "usda": 0.625,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 2.95,
+          "usda": 2.953,
+          "diff": 0.002,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.178,
+          "usda": 0.177,
+          "diff": -0.001,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0.5,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "dates_medjool",
+      "name": "Dates, Medjool",
+      "fdc_id": 168191,
+      "usda_description": "Dates, medjool",
+      "fields": {
+        "energy_kcal": {
+          "current": 277,
+          "usda": 277,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 1.81,
+          "usda": 1.81,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 74.97,
+          "usda": 74.97,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.15,
+          "usda": 0.15,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 6.7,
+          "usda": 6.7,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "egg_white_raw",
+      "name": "Egg white, raw, fresh",
+      "fdc_id": 172183,
+      "usda_description": "Egg, white, raw, fresh",
+      "fields": {
+        "energy_kcal": {
+          "current": 52,
+          "usda": 52,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 10.9,
+          "usda": 10.9,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0.73,
+          "usda": 0.73,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.17,
+          "usda": 0.17,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "egg_whole_fried",
+      "name": "Egg, whole, fried",
+      "fdc_id": 173423,
+      "usda_description": "Egg, whole, cooked, fried",
+      "fields": {
+        "energy_kcal": {
+          "current": 196,
+          "usda": 196,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 13.61,
+          "usda": 13.61,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0.83,
+          "usda": 0.83,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 14.84,
+          "usda": 14.84,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "egg_whole_hard_boiled",
+      "name": "Egg, whole, hard-boiled",
+      "fdc_id": 173424,
+      "usda_description": "Egg, whole, cooked, hard-boiled",
+      "fields": {
+        "energy_kcal": {
+          "current": 155,
+          "usda": 155,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 12.58,
+          "usda": 12.58,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 1.12,
+          "usda": 1.12,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 10.61,
+          "usda": 10.61,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "extra_virgin_olive_oil",
+      "name": "Extra-virgin olive oil",
+      "fdc_id": 171413,
+      "usda_description": "Oil, olive, salad or cooking",
+      "fields": {
+        "energy_kcal": {
+          "current": 884,
+          "usda": 884,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 100,
+          "usda": 100,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "garlic_raw",
+      "name": "Garlic, raw",
+      "fdc_id": 1104647,
+      "usda_description": "Garlic, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 143,
+          "usda": 143,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 6.62,
+          "usda": 6.62,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 28.2,
+          "usda": 28.2,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.38,
+          "usda": 0.38,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 2.7,
+          "usda": 2.7,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "honey",
+      "name": "Honey",
+      "fdc_id": 169640,
+      "usda_description": "Honey",
+      "fields": {
+        "energy_kcal": {
+          "current": 304,
+          "usda": 304,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 0.3,
+          "usda": 0.3,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 82.4,
+          "usda": 82.4,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0.2,
+          "usda": 0.2,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "ice_cream_generic",
+      "name": "Ice cream, unspecified flavor - vanilla proxy",
+      "fdc_id": 167575,
+      "usda_description": "Ice creams, vanilla",
+      "fields": {
+        "energy_kcal": {
+          "current": 207,
+          "usda": 207,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 3.5,
+          "usda": 3.5,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 23.6,
+          "usda": 23.6,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 11,
+          "usda": 11,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0.7,
+          "usda": 0.7,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "ice_cream_vanilla",
+      "name": "Ice cream, vanilla",
+      "fdc_id": 167575,
+      "usda_description": "Ice creams, vanilla",
+      "fields": {
+        "energy_kcal": {
+          "current": 207,
+          "usda": 207,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 3.5,
+          "usda": 3.5,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 23.6,
+          "usda": 23.6,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 11,
+          "usda": 11,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0.7,
+          "usda": 0.7,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "iceberg_or_mixed_lettuce",
+      "name": "Iceberg lettuce, raw",
+      "fdc_id": 2346388,
+      "usda_description": "Lettuce, iceberg, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 17.1,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 0.742,
+          "usda": 0.743,
+          "diff": 0.001,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 3.37,
+          "usda": 3.369,
+          "diff": -0.001,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.074,
+          "usda": 0.074,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 1.2,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "jalapeno_raw",
+      "name": "Jalapeno, raw",
+      "fdc_id": 2747661,
+      "usda_description": "Peppers, jalapeno, seeded, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 24.1,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 0.621,
+          "usda": 0.621,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 5.08,
+          "usda": 5.076,
+          "diff": -0.004,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.149,
+          "usda": 0.149,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 1.72,
+          "usda": 1.725,
+          "diff": 0.005,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "kefir_lowfat_plain",
+      "name": "Kefir, low-fat, plain",
+      "fdc_id": 170904,
+      "usda_description": "Kefir, lowfat, plain, LIFEWAY",
+      "fields": {
+        "energy_kcal": {
+          "current": 43,
+          "usda": 43,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 3.79,
+          "usda": 3.79,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 4.77,
+          "usda": 4.77,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 1.02,
+          "usda": 1.02,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "lettuce_green_leaf",
+      "name": "Lettuce, green leaf, raw",
+      "fdc_id": 2346391,
+      "usda_description": "Lettuce, leaf, green, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 22,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 1.09,
+          "usda": 1.094,
+          "diff": 0.004,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 4.07,
+          "usda": 4.066,
+          "diff": -0.004,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.156,
+          "usda": 0.156,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 1.3,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "lettuce_romaine",
+      "name": "Romaine lettuce, raw",
+      "fdc_id": 2346389,
+      "usda_description": "Lettuce, romaine, green, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 20.8,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 0.977,
+          "usda": 0.977,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 4.06,
+          "usda": 4.056,
+          "diff": -0.004,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.071,
+          "usda": 0.071,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 2.1,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "lime_raw_proxy",
+      "name": "Lime, raw - proxy for kaffir lime",
+      "fdc_id": 168155,
+      "usda_description": "Limes, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 30,
+          "usda": 30,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 0.7,
+          "usda": 0.7,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 10.54,
+          "usda": 10.54,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.2,
+          "usda": 0.2,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 2.8,
+          "usda": 2.8,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "mushrooms_white_proxy",
+      "name": "White mushrooms, raw - proxy for wild mushroom mix",
+      "fdc_id": 1999629,
+      "usda_description": "Mushrooms, white button",
+      "fields": {
+        "energy_kcal": {
+          "current": 31.2,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 2.89,
+          "usda": 2.891,
+          "diff": 0.001,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 4.08,
+          "usda": 4.079,
+          "diff": -0.001,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.371,
+          "usda": 0.371,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 1.72,
+          "usda": 1.717,
+          "diff": -0.003,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "negrita_island_sauce",
+      "name": "Negrita Island Sauce",
+      "fdc_id": 171402,
+      "usda_description": "Salad dressing, thousand island, commercial, regular",
+      "fields": {
+        "energy_kcal": {
+          "current": 379,
+          "usda": 379,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 1.09,
+          "usda": 1.09,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 14.64,
+          "usda": 14.64,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 35.06,
+          "usda": 35.06,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0.8,
+          "usda": 0.8,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "oats_rolled",
+      "name": "Rolled oats",
+      "fdc_id": 2346396,
+      "usda_description": "Oats, whole grain, rolled, old fashioned",
+      "fields": {
+        "energy_kcal": {
+          "current": 382,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 13.5,
+          "usda": 13.496,
+          "diff": -0.004,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 68.7,
+          "usda": 68.658,
+          "diff": -0.042,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 5.89,
+          "usda": 5.89,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 10.1,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "onion_yellow_raw",
+      "name": "Yellow onion, raw",
+      "fdc_id": 790646,
+      "usda_description": "Onions, yellow, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 38,
+          "usda": 38,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 0.83,
+          "usda": 0.83,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 8.61,
+          "usda": 8.61,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.05,
+          "usda": 0.05,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 1.9,
+          "usda": 1.9,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "pancake_base_prepared_proxy",
+      "name": "Pancake, plain, prepared from recipe",
+      "fdc_id": 175009,
+      "usda_description": "Pancakes, plain, prepared from recipe",
+      "fields": {
+        "energy_kcal": {
+          "current": 227,
+          "usda": 227,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 6.4,
+          "usda": 6.4,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 28.3,
+          "usda": 28.3,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 9.7,
+          "usda": 9.7,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 1,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "paratha_wholewheat",
+      "name": "Paratha, whole wheat, commercially prepared",
+      "fdc_id": 174076,
+      "usda_description": "Bread, paratha, whole wheat, commercially prepared, frozen",
+      "fields": {
+        "energy_kcal": {
+          "current": 326,
+          "usda": 326,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 6.36,
+          "usda": 6.36,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 45.35,
+          "usda": 45.35,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 13.2,
+          "usda": 13.2,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 9.6,
+          "usda": 9.6,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "parsley_fresh",
+      "name": "Parsley, fresh",
+      "fdc_id": 170416,
+      "usda_description": "Parsley, fresh",
+      "fields": {
+        "energy_kcal": {
+          "current": 36,
+          "usda": 36,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 2.97,
+          "usda": 2.97,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 6.33,
+          "usda": 6.33,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.79,
+          "usda": 0.79,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 3.3,
+          "usda": 3.3,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "peanut_butter_creamy",
+      "name": "Peanut butter, creamy",
+      "fdc_id": 2262072,
+      "usda_description": "Peanut butter, creamy",
+      "fields": {
+        "energy_kcal": {
+          "current": 632,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 24,
+          "usda": 23.991,
+          "diff": -0.009,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 22.7,
+          "usda": 22.704,
+          "diff": 0.004,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 49.4,
+          "usda": 49.43,
+          "diff": 0.03,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 6.32,
+          "usda": 6.323,
+          "diff": 0.003,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "pepper_black",
+      "name": "Black pepper",
+      "fdc_id": 170931,
+      "usda_description": "Spices, pepper, black",
+      "fields": {
+        "energy_kcal": {
+          "current": 251,
+          "usda": 251,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 10.39,
+          "usda": 10.39,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 63.95,
+          "usda": 63.95,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 3.26,
+          "usda": 3.26,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 25.3,
+          "usda": 25.3,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "pepper_red_raw",
+      "name": "Red bell pepper, raw",
+      "fdc_id": 2258590,
+      "usda_description": "Peppers, bell, red, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 31.3,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 0.896,
+          "usda": 0.896,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 6.65,
+          "usda": 6.653,
+          "diff": 0.003,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.126,
+          "usda": 0.126,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 1.16,
+          "usda": 1.158,
+          "diff": -0.002,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "pickled_ginger",
+      "name": "Ginger root, pickled",
+      "fdc_id": 169765,
+      "usda_description": "Ginger root, pickled, canned, with artificial sweetener",
+      "fields": {
+        "energy_kcal": {
+          "current": 20,
+          "usda": 20,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 0.33,
+          "usda": 0.33,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 4.83,
+          "usda": 4.83,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.1,
+          "usda": 0.1,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 2.6,
+          "usda": 2.6,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "pita_bread_white",
+      "name": "Pita bread, white",
+      "fdc_id": 174915,
+      "usda_description": "Bread, pita, white, enriched",
+      "fields": {
+        "energy_kcal": {
+          "current": 275,
+          "usda": 275,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 9.1,
+          "usda": 9.1,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 55.7,
+          "usda": 55.7,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 1.2,
+          "usda": 1.2,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 2.2,
+          "usda": 2.2,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "potato_bun_proxy",
+      "name": "Hamburger roll, plain - proxy for potato bun",
+      "fdc_id": 172796,
+      "usda_description": "Rolls, hamburger or hotdog, plain",
+      "fields": {
+        "energy_kcal": {
+          "current": 279,
+          "usda": 279,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 9.77,
+          "usda": 9.77,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 50.12,
+          "usda": 50.12,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 3.91,
+          "usda": 3.91,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 1.8,
+          "usda": 1.8,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "pumpkin_seeds_raw",
+      "name": "Pumpkin seeds, raw",
+      "fdc_id": 2515380,
+      "usda_description": "Seeds, pumpkin seeds (pepitas), raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 555,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 29.9,
+          "usda": 29.908,
+          "diff": 0.008,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 18.7,
+          "usda": 18.675,
+          "diff": -0.025,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 40,
+          "usda": 40.03,
+          "diff": 0.03,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 5.08,
+          "usda": 5.079,
+          "diff": -0.001,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "rice_jasmine_cooked_proxy",
+      "name": "White long-grain rice, cooked - proxy for jasmine rice",
+      "fdc_id": 168935,
+      "usda_description": "Rice, white, long-grain, regular, cooked, unenriched, with salt",
+      "fields": {
+        "energy_kcal": {
+          "current": 130,
+          "usda": 130,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 2.69,
+          "usda": 2.69,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 28.17,
+          "usda": 28.17,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.28,
+          "usda": 0.28,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0.4,
+          "usda": 0.4,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "salmon_atlantic_raw",
+      "name": "Atlantic salmon, farm-raised, raw",
+      "fdc_id": 2684441,
+      "usda_description": "Fish, salmon, Atlantic, farm raised, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 197,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 20.3,
+          "usda": 20.319,
+          "diff": 0.019,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 13.1,
+          "usda": 13.11,
+          "diff": 0.01,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "salt_table",
+      "name": "Table salt",
+      "fdc_id": 173468,
+      "usda_description": "Salt, table",
+      "fields": {
+        "energy_kcal": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "scallops_sea_raw",
+      "name": "Sea scallops, frozen, raw",
+      "fdc_id": 2747667,
+      "usda_description": "Scallops, sea, frozen, wild caught",
+      "fields": {
+        "energy_kcal": {
+          "current": 66.4,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 13.5,
+          "usda": 13.512,
+          "diff": 0.012,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 1.97,
+          "usda": 1.966,
+          "diff": -0.004,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.493,
+          "usda": 0.493,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "sesame_dressing",
+      "name": "Sesame seed dressing, regular",
+      "fdc_id": 171006,
+      "usda_description": "Salad dressing, sesame seed dressing, regular",
+      "fields": {
+        "energy_kcal": {
+          "current": 443,
+          "usda": 443,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 3.1,
+          "usda": 3.1,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 8.6,
+          "usda": 8.6,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 45.2,
+          "usda": 45.2,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 1,
+          "usda": 1,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "smoked_paprika_proxy",
+      "name": "Paprika spice - proxy for smoked paprika",
+      "fdc_id": 171329,
+      "usda_description": "Spices, paprika",
+      "fields": {
+        "energy_kcal": {
+          "current": 282,
+          "usda": 282,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 14.14,
+          "usda": 14.14,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 53.99,
+          "usda": 53.99,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 12.89,
+          "usda": 12.89,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 34.9,
+          "usda": 34.9,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "sour_cream_fullfat",
+      "name": "Sour cream, full fat",
+      "fdc_id": 2346387,
+      "usda_description": "Cream, sour, full fat",
+      "fields": {
+        "energy_kcal": {
+          "current": 196,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 3.07,
+          "usda": 3.071,
+          "diff": 0.001,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 5.56,
+          "usda": 5.556,
+          "diff": -0.004,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 18,
+          "usda": 17.99,
+          "diff": -0.01,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "spicy_mayo_proxy",
+      "name": "Spicy mayonnaise - mayonnaise proxy",
+      "fdc_id": 171009,
+      "usda_description": "Salad dressing, mayonnaise, regular",
+      "fields": {
+        "energy_kcal": {
+          "current": 680,
+          "usda": 680,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 0.96,
+          "usda": 0.96,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0.57,
+          "usda": 0.57,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 74.85,
+          "usda": 74.85,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "strawberries_raw",
+      "name": "Strawberries, raw",
+      "fdc_id": 2346409,
+      "usda_description": "Strawberries, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 36.4,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 0.641,
+          "usda": 0.641,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 7.96,
+          "usda": 7.964,
+          "diff": 0.004,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.22,
+          "usda": 0.22,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 2,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "teriyaki_sauce",
+      "name": "Teriyaki sauce, ready-to-serve",
+      "fdc_id": 171167,
+      "usda_description": "Sauce, teriyaki, ready-to-serve",
+      "fields": {
+        "energy_kcal": {
+          "current": 89,
+          "usda": 89,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 5.93,
+          "usda": 5.93,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 15.56,
+          "usda": 15.56,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.02,
+          "usda": 0.02,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0.1,
+          "usda": 0.1,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "toast_10k_proxy",
+      "name": "Whole-wheat toast - proxy for 10K toast",
+      "fdc_id": 172689,
+      "usda_description": "Bread, whole-wheat, commercially prepared, toasted",
+      "fields": {
+        "energy_kcal": {
+          "current": 306,
+          "usda": 306,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 16.27,
+          "usda": 16.27,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 51.16,
+          "usda": 51.16,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 4.07,
+          "usda": 4.07,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 7.5,
+          "usda": 7.5,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "tomato_raw",
+      "name": "Tomato, raw",
+      "fdc_id": 1999634,
+      "usda_description": "Tomato, roma",
+      "fields": {
+        "energy_kcal": {
+          "current": 22,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 0.696,
+          "usda": 0.696,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 3.84,
+          "usda": 3.837,
+          "diff": -0.003,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.425,
+          "usda": 0.425,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0.971,
+          "usda": 0.971,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "tortilla_flour",
+      "name": "Flour tortilla",
+      "fdc_id": 173242,
+      "usda_description": "Tortillas, ready-to-bake or -fry, flour, without added calcium",
+      "fields": {
+        "energy_kcal": {
+          "current": 325,
+          "usda": 325,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 8.7,
+          "usda": 8.7,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 55.6,
+          "usda": 55.6,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 7.1,
+          "usda": 7.1,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 3.3,
+          "usda": 3.3,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "tuna_bluefin_raw_proxy",
+      "name": "Bluefin tuna - yellowfin proxy",
+      "fdc_id": 2747673,
+      "usda_description": "Tuna, ahi or yellowfin, frozen, wild caught",
+      "fields": {
+        "energy_kcal": {
+          "current": 102,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 24.7,
+          "usda": 24.7,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0,
+          "usda": -0.104,
+          "diff": -0.104,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.388,
+          "usda": 0.388,
+          "diff": -0.001,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "unagi_eel_cooked",
+      "name": "Eel, cooked, dry heat",
+      "fdc_id": 174194,
+      "usda_description": "Fish, eel, mixed species, cooked, dry heat",
+      "fields": {
+        "energy_kcal": {
+          "current": 236,
+          "usda": 236,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 23.65,
+          "usda": 23.65,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 14.95,
+          "usda": 14.95,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "waffle_base_prepared_proxy",
+      "name": "Waffle, plain, prepared from recipe",
+      "fdc_id": 175039,
+      "usda_description": "Waffles, plain, prepared from recipe",
+      "fields": {
+        "energy_kcal": {
+          "current": 291,
+          "usda": 291,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 7.9,
+          "usda": 7.9,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 32.9,
+          "usda": 32.9,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 14.1,
+          "usda": 14.1,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 1,
+          "usda": null,
+          "note": "not reported by USDA"
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "whey_protein_isolate",
+      "name": "Whey protein powder isolate",
+      "fdc_id": 173177,
+      "usda_description": "Beverages, Whey protein powder isolate",
+      "fields": {
+        "energy_kcal": {
+          "current": 359,
+          "usda": 359,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 58.14,
+          "usda": 58.14,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 29.07,
+          "usda": 29.07,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 1.16,
+          "usda": 1.16,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "yogurt_plain_lowfat",
+      "name": "Yogurt, plain, low-fat",
+      "fdc_id": 170886,
+      "usda_description": "Yogurt, plain, low fat",
+      "fields": {
+        "energy_kcal": {
+          "current": 63,
+          "usda": 63,
+          "diff": 0,
+          "flagged": false
+        },
+        "protein_g": {
+          "current": 5.25,
+          "usda": 5.25,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 7.04,
+          "usda": 7.04,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 1.55,
+          "usda": 1.55,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0,
+          "usda": 0,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    },
+    {
+      "ingredient_id": "zucchini_raw",
+      "name": "Zucchini, raw",
+      "fdc_id": 2685568,
+      "usda_description": "Squash, summer, green, zucchini, includes skin, raw",
+      "fields": {
+        "energy_kcal": {
+          "current": 19,
+          "usda": null,
+          "note": "not reported by USDA"
+        },
+        "protein_g": {
+          "current": 0.984,
+          "usda": 0.984,
+          "diff": 0,
+          "flagged": false
+        },
+        "carbs_g": {
+          "current": 3.27,
+          "usda": 3.27,
+          "diff": 0,
+          "flagged": false
+        },
+        "fat_g": {
+          "current": 0.205,
+          "usda": 0.205,
+          "diff": 0,
+          "flagged": false
+        },
+        "fiber_g": {
+          "current": 0.752,
+          "usda": 0.752,
+          "diff": 0,
+          "flagged": false
+        }
+      },
+      "hasFlagged": false
+    }
+  ]
+}

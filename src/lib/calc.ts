@@ -54,6 +54,42 @@ export function totalGrams(items: DishItemLike[]): number {
   return items.reduce((sum, item) => sum + (item.grams || 0), 0);
 }
 
+/**
+ * Per-100 g macros for a house item defined from its own components:
+ * sum(component macros) / finished batch weight * 100.
+ *
+ * The yield is the *finished* weight, so cooking losses (evaporation, rendering)
+ * are captured — a 1000 g raw batch reducing to 800 g is more concentrated.
+ */
+export function houseRecipeMacrosPer100g(
+  components: DishItemLike[],
+  yieldGrams: number
+): Macros | null {
+  if (!components.length || !Number.isFinite(yieldGrams) || yieldGrams <= 0) {
+    return null;
+  }
+  const total = sumDishMacros(components);
+  const factor = 100 / yieldGrams;
+  return {
+    energy_kcal: total.energy_kcal * factor,
+    protein_g: total.protein_g * factor,
+    carbs_g: total.carbs_g * factor,
+    fat_g: total.fat_g * factor,
+    fiber_g: total.fiber_g * factor,
+  };
+}
+
+/** Multiply a macro set by a scalar (used for servings in client plans). */
+export function scaleMacros(macros: Macros, factor: number): Macros {
+  return {
+    energy_kcal: macros.energy_kcal * factor,
+    protein_g: macros.protein_g * factor,
+    carbs_g: macros.carbs_g * factor,
+    fat_g: macros.fat_g * factor,
+    fiber_g: macros.fiber_g * factor,
+  };
+}
+
 export interface MacroEnergySplit {
   proteinPct: number;
   carbsPct: number;

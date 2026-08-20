@@ -1,52 +1,60 @@
-import type { Dish, DishRepository } from "@/lib/storage/types";
-
-const STORAGE_KEY = "mamma-calories:dishes";
+import type { Entity, Repository } from "@/lib/storage/types";
 
 /**
- * Saved-dishes store backed by the browser's localStorage. Works with zero
- * configuration and no external services; dishes live on the device that
- * created them. Implements the same DishRepository contract as the Firestore
- * backend so it can be swapped out later.
+ * Builds a Repository backed by the browser's localStorage. Works with zero
+ * configuration; records live on the device that created them.
+ *
+ * `migrate` runs on every read, letting older saved records be upgraded to the
+ * current shape without a destructive rewrite.
  */
-export class LocalStorageDishRepository implements DishRepository {
-  private read(): Dish[] {
+export function createLocalRepository<T extends Entity>(
+  storageKey: string,
+  migrate?: (raw: unknown) => T | null
+): Repository<T> {
+  function read(): T[] {
     if (typeof window === "undefined") return [];
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const raw = window.localStorage.getItem(storageKey);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? (parsed as Dish[]) : [];
+      if (!Array.isArray(parsed)) return [];
+      const items = migrate
+        ? parsed.map(migrate).filter((x): x is T => x !== null)
+        : (parsed as T[]);
+      return items;
     } catch {
       return [];
     }
   }
 
-  private write(dishes: Dish[]): void {
+  function write(items: T[]): void {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(dishes));
+    window.localStorage.setItem(storageKey, JSON.stringify(items));
   }
 
-  async list(): Promise<Dish[]> {
-    return this.read().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  }
+  return {
+    async list() {
+      return read().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    },
 
-  async get(id: string): Promise<Dish | null> {
-    return this.read().find((d) => d.id === id) ?? null;
-  }
+    async get(id) {
+      return read().find((item) => item.id === id) ?? null;
+    },
 
-  async save(dish: Dish): Promise<Dish> {
-    const dishes = this.read();
-    const index = dishes.findIndex((d) => d.id === dish.id);
-    if (index >= 0) {
-      dishes[index] = dish;
-    } else {
-      dishes.push(dish);
-    }
-    this.write(dishes);
-    return dish;
-  }
+    async save(entity) {
+      const items = read();
+      const index = items.findIndex((item) => item.id === entity.id);
+      if (index >= 0) {
+        items[index] = entity;
+      } else {
+        items.push(entity);
+      }
+      write(items);
+      return entity;
+    },
 
-  async remove(id: string): Promise<void> {
-    this.write(this.read().filter((d) => d.id !== id));
-  }
+    async remove(id) {
+      write(read().filter((item) => item.id !== id));
+    },
+  };
 }

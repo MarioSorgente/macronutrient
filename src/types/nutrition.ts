@@ -14,6 +14,31 @@ export interface Macros {
 
 export type MacroKey = keyof Macros;
 
+/** The implicit unit every ingredient supports: plain grams. */
+export const GRAM_UNIT_ID = "g";
+
+/**
+ * A way to measure an ingredient other than by weight — "1 large egg",
+ * "1 slice", "1 tbsp". Grams remain authoritative for all macro math;
+ * a unit is only a multiplier used at the input surface.
+ */
+export interface PortionUnit {
+  id: string;
+  label: string;
+  /** Weight of ONE of this unit. */
+  gramWeight: number;
+  /** Countable things (eggs, slices, pitas) only accept whole numbers. */
+  integerOnly?: boolean;
+  /** Provenance: "usda" for a real foodPortion, "curated" for hand-added. */
+  source?: string;
+}
+
+export const GRAM_UNIT: PortionUnit = {
+  id: GRAM_UNIT_ID,
+  label: "g",
+  gramWeight: 1,
+};
+
 export interface IngredientSource {
   type?: string;
   fdc_id?: number;
@@ -33,6 +58,10 @@ export interface Ingredient {
   macros_per_100g: Macros;
   flags: string[];
   notes: string | null;
+  /** Portion units available for this ingredient, grams always included first. */
+  units: PortionUnit[];
+  /** Which unit the picker should preselect. */
+  defaultUnitId: string;
 }
 
 export interface RecipeComponent {
@@ -64,6 +93,6 @@ export interface NutritionDatabase {
   database_name: string;
   generated_on: string;
   units: Record<string, string>;
-  ingredients: Ingredient[];
+  ingredients: Omit<Ingredient, "units" | "defaultUnitId">[];
   menu_recipes: MenuRecipe[];
 }
