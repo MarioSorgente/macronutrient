@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background-color: theme("colors.cream.DEFAULT");
+  color: theme("colors.charcoal.DEFAULT");
+}
+
+/* Thin, brand-tinted scrollbars for the ingredient list. */
+.scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: theme("colors.tomato.soft") transparent;
+}
+.scroll-slim::-webkit-scrollbar {
+  width: 8px;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  background-color: theme("colors.tomato.soft");
+  border-radius: 9999px;
+}
+
+/* Remove number-input spinners for the grams fields. */
+input[type="number"].no-spin::-webkit-outer-spin-button,
+input[type="number"].no-spin::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"].no-spin {
+  -moz-appearance: textfield;
+}
+
+/* ---------------------------------------------------------------------------
+   Print styles — the report route is designed to be saved as a PDF from the
+   browser's print dialog.
+   --------------------------------------------------------------------------- */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #ffffff;
+  }
+  .print-page {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+  @page {
+    margin: 16mm;
+  }
+}
