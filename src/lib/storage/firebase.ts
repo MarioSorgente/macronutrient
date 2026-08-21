@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
   setDoc,
@@ -28,6 +29,15 @@ export function createFirestoreRepository<T extends Entity>(
         query(collection(getDb(), path), orderBy("updatedAt", "desc"))
       );
       return snap.docs.map((d) => d.data() as T);
+    },
+
+    /** One document, not the whole collection — the read the planner makes. */
+    async latest() {
+      const snap = await getDocs(
+        query(collection(getDb(), path), orderBy("updatedAt", "desc"), limit(1))
+      );
+      const newest = snap.docs[0];
+      return newest ? (newest.data() as T) : null;
     },
 
     async get(id) {

@@ -69,8 +69,10 @@ export function loadCurrentPlan(
   if (existing) return existing;
 
   const pending = (async () => {
-    const saved = await repo.list(); // sorted by updatedAt, newest first
-    if (saved.length > 0) return saved[0];
+    // `latest` reads one document rather than the whole collection, which is
+    // the difference between one Firestore read and one per saved plan.
+    const saved = await repo.latest();
+    if (saved) return saved;
 
     const created = newPlan(ownerUid);
     await repo.save(created);

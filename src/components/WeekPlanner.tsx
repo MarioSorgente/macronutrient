@@ -48,13 +48,20 @@ import MealDetailDialog from "@/components/MealDetailDialog";
 import PlanWeekGrid from "@/components/PlanWeekGrid";
 import PlanDayView from "@/components/PlanDayView";
 import EmptyState from "@/components/ui/EmptyState";
+import HouseRecipeLoader from "@/components/HouseRecipeLoader";
+import { getIngredient, isEstimated } from "@/lib/database";
+import { useHouseRecipes } from "@/store/houseRecipes";
 
 export default function WeekPlanner() {
   const repos = useRepos();
+  // Re-render totals after a conditionally requested override set arrives.
+  useHouseRecipes((state) => state.version);
   const [plan, setClient] = useState<Plan | null>(null);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [dishesLoading, setDishesLoading] = useState(true);
+  const [dishesError, setDishesError] = useState<string | null>(null);
   const [week, setWeek] = useState(1);
   const [day, setDay] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -70,44 +77,71 @@ export default function WeekPlanner() {
     // Wait for auth: reading first would open the guest store and then swap it
     // underneath the person once their account resolved.
     if (repos.loading) return;
-    let cancelled = false;
+    let active = true;
 
-    Promise.all([
-      loadCurrentPlan(repos.plans, repos.uid),
-      repos.dishes.list(),
-    ])
-      .then(([loaded, d]) => {
-        if (cancelled) return;
+    loadCurrentPlan(repos.plans, repos.uid)
+      .then((loaded) => {
+        if (!active) return;
         setClient(loaded);
-        setDishes(d);
+        // The plan is self-contained: assignment snapshots and inline items
+        // are enough to render it while the dish library catches up.
       })
       .catch((cause) => {
+        if (!active) return;
         // Without this a rejected read (an expired session, a denied rule)
         // leaves the planner on its loading line indefinitely, which reads as
         // a hang rather than as something the reader can act on.
         console.error("Could not load the planner:", cause);
-        if (!cancelled) {
-          setLoadError(
-            "We could not load your plan. Check your connection and reload."
-          );
-        }
+        setLoadError(
+          "We could not load your plan. Check your connection and reload."
+        );
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (active) setLoading(false);
+      });
+
+    // Deliberately not awaited with the plan: a saved-dish library that is slow
+    // or unreachable must not stop someone opening the week they already have.
+    repos.dishes
+      .list()
+      .then((loadedDishes) => {
+        if (active) setDishes(loadedDishes);
+      })
+      .catch((cause) => {
+        if (!active) return;
+        console.error("Could not load the dish library:", cause);
+        setDishesError(
+          "We could not load your saved dishes. Check your connection and try again."
+        );
+      })
+      .finally(() => {
+        if (active) setDishesLoading(false);
       });
 
     return () => {
-      cancelled = true;
+      active = false;
     };
   }, [repos]);
 
   const dishMap = useMemo(() => byId(dishes), [dishes]);
+  const visibleWeekNeedsHouseRecipes = useMemo(() => {
+    if (!plan) return false;
+    return plan.assignments.some((assignment) => {
+      if (assignment.week !== week) return false;
+      const items = assignment.items ??
+        (assignment.dishId ? dishMap.get(assignment.dishId)?.items : undefined);
+      return items?.some((item) => {
+        const ingredient = getIngredient(item.ingredientId);
+        return ingredient ? isEstimated(ingredient) : false;
+      }) ?? false;
+    });
+  }, [plan, dishMap, week]);
 
   const persist = useCallback(async (next: Plan) => {
     const updated = { ...next, updatedAt: new Date().toISOString() };
     setClient(updated);
     await repos.plans.save(updated);
-  }, []);
+  }, [repos]);
 
   function assign(dish: Dish, servings: number) {
     if (!plan || !assigning) return;
@@ -266,6 +300,7 @@ export default function WeekPlanner() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+      <HouseRecipeLoader enabled={visibleWeekNeedsHouseRecipes} />
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -281,7 +316,13 @@ export default function WeekPlanner() {
           <button
             type="button"
             onClick={() => setGenerateOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl bg-basil px-3 py-2 text-sm font-700 text-cream hover:opacity-90"
+            disabled={dishesLoading || Boolean(dishesError)}
+            title={
+              dishesLoading
+                ? "Loading your dish library…"
+                : dishesError ?? undefined
+            }
+            className="flex items-center gap-1.5 rounded-xl bg-basil px-3 py-2 text-sm font-700 text-cream hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Sparkles size={15} /> Auto-fill my week
           </button>
@@ -456,6 +497,8 @@ export default function WeekPlanner() {
       {assigning && (
         <AssignDishDialog
           dishes={dishes}
+          dishesLoading={dishesLoading}
+          dishesError={dishesError}
           slot={assigning.slot}
           dayLabel={`Week ${currentWeek} · ${DAY_NAMES[assigning.day]} ${formatShortDate(
             dateFor(plan, currentWeek, assigning.day)

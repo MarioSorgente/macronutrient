@@ -12,6 +12,10 @@ import type {
 } from "@/lib/storage/types";
 import { DEFAULT_MEAL_SLOTS } from "@/lib/storage/types";
 import { createLocalRepository } from "@/lib/storage/local";
+import {
+  instrumentRepository,
+  type StorageRequestKind,
+} from "@/lib/storage/instrumentation";
 import { RESTAURANT_ID, isFirebaseConfigured } from "@/lib/firebaseEnv";
 
 export type {
@@ -61,10 +65,27 @@ function createLazyFirestoreRepository<T extends Entity>(
 
   return {
     list: async () => (await impl()).list(),
+    latest: async () => (await impl()).latest(),
     get: async (id) => (await impl()).get(id),
     save: async (entity) => (await impl()).save(entity),
     remove: async (id) => (await impl()).remove(id),
   };
+}
+
+/**
+ * Picks the backend for one collection and wraps it in timing instrumentation,
+ * so a slow or failing read is observable rather than just felt.
+ */
+function createRepository<T extends Entity>(
+  kind: StorageRequestKind,
+  cloudPath: string | null,
+  localKey: string,
+  migrate?: (raw: unknown) => T | null
+): Repository<T> {
+  const repository = cloudPath
+    ? createLazyFirestoreRepository<T>(cloudPath)
+    : createLocalRepository<T>(localKey, migrate);
+  return instrumentRepository(kind, repository);
 }
 
 // --- Dishes -----------------------------------------------------------------
@@ -145,10 +166,12 @@ export function getPlanRepository(uid: string | null): PlanRepository {
   const key = uid ?? GUEST;
   let repo = planRepos.get(key);
   if (!repo) {
-    repo =
-      uid && isCloudBackend()
-        ? createLazyFirestoreRepository<Plan>(`users/${uid}/plans`)
-        : createLocalRepository<Plan>(KEYS.plans, migratePlan);
+    repo = createRepository<Plan>(
+      "plan",
+      uid && isCloudBackend() ? `users/${uid}/plans` : null,
+      KEYS.plans,
+      migratePlan
+    );
     planRepos.set(key, repo);
   }
   return repo;
@@ -158,10 +181,12 @@ export function getDishRepository(uid: string | null): DishRepository {
   const key = uid ?? GUEST;
   let repo = dishRepos.get(key);
   if (!repo) {
-    repo =
-      uid && isCloudBackend()
-        ? createLazyFirestoreRepository<Dish>(`users/${uid}/dishes`)
-        : createLocalRepository<Dish>(KEYS.dishes, migrateDish);
+    repo = createRepository<Dish>(
+      "dish",
+      uid && isCloudBackend() ? `users/${uid}/dishes` : null,
+      KEYS.dishes,
+      migrateDish
+    );
     dishRepos.set(key, repo);
   }
   return repo;
@@ -176,11 +201,11 @@ let houseRecipeRepo: HouseRecipeRepository | null = null;
  */
 export function getHouseRecipeRepository(): HouseRecipeRepository {
   if (!houseRecipeRepo) {
-    houseRecipeRepo = isCloudBackend()
-      ? createLazyFirestoreRepository<HouseRecipe>(
-          `restaurants/${RESTAURANT_ID}/houseRecipes`
-        )
-      : createLocalRepository<HouseRecipe>(KEYS.houseRecipes);
+    houseRecipeRepo = createRepository<HouseRecipe>(
+      "house-recipe",
+      isCloudBackend() ? `restaurants/${RESTAURANT_ID}/houseRecipes` : null,
+      KEYS.houseRecipes
+    );
   }
   return houseRecipeRepo;
 }
