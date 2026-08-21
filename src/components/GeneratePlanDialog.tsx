@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import type {
-  Client,
+  Plan,
   ClientPreferences,
   Dish,
   MacroStyle,
@@ -37,13 +37,13 @@ import Modal from "@/components/ui/Modal";
  * review a week. Split so neither screen becomes a wall of controls.
  */
 export default function GeneratePlanDialog({
-  client,
+  plan,
   week,
   savedDishes,
   onApply,
   onClose,
 }: {
-  client: Client;
+  plan: Plan;
   week: number;
   savedDishes: Dish[];
   onApply: (
@@ -56,10 +56,10 @@ export default function GeneratePlanDialog({
   const [step, setStep] = useState<1 | 2>(1);
 
   const [preferences, setPreferences] = useState<ClientPreferences>(
-    client.preferences ?? DEFAULT_PREFERENCES
+    plan.preferences ?? DEFAULT_PREFERENCES
   );
   const [targets, setTargets] = useState<MacroTargets>(
-    client.targets ?? DEFAULT_TARGETS
+    plan.targets ?? DEFAULT_TARGETS
   );
 
   const [includeMenu, setIncludeMenu] = useState(true);
@@ -96,7 +96,7 @@ export default function GeneratePlanDialog({
     setPreview(
       generatePlan({
         targets,
-        slots: client.mealSlots,
+        slots: plan.mealSlots,
         includeMenuDishes: includeMenu,
         includeSavedDishes: includeSaved,
         savedDishes,

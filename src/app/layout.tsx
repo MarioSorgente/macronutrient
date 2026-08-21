@@ -3,6 +3,7 @@ import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { ToastProvider } from "@/components/ui/Toast";
+import GuestDataClaim from "@/components/GuestDataClaim";
 
 const display = Fraunces({
   subsets: ["latin"],
@@ -33,6 +34,9 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <AuthProvider>
           <ToastProvider>
+            {/* House recipes are loaded by the views that need them, not
+                globally — the landing page has no use for them. */}
+            <GuestDataClaim />
             {children}
           </ToastProvider>
         </AuthProvider>

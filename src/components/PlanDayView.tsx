@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Plus } from "lucide-react";
-import type { Assignment, Client, Dish } from "@/lib/storage/types";
+import type { Assignment, Plan, Dish } from "@/lib/storage/types";
 import {
   DAY_NAMES,
   DAY_SHORT,
@@ -26,7 +26,7 @@ import MacroChips from "@/components/MacroChips";
  * columns; here there is room to read what a meal actually is.
  */
 export default function PlanDayView({
-  client,
+  plan,
   week,
   day,
   dishes,
@@ -35,7 +35,7 @@ export default function PlanDayView({
   onOpenMeal,
   onAddMeal,
 }: {
-  client: Client;
+  plan: Plan;
   week: number;
   day: number;
   dishes: Map<string, Dish>;
@@ -44,15 +44,15 @@ export default function PlanDayView({
   onOpenMeal: (assignment: Assignment) => void;
   onAddMeal: (day: number, slot: string) => void;
 }) {
-  const totals = dayTotals(client, week, day, dishes);
-  const price = dayPrice(client, week, day, dishes);
+  const totals = dayTotals(plan, week, day, dishes);
+  const price = dayPrice(plan, week, day, dishes);
 
   return (
     <div>
       {/* Day picker */}
       <div className="scroll-slim -mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
         {DAY_SHORT.map((name, index) => {
-          const dayKcal = dayTotals(client, week, index, dishes).energy_kcal;
+          const dayKcal = dayTotals(plan, week, index, dishes).energy_kcal;
           const active = index === day;
           return (
             <button
@@ -85,7 +85,7 @@ export default function PlanDayView({
         <h2 className="font-display text-xl font-700 text-charcoal">
           {DAY_NAMES[day]}
           <span className="ml-2 text-sm font-500 text-charcoal-soft">
-            {formatShortDate(dateFor(client, week, day))}
+            {formatShortDate(dateFor(plan, week, day))}
           </span>
         </h2>
         {showPrices && (
@@ -97,8 +97,8 @@ export default function PlanDayView({
 
       {/* Slots */}
       <div className="flex flex-col gap-3">
-        {client.mealSlots.map((slot) => {
-          const slotAssignments = assignmentsFor(client, week, day, slot);
+        {plan.mealSlots.map((slot) => {
+          const slotAssignments = assignmentsFor(plan, week, day, slot);
           return (
             <section key={slot} className="hover-reveal-parent">
               <div className="mb-1.5 flex items-center justify-between">
@@ -176,12 +176,12 @@ export default function PlanDayView({
           Day total
         </h3>
         <MacroSummary macros={totals} />
-        {client.targets && (
+        {plan.targets && (
           <div className="mt-4 border-t border-cream-deep pt-4">
             <h4 className="mb-2 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
               Against daily target
             </h4>
-            <TargetAdherence actual={totals} targets={client.targets} />
+            <TargetAdherence actual={totals} targets={plan.targets} />
           </div>
         )}
       </section>

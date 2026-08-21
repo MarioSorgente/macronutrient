@@ -1,38 +1,41 @@
 import { GRAM_UNIT_ID } from "@/types/nutrition";
 import type {
-  Client,
-  ClientRepository,
   Dish,
   DishItem,
   DishRepository,
   Entity,
   HouseRecipe,
   HouseRecipeRepository,
+  Plan,
+  PlanRepository,
   Repository,
 } from "@/lib/storage/types";
 import { DEFAULT_MEAL_SLOTS } from "@/lib/storage/types";
 import { createLocalRepository } from "@/lib/storage/local";
-import { createFirestoreRepository } from "@/lib/storage/firebase";
-import { isFirebaseConfigured } from "@/lib/firebaseEnv";
 import {
   instrumentRepository,
   type StorageRequestKind,
 } from "@/lib/storage/instrumentation";
+import { RESTAURANT_ID, isFirebaseConfigured } from "@/lib/firebaseEnv";
 
 export type {
   Assignment,
-  Client,
   Dish,
   DishItem,
   HouseRecipe,
   MacroTargets,
+  Plan,
   Repository,
+  Role,
+  UserProfile,
 } from "@/lib/storage/types";
 export { DEFAULT_MEAL_SLOTS, MAX_PROGRAM_WEEKS } from "@/lib/storage/types";
 
+/** localStorage keys. Guest data lives here and nowhere else. */
 const KEYS = {
   dishes: "mamma-calories:dishes",
-  clients: "mamma-calories:clients",
+  // Historic key. Renaming it would orphan plans people already have saved.
+  plans: "mamma-calories:clients",
   houseRecipes: "mamma-calories:house-recipes",
 } as const;
 
@@ -45,18 +48,44 @@ export function isCloudBackend(): boolean {
 }
 
 /**
- * Picks the active backend for a collection. Defaults to localStorage; uses
- * Firestore only when the backend is selected AND Firebase config is present.
+ * A Firestore repository whose SDK is fetched on first use.
+ *
+ * Every Repository method is already async, so the import can be deferred
+ * without changing the contract — which keeps the Firestore SDK out of the
+ * bundle for guests, who never touch it.
+ */
+function createLazyFirestoreRepository<T extends Entity>(
+  path: string
+): Repository<T> {
+  let pending: Promise<Repository<T>> | null = null;
+  const impl = () =>
+    (pending ??= import("@/lib/storage/firebase").then((m) =>
+      m.createFirestoreRepository<T>(path)
+    ));
+
+  return {
+    list: async () => (await impl()).list(),
+    latest: async () => (await impl()).latest(),
+    get: async (id) => (await impl()).get(id),
+    save: async (entity) => (await impl()).save(entity),
+    remove: async (id) => (await impl()).remove(id),
+  };
+}
+
+/**
+ * Picks the backend for one collection and wraps it in timing instrumentation,
+ * so a slow or failing read is observable rather than just felt.
  */
 function createRepository<T extends Entity>(
-  key: keyof typeof KEYS,
-  requestKind: StorageRequestKind,
+  kind: StorageRequestKind,
+  cloudPath: string | null,
+  localKey: string,
   migrate?: (raw: unknown) => T | null
 ): Repository<T> {
-  const repository = isCloudBackend()
-    ? createFirestoreRepository<T>(key)
-    : createLocalRepository<T>(KEYS[key], migrate);
-  return instrumentRepository(requestKind, repository);
+  const repository = cloudPath
+    ? createLazyFirestoreRepository<T>(cloudPath)
+    : createLocalRepository<T>(localKey, migrate);
+  return instrumentRepository(kind, repository);
 }
 
 // --- Dishes -----------------------------------------------------------------
@@ -85,50 +114,111 @@ function migrateDish(raw: unknown): Dish | null {
   return { ...(dish as Dish), items };
 }
 
-let dishRepo: DishRepository | null = null;
+// --- Plans ------------------------------------------------------------------
 
-export function getDishRepository(): DishRepository {
-  if (!dishRepo) {
-    dishRepo = createRepository<Dish>("dishes", "dish", migrateDish);
-  }
-  return dishRepo;
-}
-
-// --- Clients ----------------------------------------------------------------
-
-/** Fills in defaults so partially-shaped client records stay usable. */
-function migrateClient(raw: unknown): Client | null {
+/**
+ * Fills in defaults so partially-shaped records stay usable, and upgrades the
+ * pre-account shape: what used to be a coach's `Client` (with `name` and
+ * `plan`) becomes the owner's own `Plan` (with `title` and `assignments`).
+ */
+function migratePlan(raw: unknown): Plan | null {
   if (!raw || typeof raw !== "object") return null;
-  const client = raw as Partial<Client>;
-  if (!client.id) return null;
+  const legacy = raw as Partial<Plan> & { name?: string; plan?: unknown };
+  if (!legacy.id) return null;
+
+  const assignments = Array.isArray(legacy.assignments)
+    ? legacy.assignments
+    : Array.isArray(legacy.plan)
+    ? (legacy.plan as Plan["assignments"])
+    : [];
+
   return {
-    ...(client as Client),
-    targets: client.targets ?? null,
+    ...(legacy as Plan),
+    ownerUid: legacy.ownerUid ?? "",
+    title: legacy.title ?? legacy.name ?? "My week",
+    targets: legacy.targets ?? null,
     mealSlots:
-      Array.isArray(client.mealSlots) && client.mealSlots.length
-        ? client.mealSlots
+      Array.isArray(legacy.mealSlots) && legacy.mealSlots.length
+        ? legacy.mealSlots
         : [...DEFAULT_MEAL_SLOTS],
-    weekCount: client.weekCount ?? 4,
-    plan: Array.isArray(client.plan) ? client.plan : [],
+    weekCount: legacy.weekCount ?? 4,
+    assignments,
+    status: legacy.status ?? "draft",
+    submittedWeeks: Array.isArray(legacy.submittedWeeks)
+      ? legacy.submittedWeeks
+      : [],
   };
 }
 
-let clientRepo: ClientRepository | null = null;
+// --- Factories --------------------------------------------------------------
+//
+// Repositories are keyed by uid rather than being module singletons, because
+// which store a component talks to now depends on who is signed in. `null`
+// means "this device" — the guest store the planner uses before anyone has an
+// account, and the one a new account's data is claimed from.
 
-export function getClientRepository(): ClientRepository {
-  if (!clientRepo) {
-    clientRepo = createRepository<Client>("clients", "plan", migrateClient);
+const planRepos = new Map<string, PlanRepository>();
+const dishRepos = new Map<string, DishRepository>();
+
+const GUEST = "@guest";
+
+export function getPlanRepository(uid: string | null): PlanRepository {
+  const key = uid ?? GUEST;
+  let repo = planRepos.get(key);
+  if (!repo) {
+    repo = createRepository<Plan>(
+      "plan",
+      uid && isCloudBackend() ? `users/${uid}/plans` : null,
+      KEYS.plans,
+      migratePlan
+    );
+    planRepos.set(key, repo);
   }
-  return clientRepo;
+  return repo;
 }
 
-// --- House recipes ----------------------------------------------------------
+export function getDishRepository(uid: string | null): DishRepository {
+  const key = uid ?? GUEST;
+  let repo = dishRepos.get(key);
+  if (!repo) {
+    repo = createRepository<Dish>(
+      "dish",
+      uid && isCloudBackend() ? `users/${uid}/dishes` : null,
+      KEYS.dishes,
+      migrateDish
+    );
+    dishRepos.set(key, repo);
+  }
+  return repo;
+}
 
 let houseRecipeRepo: HouseRecipeRepository | null = null;
 
+/**
+ * House recipes belong to the restaurant, not to a person: they correct the
+ * macros everyone sees, guests included, so they come from the shared
+ * restaurant document rather than from anyone's account.
+ */
 export function getHouseRecipeRepository(): HouseRecipeRepository {
   if (!houseRecipeRepo) {
-    houseRecipeRepo = createRepository<HouseRecipe>("houseRecipes", "house-recipe");
+    houseRecipeRepo = createRepository<HouseRecipe>(
+      "house-recipe",
+      isCloudBackend() ? `restaurants/${RESTAURANT_ID}/houseRecipes` : null,
+      KEYS.houseRecipes
+    );
   }
   return houseRecipeRepo;
 }
+
+/** The device's guest stores, for claiming that work into a new account. */
+export const guestStores = {
+  plans: (): PlanRepository =>
+    createLocalRepository<Plan>(KEYS.plans, migratePlan),
+  dishes: (): DishRepository =>
+    createLocalRepository<Dish>(KEYS.dishes, migrateDish),
+  clear(): void {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(KEYS.plans);
+    window.localStorage.removeItem(KEYS.dishes);
+  },
+};

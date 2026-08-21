@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Pencil, Trash2, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
-import { getDishRepository, isCloudBackend } from "@/lib/storage";
+import { isCloudBackend } from "@/lib/storage";
+import { useRepos } from "@/lib/storage/repos";
 import type { Dish } from "@/lib/storage/types";
 import { useDishBuilder } from "@/store/dishBuilder";
 import { formatDate } from "@/lib/format";
@@ -12,15 +13,16 @@ import { formatPrice, priceItems } from "@/lib/pricing";
 import MacroChips from "@/components/MacroChips";
 
 export default function SavedDishList() {
+  const repos = useRepos();
   const router = useRouter();
   const loadDish = useDishBuilder((s) => s.loadDish);
   const [dishes, setDishes] = useState<Dish[] | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const repo = getDishRepository();
+    const repo = repos.dishes;
     setDishes(await repo.list());
-  }, []);
+  }, [repos]);
 
   useEffect(() => {
     refresh();
@@ -32,7 +34,7 @@ export default function SavedDishList() {
   }
 
   async function remove(id: string) {
-    await getDishRepository().remove(id);
+    await repos.dishes.remove(id);
     setPendingDelete(null);
     refresh();
   }

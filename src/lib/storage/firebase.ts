@@ -13,54 +13,45 @@ import type { Entity, Repository } from "@/lib/storage/types";
 import { getDb } from "@/lib/storage/firebaseClient";
 
 /**
- * Builds a Repository backed by Cloud Firestore: one collection, one document
- * per entity keyed by its id.
+ * A Repository backed by Cloud Firestore: one document per entity, keyed by id.
  *
- * Prepared for later — only used when NEXT_PUBLIC_STORAGE_BACKEND=firebase and
- * the Firebase env vars are present (see getRepository). Importing this module
- * runs no code; Firebase initialises lazily on the first getDb() call.
+ * Takes a full collection *path* rather than a name, so the same code serves a
+ * top-level collection and a per-user subcollection. That is what lets a plan
+ * live at `users/{uid}/plans` — private to its owner by construction, rather
+ * than by a rule that has to filter a shared collection.
  */
 export function createFirestoreRepository<T extends Entity>(
-  collectionName: string
+  path: string
 ): Repository<T> {
   return {
     async list() {
-      const db = getDb();
-      const q = query(
-        collection(db, collectionName),
-        orderBy("updatedAt", "desc")
+      const snap = await getDocs(
+        query(collection(getDb(), path), orderBy("updatedAt", "desc"))
       );
-      const snap = await getDocs(q);
       return snap.docs.map((d) => d.data() as T);
     },
 
+    /** One document, not the whole collection — the read the planner makes. */
     async latest() {
-      const db = getDb();
-      const q = query(
-        collection(db, collectionName),
-        orderBy("updatedAt", "desc"),
-        limit(1)
+      const snap = await getDocs(
+        query(collection(getDb(), path), orderBy("updatedAt", "desc"), limit(1))
       );
-      const snap = await getDocs(q);
-      const latest = snap.docs[0];
-      return latest ? (latest.data() as T) : null;
+      const newest = snap.docs[0];
+      return newest ? (newest.data() as T) : null;
     },
 
     async get(id) {
-      const db = getDb();
-      const snap = await getDoc(doc(db, collectionName, id));
+      const snap = await getDoc(doc(getDb(), path, id));
       return snap.exists() ? (snap.data() as T) : null;
     },
 
     async save(entity) {
-      const db = getDb();
-      await setDoc(doc(db, collectionName, entity.id), entity);
+      await setDoc(doc(getDb(), path, entity.id), entity);
       return entity;
     },
 
     async remove(id) {
-      const db = getDb();
-      await deleteDoc(doc(db, collectionName, id));
+      await deleteDoc(doc(getDb(), path, id));
     },
   };
 }

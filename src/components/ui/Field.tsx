@@ -5,7 +5,7 @@ import { cn } from "@/components/ui/cn";
 /**
  * Label + optional hint + error, wrapping any control.
  *
- * The layout is the one ClientSettings had established privately — label and
+ * The layout is the one PlanSettings had established privately — label and
  * hint sharing a baseline above the control — lifted out so every form in the
  * app labels its inputs the same way, and so the label is actually associated
  * with the control it names.

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
 import {
   MAX_PROGRAM_WEEKS,
-  type Client,
+  type Plan,
   type MacroTargets,
 } from "@/lib/storage/types";
 import { DEFAULT_TARGETS, TARGET_FIELDS } from "@/lib/clients";
@@ -12,27 +12,27 @@ import Modal from "@/components/ui/Modal";
 import Field from "@/components/ui/Field";
 
 /**
- * Client program settings: name, start date, program length, editable meal slot
+ * Plan program settings: name, start date, program length, editable meal slot
  * names, and optional daily macro targets.
  */
-export default function ClientSettings({
-  client,
+export default function PlanSettings({
+  plan,
   onSave,
   onClose,
 }: {
-  client: Client;
-  onSave: (next: Client) => void | Promise<void>;
+  plan: Plan;
+  onSave: (next: Plan) => void | Promise<void>;
   onClose: () => void;
 }) {
-  const [name, setName] = useState(client.name);
-  const [notes, setNotes] = useState(client.notes ?? "");
-  const [startDate, setStartDate] = useState(client.programStartDate);
-  const [weekCount, setWeekCount] = useState(client.weekCount);
-  const [slots, setSlots] = useState<string[]>([...client.mealSlots]);
+  const [name, setName] = useState(plan.title);
+  const [notes, setNotes] = useState(plan.notes ?? "");
+  const [startDate, setStartDate] = useState(plan.programStartDate);
+  const [weekCount, setWeekCount] = useState(plan.weekCount);
+  const [slots, setSlots] = useState<string[]>([...plan.mealSlots]);
   const [newSlot, setNewSlot] = useState("");
-  const [targetsOn, setTargetsOn] = useState(Boolean(client.targets));
+  const [targetsOn, setTargetsOn] = useState(Boolean(plan.targets));
   const [targets, setTargets] = useState<MacroTargets>(
-    client.targets ?? DEFAULT_TARGETS
+    plan.targets ?? DEFAULT_TARGETS
   );
 
   function addSlot() {
@@ -49,12 +49,12 @@ export default function ClientSettings({
   function save() {
     const cleanSlots = slots.map((s) => s.trim()).filter(Boolean);
     onSave({
-      ...client,
-      name: name.trim() || client.name,
+      ...plan,
+      title: name.trim() || plan.title,
       notes: notes.trim() || undefined,
       programStartDate: startDate,
       weekCount,
-      mealSlots: cleanSlots.length ? cleanSlots : client.mealSlots,
+      mealSlots: cleanSlots.length ? cleanSlots : plan.mealSlots,
       targets: targetsOn ? targets : null,
     });
   }

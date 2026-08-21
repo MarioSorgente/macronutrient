@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Plus } from "lucide-react";
-import type { Assignment, Client, Dish } from "@/lib/storage/types";
+import type { Assignment, Plan, Dish } from "@/lib/storage/types";
 import {
   DAY_SHORT,
   assignmentMacros,
@@ -21,14 +21,14 @@ import { round0 } from "@/lib/format";
  * calories, and everything else lives one click away in the meal dialog.
  */
 export default function PlanWeekGrid({
-  client,
+  plan,
   week,
   dishes,
   showPrices,
   onOpenMeal,
   onAddMeal,
 }: {
-  client: Client;
+  plan: Plan;
   week: number;
   dishes: Map<string, Dish>;
   showPrices: boolean;
@@ -39,9 +39,9 @@ export default function PlanWeekGrid({
     <div className="scroll-slim -mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
       <div className="grid min-w-[52rem] grid-cols-7 gap-2">
         {DAY_SHORT.map((dayName, dayIndex) => {
-          const totals = dayTotals(client, week, dayIndex, dishes);
-          const price = dayPrice(client, week, dayIndex, dishes);
-          const date = dateFor(client, week, dayIndex);
+          const totals = dayTotals(plan, week, dayIndex, dishes);
+          const price = dayPrice(plan, week, dayIndex, dishes);
+          const date = dateFor(plan, week, dayIndex);
 
           return (
             <div key={dayIndex} className="flex flex-col rounded-xl2 bg-white/60 p-2">
@@ -55,9 +55,9 @@ export default function PlanWeekGrid({
               </div>
 
               <div className="flex flex-1 flex-col gap-2">
-                {client.mealSlots.map((slot) => {
+                {plan.mealSlots.map((slot) => {
                   const slotAssignments = assignmentsFor(
-                    client,
+                    plan,
                     week,
                     dayIndex,
                     slot
@@ -128,14 +128,14 @@ export default function PlanWeekGrid({
                     {formatPrice(price)}
                   </div>
                 )}
-                {client.targets && (
+                {plan.targets && (
                   <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-cream-deep">
                     <span
                       className="block h-full bg-tomato"
                       style={{
                         width: `${Math.min(
                           100,
-                          (totals.energy_kcal / client.targets.energy_kcal) * 100
+                          (totals.energy_kcal / plan.targets.energy_kcal) * 100
                         )}%`,
                       }}
                     />

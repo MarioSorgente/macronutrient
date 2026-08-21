@@ -40,7 +40,13 @@ const COPY: Record<AuthMode, { title: string; blurb: string; submit: string }> =
   },
 };
 
-/** Writes the chosen name over whatever the sign-in stamp guessed. */
+/**
+ * Writes the chosen name over whatever the sign-in stamp guessed.
+ *
+ * `uid` is included because this races the account-creation trigger: if it
+ * lands first the merge is a *create*, and the security rules require a
+ * document to name its own owner before they will accept one.
+ */
 async function saveDisplayName(uid: string, displayName: string) {
   const [{ getDb }, { doc, setDoc }] = await Promise.all([
     import("@/lib/storage/firebaseClient"),
@@ -48,7 +54,7 @@ async function saveDisplayName(uid: string, displayName: string) {
   ]);
   await setDoc(
     doc(getDb(), "users", uid),
-    { displayName, updatedAt: new Date().toISOString() },
+    { uid, displayName, updatedAt: new Date().toISOString() },
     { merge: true }
   );
 }

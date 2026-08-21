@@ -3,19 +3,28 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { Client, Dish } from "@/lib/storage/types";
+import type { Plan, Dish } from "@/lib/storage/types";
 
 const mocks = vi.hoisted(() => ({
   loadCurrentPlan: vi.fn(),
   listDishes: vi.fn(),
-  houseRecipeLoader: vi.fn(() => null),
+  houseRecipeLoader: vi.fn((_props: { enabled: boolean }) => null),
 }));
 
 vi.mock("@/lib/currentPlan", () => ({ loadCurrentPlan: mocks.loadCurrentPlan }));
-vi.mock("@/lib/storage", () => ({
-  getClientRepository: () => ({ save: vi.fn() }),
-  getDishRepository: () => ({ list: mocks.listDishes, save: vi.fn() }),
-}));
+// The real useRepos memoises on [uid, loading], so its identity is stable
+// across renders. The stub must be stable too, or the planner's load effect
+// re-fires on every render and the test measures the mock, not the component.
+vi.mock("@/lib/storage/repos", () => {
+  const repos = {
+    plans: { save: vi.fn() },
+    dishes: { list: mocks.listDishes, save: vi.fn() },
+    houseRecipes: {},
+    uid: null,
+    loading: false,
+  };
+  return { useRepos: () => repos };
+});
 vi.mock("@/lib/planView", () => ({
   usePlanView: () => ["week", vi.fn()],
   useShowPrices: () => [false, vi.fn()],
@@ -31,20 +40,20 @@ vi.mock("next/link", () => ({
   default: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
 }));
 
-// Keep this focused on ClientPlanner's async boundary. The grid stub reads the
+// Keep this focused on WeekPlanner's async boundary. The grid stub reads the
 // same assignment snapshot the real grid uses when its dish map has no match.
 vi.mock("@/components/PlanWeekGrid", () => ({
-  default: ({ client }: { client: Client }) => (
-    <div data-testid="week">{client.plan[0]?.snapshot.name}</div>
+  default: ({ plan }: { plan: Plan }) => (
+    <div data-testid="week">{plan.assignments[0]?.snapshot.name}</div>
   ),
 }));
 vi.mock("@/components/MacroSummary", () => ({ default: () => null }));
 vi.mock("@/components/TargetAdherence", () => ({ default: () => null }));
 vi.mock("@/components/SegmentedToggle", () => ({ default: () => null }));
 
-import ClientPlanner from "@/components/ClientPlanner";
+import WeekPlanner from "@/components/WeekPlanner";
 
-describe("ClientPlanner", () => {
+describe("WeekPlanner", () => {
   it("shows the week before the dish library request settles", async () => {
     let resolveDishes!: (dishes: Dish[]) => void;
     const pendingDishes = new Promise<Dish[]>((resolve) => {
@@ -53,14 +62,17 @@ describe("ClientPlanner", () => {
     mocks.listDishes.mockReturnValue(pendingDishes);
     mocks.loadCurrentPlan.mockResolvedValue({
       id: "plan-1",
-      name: "August plan",
+      ownerUid: "",
+      title: "August plan",
       createdAt: "2026-08-01T00:00:00.000Z",
       updatedAt: "2026-08-01T00:00:00.000Z",
       targets: null,
       mealSlots: ["Lunch"],
       programStartDate: "2026-08-17",
       weekCount: 1,
-      plan: [
+      status: "draft",
+      submittedWeeks: [],
+      assignments: [
         {
           id: "assignment-1",
           week: 1,
@@ -80,9 +92,9 @@ describe("ClientPlanner", () => {
           },
         },
       ],
-    } satisfies Client);
+    } satisfies Plan);
 
-    render(<ClientPlanner />);
+    render(<WeekPlanner />);
 
     expect((await screen.findByTestId("week")).textContent).toContain(
       "Snapshot nasi campur"

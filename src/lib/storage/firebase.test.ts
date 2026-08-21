@@ -38,7 +38,7 @@ describe("Firestore repository latest", () => {
 
   it("returns null for an empty collection", async () => {
     mocks.getDocs.mockResolvedValue({ docs: [] });
-    const repo = createFirestoreRepository<Entity>("plans");
+    const repo = createFirestoreRepository<Entity>("users/u1/plans");
 
     await expect(repo.latest()).resolves.toBeNull();
   });
@@ -50,10 +50,10 @@ describe("Firestore repository latest", () => {
       updatedAt: "2026-01-03T00:00:00.000Z",
     };
     mocks.getDocs.mockResolvedValue({ docs: [{ data: () => newest }] });
-    const repo = createFirestoreRepository<Entity>("plans");
+    const repo = createFirestoreRepository<Entity>("users/u1/plans");
 
     await expect(repo.latest()).resolves.toEqual(newest);
-    expect(mocks.collection).toHaveBeenCalledWith("database", "plans");
+    expect(mocks.collection).toHaveBeenCalledWith("database", "users/u1/plans");
     expect(mocks.orderBy).toHaveBeenCalledWith("updatedAt", "desc");
     expect(mocks.limit).toHaveBeenCalledWith(1);
     expect(mocks.query).toHaveBeenCalledWith(

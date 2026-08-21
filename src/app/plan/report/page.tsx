@@ -1,5 +1,5 @@
-import ClientReport from "@/components/ClientReport";
+import PlanReport from "@/components/PlanReport";
 
-export default function ClientReportPage() {
-  return <ClientReport />;
+export default function PlanReportPage() {
+  return <PlanReport />;
 }
