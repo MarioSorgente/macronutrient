@@ -97,6 +97,26 @@ export async function setOrderStatus(
   });
 }
 
+/**
+ * Cancels a week the kitchen has not started yet.
+ *
+ * Only the status moves; a Cloud Function clears the prep tasks and frees the
+ * week on the plan, because a customer is not allowed to write the kitchen's
+ * board — and should not have to remember to.
+ */
+export async function cancelOrder(order: Order, byUid: string): Promise<void> {
+  const { db, doc, updateDoc } = await firestore();
+  const at = new Date().toISOString();
+  await updateDoc(doc(db, ORDERS, order.id), {
+    status: "cancelled",
+    updatedAt: at,
+    statusHistory: [
+      ...(order.statusHistory ?? []),
+      { status: "cancelled", at, byUid },
+    ],
+  });
+}
+
 // --- Prep tasks -------------------------------------------------------------
 
 /** One day's kitchen work, in the order it has to be ready. */

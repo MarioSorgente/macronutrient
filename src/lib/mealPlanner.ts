@@ -5,6 +5,7 @@ import { EMPTY_MACROS, addMacros, perItemMacros, sumDishMacros } from "@/lib/cal
 import { ZERO_PRICE, addPrices, priceItems, type PriceResult } from "@/lib/pricing";
 import { TARGET_FIELDS, adherencePct } from "@/lib/clients";
 import { proteinSourceOf } from "@/lib/preferences";
+import { mealSlotPenalty, namedDishSlotPenalty } from "@/lib/slotSuitability";
 import {
   DEFAULT_PREFERENCES,
   type ClientPreferences,
@@ -261,6 +262,7 @@ interface Candidate {
  */
 function composedCandidates(
   target: MacroTargets,
+  slot: string,
   pools: Record<DiySection, Component[]>,
   budgetIdr: number | null,
   preferences: ClientPreferences
@@ -327,7 +329,11 @@ function composedCandidates(
         score:
           scoreAgainst(macros, target) +
           pricePenalty(priceIdr) +
-          leanBonus(protein.ingredient, preferences.proteinLean),
+          leanBonus(protein.ingredient, preferences.proteinLean) +
+          mealSlotPenalty(
+            parts.map((c) => c.ingredient.ingredient_id),
+            slot
+          ),
         mealKey: `${protein.ingredient.ingredient_id}+${carb.ingredient.ingredient_id}`,
         proteinKey: protein.ingredient.ingredient_id,
         carbKey: carb.ingredient.ingredient_id,
@@ -343,6 +349,7 @@ function composedCandidates(
 /** Menu recipes and saved dishes, scored whole. */
 function readyCandidates(
   target: MacroTargets,
+  slot: string,
   savedDishes: Dish[],
   menuDishes: boolean,
   budgetIdr: number | null,
@@ -369,7 +376,9 @@ function readyCandidates(
       items: dish.items,
       macros,
       priceIdr: price.totalIdr,
-      score: scoreAgainst(macros, target),
+      score:
+        scoreAgainst(macros, target) +
+        namedDishSlotPenalty(dish.name, slot),
       mealKey: `dish:${dish.id}`,
       proteinKey: `dish:${dish.id}`,
       carbKey: `dish:${dish.id}`,
@@ -402,7 +411,9 @@ function readyCandidates(
       items,
       macros,
       priceIdr,
-      score: scoreAgainst(macros, target),
+      score:
+        scoreAgainst(macros, target) +
+        namedDishSlotPenalty(recipe.name, slot),
       mealKey: `recipe:${recipe.recipe_id}`,
       proteinKey: `recipe:${recipe.recipe_id}`,
       carbKey: `recipe:${recipe.recipe_id}`,
@@ -468,9 +479,10 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
       slot,
       target,
       pool: [
-        ...composedCandidates(target, pools, budget, preferences),
+        ...composedCandidates(target, slot, pools, budget, preferences),
         ...readyCandidates(
           target,
+          slot,
           options.includeSavedDishes ? options.savedDishes : [],
           options.includeMenuDishes,
           budget,

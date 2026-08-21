@@ -5,10 +5,16 @@ import {
   isCloudBackend,
 } from "@/lib/storage";
 import { touch } from "@/lib/storage/entity";
+import type { Plan } from "@/lib/storage/types";
 
 export interface ClaimResult {
   plans: number;
   dishes: number;
+}
+
+/** A plan the planner created on sign-in but nobody has put anything in yet. */
+function isEmpty(plan: Plan): boolean {
+  return (plan.assignments?.length ?? 0) === 0;
 }
 
 /**
@@ -18,8 +24,12 @@ export interface ClaimResult {
  * at the moment they commit would be the worst possible time to lose it, so the
  * guest store is copied up and only cleared once every write has succeeded.
  *
- * Safe to call on every sign-in: with nothing stored it does nothing, and it
- * never overwrites cloud records that already exist for the same id.
+ * Id collisions are the subtle part. A guest plan carries the same fixed
+ * `primary` id the planner uses, and the planner may have already created an
+ * empty plan under it while this was running — both react to the same sign-in.
+ * So a collision is resolved by looking at what is actually there rather than
+ * by skipping: an empty plan is replaced, a real one is kept and the guest's
+ * week is filed alongside it under a fresh id.
  */
 export async function claimGuestData(uid: string): Promise<ClaimResult> {
   if (!uid || !isCloudBackend()) return { plans: 0, dishes: 0 };
@@ -35,25 +45,44 @@ export async function claimGuestData(uid: string): Promise<ClaimResult> {
   const plans = getPlanRepository(uid);
   const dishes = getDishRepository(uid);
 
-  // Anything already in the account wins: a second device signing in must not
-  // overwrite the plan the first one saved.
   const [existingPlans, existingDishes] = await Promise.all([
     plans.list(),
     dishes.list(),
   ]);
-  const havePlan = new Set(existingPlans.map((p) => p.id));
+  const planById = new Map(existingPlans.map((p) => [p.id, p]));
   const haveDish = new Set(existingDishes.map((d) => d.id));
 
-  const newPlans = guestPlans.filter((p) => !havePlan.has(p.id));
-  const newDishes = guestDishes.filter((d) => !haveDish.has(d.id));
+  const writes: Promise<unknown>[] = [];
+  let claimedPlans = 0;
 
-  await Promise.all([
-    ...newPlans.map((plan) => plans.save(touch({ ...plan, ownerUid: uid }))),
-    ...newDishes.map((dish) => dishes.save(touch(dish))),
-  ]);
+  for (const guest of guestPlans) {
+    // Nothing on the device worth moving.
+    if (isEmpty(guest)) continue;
+
+    const collision = planById.get(guest.id);
+    const target =
+      !collision || isEmpty(collision)
+        ? guest.id // free, or an empty placeholder we can replace
+        : newId(); // a real plan lives here — keep both
+
+    writes.push(plans.save(touch({ ...guest, id: target, ownerUid: uid })));
+    claimedPlans += 1;
+  }
+
+  // Dish ids are random, so a collision means this dish was already claimed.
+  const newDishes = guestDishes.filter((d) => !haveDish.has(d.id));
+  writes.push(...newDishes.map((dish) => dishes.save(touch(dish))));
+
+  await Promise.all(writes);
 
   // Only now is it safe to let go of the device copy.
   guestStores.clear();
 
-  return { plans: newPlans.length, dishes: newDishes.length };
+  return { plans: claimedPlans, dishes: newDishes.length };
+}
+
+function newId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `p-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
