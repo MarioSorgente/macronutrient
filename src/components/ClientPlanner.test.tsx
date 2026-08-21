@@ -8,6 +8,7 @@ import type { Client, Dish } from "@/lib/storage/types";
 const mocks = vi.hoisted(() => ({
   loadCurrentPlan: vi.fn(),
   listDishes: vi.fn(),
+  houseRecipeLoader: vi.fn(() => null),
 }));
 
 vi.mock("@/lib/currentPlan", () => ({ loadCurrentPlan: mocks.loadCurrentPlan }));
@@ -18,6 +19,13 @@ vi.mock("@/lib/storage", () => ({
 vi.mock("@/lib/planView", () => ({
   usePlanView: () => ["week", vi.fn()],
   useShowPrices: () => [false, vi.fn()],
+}));
+vi.mock("@/store/houseRecipes", () => ({
+  useHouseRecipes: (selector: (state: { version: number }) => number) =>
+    selector({ version: 0 }),
+}));
+vi.mock("@/components/HouseRecipeLoader", () => ({
+  default: mocks.houseRecipeLoader,
 }));
 vi.mock("next/link", () => ({
   default: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
@@ -80,6 +88,9 @@ describe("ClientPlanner", () => {
       "Snapshot nasi campur"
     );
     expect(mocks.listDishes).toHaveBeenCalledOnce();
+    expect(mocks.houseRecipeLoader.mock.calls.at(-1)?.[0]).toEqual({
+      enabled: false,
+    });
 
     resolveDishes([]);
   });
