@@ -20,5 +20,6 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "// exclude": "functions/ has its own tsconfig (commonjs, node lib) and its own node_modules; type-checking it here with browser settings would be wrong.",
+  "exclude": ["node_modules", "functions"]
 }

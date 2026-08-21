@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   CalendarDays,
   CalendarRange,
   FileText,
@@ -46,11 +47,13 @@ import GeneratePlanDialog from "@/components/GeneratePlanDialog";
 import MealDetailDialog from "@/components/MealDetailDialog";
 import PlanWeekGrid from "@/components/PlanWeekGrid";
 import PlanDayView from "@/components/PlanDayView";
+import EmptyState from "@/components/ui/EmptyState";
 
 export default function ClientPlanner() {
   const [client, setClient] = useState<Client | null>(null);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [week, setWeek] = useState(1);
   const [day, setDay] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -63,13 +66,21 @@ export default function ClientPlanner() {
   );
 
   useEffect(() => {
-    Promise.all([loadCurrentPlan(), getDishRepository().list()]).then(
-      ([plan, d]) => {
+    Promise.all([loadCurrentPlan(), getDishRepository().list()])
+      .then(([plan, d]) => {
         setClient(plan);
         setDishes(d);
-        setLoading(false);
-      }
-    );
+      })
+      .catch((cause) => {
+        // Without this a rejected read (an expired session, a denied rule)
+        // leaves the planner on its loading line indefinitely, which reads as
+        // a hang rather than as something the reader can act on.
+        console.error("Could not load the planner:", cause);
+        setLoadError(
+          "We could not load your plan. Check your connection and reload."
+        );
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const dishMap = useMemo(() => byId(dishes), [dishes]);
@@ -204,8 +215,26 @@ export default function ClientPlanner() {
     );
   }
 
-  // loadCurrentPlan always resolves to a plan, creating one if needed.
-  if (!client) return null;
+  if (loadError || !client) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-16">
+        <EmptyState
+          icon={<AlertTriangle size={22} />}
+          title="Your plan did not load"
+          hint={loadError ?? "Something went wrong reading your week."}
+          action={
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
+            >
+              Try again
+            </button>
+          }
+        />
+      </main>
+    );
+  }
 
   const currentWeek = Math.min(week, client.weekCount);
   const totals = weekTotals(client, currentWeek, dishMap);

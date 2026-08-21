@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// No file uploads exist yet. Deny everything until a feature actually needs a
+// bucket, so an unused surface cannot become an open one.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
