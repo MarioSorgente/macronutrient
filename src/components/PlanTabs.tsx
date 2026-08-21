@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarRange, Hammer, Library } from "lucide-react";
+import { CalendarRange, Hammer, Library, Send } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
 const TABS = [
   { href: "/plan", label: "My week", icon: CalendarRange },
   { href: "/plan/build", label: "Build a dish", icon: Hammer },
   { href: "/plan/dishes", label: "Saved dishes", icon: Library },
+  { href: "/plan/submit", label: "Send to kitchen", icon: Send },
 ];
 
 /**

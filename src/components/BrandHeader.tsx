@@ -26,15 +26,25 @@ const LINKS: NavLink[] = [
   },
 ];
 
+/** Shown once someone has an account to have orders in. */
+const ACCOUNT_LINKS: NavLink[] = [
+  { href: "/orders", label: "My orders", match: (p) => p.startsWith("/orders") },
+];
+
 /** Only rendered for accounts whose role actually grants them. */
 const STAFF_LINKS: NavLink[] = [
-  { href: "/admin/house-items", label: "House items", match: (p) => p.startsWith("/admin") },
+  { href: "/kitchen", label: "Kitchen", match: (p) => p.startsWith("/kitchen") },
+  { href: "/admin", label: "Admin", match: (p) => p.startsWith("/admin") },
 ];
 
 export default function BrandHeader() {
   const pathname = usePathname() ?? "/";
-  const { role } = useAuth();
-  const links = isStaff(role) ? [...LINKS, ...STAFF_LINKS] : LINKS;
+  const { user, role } = useAuth();
+  const links = [
+    ...LINKS,
+    ...(user ? ACCOUNT_LINKS : []),
+    ...(isStaff(role) ? STAFF_LINKS : []),
+  ];
 
   return (
     <header className="no-print sticky top-0 z-20 border-b border-cream-deep bg-cream/80 backdrop-blur">
