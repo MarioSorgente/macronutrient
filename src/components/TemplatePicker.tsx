@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Search, X } from "lucide-react";
+import { AlertTriangle, Search } from "lucide-react";
 import { menuNotes, menuRecipes } from "@/lib/database";
 import { categoryLabel } from "@/lib/database";
 import { formatIdr } from "@/lib/pricing";
 import { useDishBuilder } from "@/store/dishBuilder";
 import type { MenuRecipe } from "@/types/nutrition";
+import Modal from "@/components/ui/Modal";
 
 export default function TemplatePicker({ onClose }: { onClose: () => void }) {
   const loadTemplate = useDishBuilder((s) => s.loadTemplate);
@@ -32,52 +33,27 @@ export default function TemplatePicker({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-end justify-center bg-charcoal/40 p-0 sm:items-center sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
+    <Modal
+      title="Negrita menu templates"
+      subtitle={`Load a menu dish, then tweak the grams. ${menuNotes.measurement}`}
+      onClose={onClose}
+      subheader={
+        <div className="relative">
+          <Search
+            size={15}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-charcoal-soft"
+          />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search menu dishes…"
+            className="w-full rounded-xl border border-cream-deep bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-tomato-soft focus:ring-2 focus:ring-tomato-soft/40"
+          />
+        </div>
+      }
     >
-      <div
-        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-xl2 bg-cream shadow-card sm:rounded-xl2"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-cream-deep px-4 py-3">
-          <div>
-            <h3 className="font-display text-lg font-700 text-charcoal">
-              Negrita menu templates
-            </h3>
-            <p className="text-xs text-charcoal-soft">
-              Load a menu dish, then tweak the grams. {menuNotes.measurement}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-charcoal-soft hover:bg-cream-deep"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
 
-        <div className="border-b border-cream-deep px-4 py-3">
-          <div className="relative">
-            <Search
-              size={15}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-charcoal-soft"
-            />
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search menu dishes…"
-              className="w-full rounded-xl border border-cream-deep bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-tomato-soft focus:ring-2 focus:ring-tomato-soft/40"
-            />
-          </div>
-        </div>
-
-        <div className="scroll-slim flex-1 overflow-y-auto px-4 py-3">
           {grouped.map(([section, recipes]) => (
             <div key={section} className="mb-4 last:mb-0">
               <h4 className="mb-1 text-[11px] font-700 uppercase tracking-[0.14em] text-tomato">
@@ -138,13 +114,11 @@ export default function TemplatePicker({ onClose }: { onClose: () => void }) {
               </ul>
             </div>
           ))}
-          {grouped.length === 0 && (
-            <p className="py-8 text-center text-sm text-charcoal-soft">
-              No menu dishes match “{query}”.
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
+      {grouped.length === 0 && (
+        <p className="py-8 text-center text-sm text-charcoal-soft">
+          No menu dishes match “{query}”.
+        </p>
+      )}
+    </Modal>
   );
 }

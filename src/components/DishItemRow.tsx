@@ -7,7 +7,8 @@ import { getIngredient, categoryLabel } from "@/lib/database";
 import { perItemMacros } from "@/lib/calc";
 import { findUnit, normalizeQuantity, stepFor, unitsFor } from "@/lib/units";
 import { GRAM_UNIT_ID } from "@/types/nutrition";
-import { grams as fmtGrams, round0, round1 } from "@/lib/format";
+import { grams as fmtGrams, round0 } from "@/lib/format";
+import MacroChips from "@/components/MacroChips";
 
 export default function DishItemRow({
   item,
@@ -135,15 +136,7 @@ export default function DishItemRow({
         </div>
 
         {/* Contribution */}
-        <div className="flex items-center gap-3 text-[11px] tabular-nums text-charcoal-soft">
-          <span>
-            <b className="font-700 text-tomato">{round0(contributed.energy_kcal)}</b>{" "}
-            kcal
-          </span>
-          <span>P {round1(contributed.protein_g)}</span>
-          <span>C {round1(contributed.carbs_g)}</span>
-          <span>F {round1(contributed.fat_g)}</span>
-        </div>
+        <MacroChips macros={contributed} size="xxs" />
       </div>
     </li>
   );

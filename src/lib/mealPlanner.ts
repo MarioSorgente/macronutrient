@@ -2,7 +2,8 @@ import type { DiySection, Ingredient, Macros } from "@/types/nutrition";
 import { GRAM_UNIT_ID } from "@/types/nutrition";
 import { diyMenu, getIngredient, menuRecipes } from "@/lib/database";
 import { EMPTY_MACROS, addMacros, perItemMacros, sumDishMacros } from "@/lib/calc";
-import { priceItems, type PriceResult } from "@/lib/pricing";
+import { ZERO_PRICE, addPrices, priceItems, type PriceResult } from "@/lib/pricing";
+import { TARGET_FIELDS, adherencePct } from "@/lib/clients";
 import { proteinSourceOf } from "@/lib/preferences";
 import {
   DEFAULT_PREFERENCES,
@@ -492,11 +493,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
     /** Meals already placed today — nothing repeats within a single day. */
     const usedToday = new Set<string>();
     let dayMacros: Macros = { ...EMPTY_MACROS };
-    let dayPrice: PriceResult = {
-      totalIdr: 0,
-      unpricedCount: 0,
-      complete: true,
-    };
+    let dayPrice: PriceResult = { ...ZERO_PRICE };
 
     for (const { slot, target, pool } of slotPlans) {
       if (!pool.length) {
@@ -553,7 +550,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
 
       const price =
         candidate.kind === "ready" && candidate.priceIdr > 0
-          ? { totalIdr: candidate.priceIdr, unpricedCount: 0, complete: true }
+          ? { ...ZERO_PRICE, totalIdr: candidate.priceIdr }
           : priceItems(candidate.items);
 
       meals.push({
@@ -567,11 +564,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
       });
 
       dayMacros = addMacros(dayMacros, candidate.macros);
-      dayPrice = {
-        totalIdr: dayPrice.totalIdr + price.totalIdr,
-        unpricedCount: dayPrice.unpricedCount + price.unpricedCount,
-        complete: dayPrice.complete && price.complete,
-      };
+      dayPrice = addPrices(dayPrice, price);
     }
 
     days.push({ day, meals, macros: dayMacros, price: dayPrice, unfilledSlots });
@@ -580,18 +573,24 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
   return days;
 }
 
-/** How far a generated day lands from target, for showing accuracy in the UI. */
+/**
+ * How far a generated day lands from target, for showing accuracy in the UI.
+ * Reads the same field list and percentage rule the adherence bars use, so the
+ * preview inside the generator cannot disagree with the plan it produces.
+ */
 export function dayAccuracy(
   macros: Macros,
   targets: MacroTargets
 ): { key: string; label: string; actual: number; target: number; pct: number }[] {
-  return [
-    { key: "energy_kcal", label: "Calories", actual: macros.energy_kcal, target: targets.energy_kcal },
-    { key: "protein_g", label: "Protein", actual: macros.protein_g, target: targets.protein_g },
-    { key: "carbs_g", label: "Carbs", actual: macros.carbs_g, target: targets.carbs_g },
-    { key: "fat_g", label: "Fat", actual: macros.fat_g, target: targets.fat_g },
-  ].map((row) => ({
-    ...row,
-    pct: row.target > 0 ? (row.actual / row.target) * 100 : 0,
-  }));
+  return TARGET_FIELDS.map((field) => {
+    const actual = macros[field.macroKey];
+    const target = targets[field.key];
+    return {
+      key: field.key,
+      label: field.label,
+      actual,
+      target,
+      pct: adherencePct(actual, target),
+    };
+  });
 }

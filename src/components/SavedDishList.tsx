@@ -7,8 +7,9 @@ import Link from "next/link";
 import { getDishRepository, isCloudBackend } from "@/lib/storage";
 import type { Dish } from "@/lib/storage/types";
 import { useDishBuilder } from "@/store/dishBuilder";
-import { formatDate, round0, round1 } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { formatPrice, priceItems } from "@/lib/pricing";
+import MacroChips from "@/components/MacroChips";
 
 export default function SavedDishList() {
   const router = useRouter();
@@ -85,20 +86,11 @@ export default function SavedDishList() {
                 {dish.items.length === 1 ? "" : "s"} · saved{" "}
                 {formatDate(dish.updatedAt)}
               </p>
-              <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs tabular-nums text-charcoal-soft">
-                <span>
-                  <b className="font-700 text-tomato">
-                    {round0(dish.totals.energy_kcal)}
-                  </b>{" "}
-                  kcal
-                </span>
-                <span>P {round1(dish.totals.protein_g)}g</span>
-                <span>C {round1(dish.totals.carbs_g)}g</span>
-                <span>F {round1(dish.totals.fat_g)}g</span>
+              <MacroChips macros={dish.totals} gramSuffix className="mt-3">
                 <span className="font-600 text-charcoal">
                   {formatPrice(priceItems(dish.items))}
                 </span>
-              </div>
+              </MacroChips>
             </div>
 
             <div className="mt-4 flex items-center gap-2">

@@ -6,7 +6,6 @@ import {
   ArrowRight,
   Ban,
   RefreshCw,
-  Search,
   Sparkles,
   Wallet,
   X,
@@ -20,23 +19,18 @@ import type {
   ProteinSource,
 } from "@/lib/storage/types";
 import { DEFAULT_PREFERENCES } from "@/lib/storage/types";
-import { TARGET_FIELDS, DAY_SHORT } from "@/lib/clients";
+import { DEFAULT_TARGETS, TARGET_FIELDS, DAY_SHORT } from "@/lib/clients";
 import {
   MACRO_STYLES,
   PROTEIN_SOURCES,
   targetsFromStyle,
 } from "@/lib/preferences";
-import { getIngredient, searchIngredients } from "@/lib/database";
+import { getIngredient } from "@/lib/database";
 import { generatePlan, type GeneratedDay } from "@/lib/mealPlanner";
 import { formatIdr, formatPrice } from "@/lib/pricing";
 import { round0, round1 } from "@/lib/format";
-
-const DEFAULT_TARGETS: MacroTargets = {
-  energy_kcal: 2000,
-  protein_g: 150,
-  carbs_g: 200,
-  fat_g: 65,
-};
+import IngredientTypeahead from "@/components/IngredientTypeahead";
+import Modal from "@/components/ui/Modal";
 
 /**
  * Coach workflow in two steps: say what the client likes, then produce and
@@ -75,7 +69,6 @@ export default function GeneratePlanDialog({
   const [replace, setReplace] = useState(true);
   const [seed, setSeed] = useState(1);
   const [preview, setPreview] = useState<GeneratedDay[] | null>(null);
-  const [avoidQuery, setAvoidQuery] = useState("");
 
   const days = useMemo(() => [0, 1, 2, 3, 4, 5, 6], []);
 
@@ -97,12 +90,6 @@ export default function GeneratePlanDialog({
     setPreview(null);
   }
 
-  const avoidResults = useMemo(() => {
-    if (!avoidQuery.trim()) return [];
-    return searchIngredients(avoidQuery, null)
-      .filter((i) => !preferences.avoidIngredientIds.includes(i.ingredient_id))
-      .slice(0, 5);
-  }, [avoidQuery, preferences.avoidIngredientIds]);
 
   function run(nextSeed: number) {
     setSeed(nextSeed);
@@ -130,40 +117,60 @@ export default function GeneratePlanDialog({
     : 0;
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-end justify-center bg-charcoal/40 p-0 sm:items-center sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-xl2 bg-cream shadow-card sm:rounded-xl2"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between border-b border-cream-deep px-4 py-3">
-          <div>
-            <h3 className="flex items-center gap-2 font-display text-lg font-700 text-charcoal">
-              <Sparkles size={18} className="text-tomato" />
-              {step === 1 ? "What does " + client.name + " like?" : `Week ${week} plan`}
-            </h3>
-            <p className="text-xs text-charcoal-soft">
-              Step {step} of 2 ·{" "}
-              {step === 1
-                ? "Tastes shape the mix, not the maths"
-                : "Targets, sources, then review"}
-            </p>
-          </div>
+    <Modal
+      title={
+        <>
+          <Sparkles size={18} className="text-tomato" />
+          {step === 1 ? `What does ${client.name} like?` : `Week ${week} plan`}
+        </>
+      }
+      subtitle={`Step ${step} of 2 · ${
+        step === 1
+          ? "Tastes shape the mix, not the maths"
+          : "Targets, sources, then review"
+      }`}
+      onClose={onClose}
+      size="2xl"
+      footer={
+        <>
+          {step === 2 && (
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-600 text-charcoal-soft hover:text-charcoal"
+            >
+              <ArrowLeft size={15} /> Preferences
+            </button>
+          )}
+          <div className="flex-1" />
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-charcoal-soft hover:bg-cream-deep"
-            aria-label="Close"
+            className="rounded-xl border border-cream-deep bg-white px-4 py-2 text-sm font-600 text-charcoal"
           >
-            <X size={18} />
+            Cancel
           </button>
-        </div>
-
-        <div className="scroll-slim flex-1 overflow-y-auto px-4 py-4">
+          {step === 1 ? (
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              className="flex items-center gap-1.5 rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
+            >
+              Next <ArrowRight size={15} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={!preview}
+              onClick={() => preview && onApply(preview, replace, preferences)}
+              className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
+            >
+              Apply to week {week}
+            </button>
+          )}
+        </>
+      }
+    >
           {step === 1 ? (
             <>
               {/* Macro style */}
@@ -263,43 +270,21 @@ export default function GeneratePlanDialog({
                 </div>
               )}
 
-              <div className="relative">
-                <Search
-                  size={15}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-charcoal-soft"
-                />
-                <input
-                  value={avoidQuery}
-                  onChange={(e) => setAvoidQuery(e.target.value)}
-                  placeholder="Search an ingredient to exclude…"
-                  className="w-full rounded-xl border border-cream-deep bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-tomato-soft"
-                />
-                {avoidResults.length > 0 && (
-                  <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-cream-deep bg-white shadow-card">
-                    {avoidResults.map((ingredient) => (
-                      <li key={ingredient.ingredient_id}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPreferences({
-                              ...preferences,
-                              avoidIngredientIds: [
-                                ...preferences.avoidIngredientIds,
-                                ingredient.ingredient_id,
-                              ],
-                            });
-                            setAvoidQuery("");
-                            setPreview(null);
-                          }}
-                          className="w-full px-3 py-2 text-left text-sm text-charcoal hover:bg-cream"
-                        >
-                          {ingredient.name}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              <IngredientTypeahead
+                placeholder="Search an ingredient to exclude…"
+                excludeIds={preferences.avoidIngredientIds}
+                limit={5}
+                onSelect={(ingredient) => {
+                  setPreferences({
+                    ...preferences,
+                    avoidIngredientIds: [
+                      ...preferences.avoidIngredientIds,
+                      ingredient.ingredient_id,
+                    ],
+                  });
+                  setPreview(null);
+                }}
+              />
             </>
           ) : (
             <>
@@ -518,46 +503,6 @@ export default function GeneratePlanDialog({
               )}
             </>
           )}
-        </div>
-
-        <div className="flex items-center gap-2 border-t border-cream-deep px-4 py-3">
-          {step === 2 && (
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-600 text-charcoal-soft hover:text-charcoal"
-            >
-              <ArrowLeft size={15} /> Preferences
-            </button>
-          )}
-          <div className="flex-1" />
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-cream-deep bg-white px-4 py-2 text-sm font-600 text-charcoal"
-          >
-            Cancel
-          </button>
-          {step === 1 ? (
-            <button
-              type="button"
-              onClick={() => setStep(2)}
-              className="flex items-center gap-1.5 rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
-            >
-              Next <ArrowRight size={15} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={!preview}
-              onClick={() => preview && onApply(preview, replace, preferences)}
-              className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
-            >
-              Apply to week {week}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

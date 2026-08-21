@@ -29,6 +29,17 @@ const config: Config = {
         display: ["var(--font-display)", "Georgia", "serif"],
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
       },
+      /**
+       * The app writes weights numerically (`font-600`), which is not a stock
+       * Tailwind utility — without these keys those ~200 class names emit no
+       * CSS at all and every heading renders at 400.
+       */
+      fontWeight: {
+        400: "400",
+        500: "500",
+        600: "600",
+        700: "700",
+      },
       boxShadow: {
         card: "0 1px 2px rgba(44,38,33,0.06), 0 8px 24px -12px rgba(44,38,33,0.18)",
       },

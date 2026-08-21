@@ -17,9 +17,10 @@ import {
   isOrphaned,
 } from "@/lib/clients";
 import { formatPrice } from "@/lib/pricing";
-import { round0, round1 } from "@/lib/format";
+import { round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import TargetAdherence from "@/components/TargetAdherence";
+import MacroChips from "@/components/MacroChips";
 
 /**
  * One day, full width. The week grid has to truncate names to fit seven
@@ -165,17 +166,7 @@ export default function PlanDayView({
                               </span>
                             )}
                           </div>
-                          <div className="mt-1 flex flex-wrap gap-x-3 text-xs tabular-nums text-charcoal-soft">
-                            <span>
-                              <b className="font-700 text-tomato">
-                                {round0(macros.energy_kcal)}
-                              </b>{" "}
-                              kcal
-                            </span>
-                            <span>P {round1(macros.protein_g)}</span>
-                            <span>C {round1(macros.carbs_g)}</span>
-                            <span>F {round1(macros.fat_g)}</span>
-                          </div>
+                          <MacroChips macros={macros} className="mt-1" />
                         </button>
                       </li>
                     );

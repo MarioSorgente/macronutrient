@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Minus, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { AlertTriangle, Minus, Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { Assignment, Dish } from "@/lib/storage/types";
 import {
   assignmentBasePrice,
@@ -17,6 +17,7 @@ import { perItemMacros } from "@/lib/calc";
 import { formatIdr, formatPrice } from "@/lib/pricing";
 import { round0, round1 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
+import Modal from "@/components/ui/Modal";
 
 /**
  * Everything about one planned meal: what it is, what it delivers, what it
@@ -70,34 +71,29 @@ export default function MealDetailDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-charcoal/40 p-0 sm:items-center sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-xl2 bg-cream shadow-card sm:rounded-xl2"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3 border-b border-cream-deep px-4 py-3">
-          <div className="min-w-0">
-            <h3 className="font-display text-lg font-700 leading-tight text-charcoal">
-              {name}
-            </h3>
-            <p className="mt-0.5 text-xs text-charcoal-soft">{contextLabel}</p>
-          </div>
+    <Modal
+      title={name}
+      subtitle={contextLabel}
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="mr-auto flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-600 text-charcoal-soft hover:text-tomato-dark"
+          >
+            <Trash2 size={15} /> Remove from plan
+          </button>
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-lg p-1.5 text-charcoal-soft hover:bg-cream-deep"
-            aria-label="Close"
+            className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
           >
-            <X size={18} />
+            Done
           </button>
-        </div>
-
-        <div className="scroll-slim flex-1 overflow-y-auto px-4 py-4">
+        </>
+      }
+    >
           <MacroSummary macros={macros} />
 
           {/* Servings */}
@@ -258,25 +254,6 @@ export default function MealDetailDialog({
               </table>
             </div>
           )}
-        </div>
-
-        <div className="flex items-center justify-between gap-2 border-t border-cream-deep px-4 py-3">
-          <button
-            type="button"
-            onClick={onRemove}
-            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-600 text-charcoal-soft hover:text-tomato-dark"
-          >
-            <Trash2 size={15} /> Remove from plan
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
