@@ -23,6 +23,7 @@ import {
   type DishItem,
 } from "@/lib/storage/types";
 import {
+  byId,
   DAY_NAMES,
   assignmentsFor,
   dateFor,
@@ -80,7 +81,7 @@ export default function ClientPlanner() {
     });
   }, [id]);
 
-  const dishMap = useMemo(() => new Map(dishes.map((d) => [d.id, d])), [dishes]);
+  const dishMap = useMemo(() => byId(dishes), [dishes]);
 
   const persist = useCallback(async (next: Client) => {
     const updated = { ...next, updatedAt: new Date().toISOString() };

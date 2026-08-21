@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Printer, UtensilsCrossed } from "lucide-react";
 import { getClientRepository, getDishRepository } from "@/lib/storage";
 import type { Client, Dish } from "@/lib/storage/types";
 import {
+  byId,
   DAY_NAMES,
   assignmentMacros,
   assignmentName,
@@ -21,10 +21,10 @@ import {
   weekTotals,
 } from "@/lib/clients";
 import { formatIdr, formatPrice } from "@/lib/pricing";
-import { databaseMeta } from "@/lib/database";
-import { formatDate, round0, round1 } from "@/lib/format";
+import { round0, round1 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import TargetAdherence from "@/components/TargetAdherence";
+import ReportShell, { ReportMessage } from "@/components/ReportShell";
 
 export default function ClientReport() {
   const params = useParams<{ id: string }>();
@@ -47,15 +47,15 @@ export default function ClientReport() {
     });
   }, [id]);
 
-  const dishMap = useMemo(() => new Map(dishes.map((d) => [d.id, d])), [dishes]);
+  const dishMap = useMemo(() => byId(dishes), [dishes]);
 
   if (loading) {
-    return <Centered>Loading report…</Centered>;
+    return <ReportMessage>Loading report…</ReportMessage>;
   }
 
   if (!client) {
     return (
-      <Centered>
+      <ReportMessage>
         <p className="font-display text-xl font-700 text-charcoal">
           Client not found
         </p>
@@ -65,7 +65,7 @@ export default function ClientReport() {
         >
           Back to clients
         </Link>
-      </Centered>
+      </ReportMessage>
     );
   }
 
@@ -75,66 +75,30 @@ export default function ClientReport() {
       : [scope];
 
   return (
-    <div className="min-h-screen">
-      {/* Action bar (hidden when printing) */}
-      <div className="no-print sticky top-0 z-10 border-b border-cream-deep bg-cream/80 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-3">
-          <Link
-            href={`/clients/${client.id}`}
-            className="flex items-center gap-1.5 text-sm font-600 text-charcoal-soft hover:text-charcoal"
-          >
-            <ArrowLeft size={16} /> Back to planner
-          </Link>
-          <div className="flex items-center gap-2">
-            <select
-              value={scope === "all" ? "all" : String(scope)}
-              onChange={(e) =>
-                setScope(e.target.value === "all" ? "all" : Number(e.target.value))
-              }
-              className="rounded-lg border border-cream-deep bg-white px-2.5 py-1.5 text-sm font-600 text-charcoal outline-none focus:border-tomato-soft"
-              aria-label="Report scope"
-            >
-              <option value="all">Whole program</option>
-              {Array.from({ length: client.weekCount }, (_, i) => i + 1).map((w) => (
-                <option key={w} value={w}>
-                  Week {w} only
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="flex items-center gap-2 rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
-            >
-              <Printer size={16} /> Print / Save as PDF
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <main className="mx-auto max-w-3xl px-4 py-6">
-        <article className="print-page rounded-xl2 border border-cream-deep bg-white p-6 shadow-card sm:p-8">
-          {/* Brand header */}
-          <div className="flex items-center justify-between border-b border-cream-deep pb-4">
-            <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl2 bg-tomato text-cream">
-                <UtensilsCrossed size={20} />
-              </span>
-              <div className="leading-tight">
-                <div className="font-display text-lg font-700 text-charcoal">
-                  Mamma Calories
-                </div>
-                <div className="text-[11px] font-600 uppercase tracking-[0.18em] text-tomato">
-                  For Negrita
-                </div>
-              </div>
-            </div>
-            <div className="text-right text-xs text-charcoal-soft">
-              <div>Client meal plan</div>
-              <div>{formatDate(client.updatedAt)}</div>
-            </div>
-          </div>
-
+    <ReportShell
+      backHref={`/clients/${client.id}`}
+      backLabel="Back to planner"
+      kind="Client meal plan"
+      dateIso={client.updatedAt}
+      footnote="Some restaurant values are estimates; define house recipes to make them exact."
+      toolbar={
+        <select
+          value={scope === "all" ? "all" : String(scope)}
+          onChange={(e) =>
+            setScope(e.target.value === "all" ? "all" : Number(e.target.value))
+          }
+          className="rounded-lg border border-cream-deep bg-white px-2.5 py-1.5 text-sm font-600 text-charcoal outline-none focus:border-tomato-soft"
+          aria-label="Report scope"
+        >
+          <option value="all">Whole program</option>
+          {Array.from({ length: client.weekCount }, (_, i) => i + 1).map((w) => (
+            <option key={w} value={w}>
+              Week {w} only
+            </option>
+          ))}
+        </select>
+      }
+    >
           {/* Client */}
           <div className="py-5">
             <h1 className="font-display text-3xl font-700 text-charcoal">
@@ -309,22 +273,8 @@ export default function ClientReport() {
             );
           })}
 
-          <p className="mt-6 border-t border-cream-deep pt-4 text-[11px] leading-relaxed text-charcoal-soft">
-            Macros are calculated from each ingredient&apos;s per-100&nbsp;g values as{" "}
-            <span className="font-600">grams ÷ 100 × value per 100&nbsp;g</span>.
-            Source: {databaseMeta.name} (v{databaseMeta.version}). Some restaurant
-            values are estimates; define house recipes to make them exact.
-          </p>
-        </article>
-      </main>
-    </div>
+    </ReportShell>
   );
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="grid min-h-screen place-items-center px-4">
-      <div className="text-center text-charcoal-soft">{children}</div>
-    </div>
-  );
-}
+

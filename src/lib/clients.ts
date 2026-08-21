@@ -22,6 +22,27 @@ export const DAY_NAMES = [
 export const DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /**
+ * Index dishes by id for the plan helpers below, which all take a lookup map
+ * rather than a list so a week's worth of assignments is not a linear scan
+ * each time.
+ */
+export function byId(dishes: Dish[]): Map<string, Dish> {
+  return new Map(dishes.map((dish) => [dish.id, dish]));
+}
+
+/**
+ * Starting point for someone who has not set targets yet — a middle-of-the-road
+ * 2000 kcal day. Used by the settings dialog and the auto-planner, which must
+ * not disagree about what "default" means.
+ */
+export const DEFAULT_TARGETS: MacroTargets = {
+  energy_kcal: 2000,
+  protein_g: 150,
+  carbs_g: 200,
+  fat_g: 65,
+};
+
+/**
  * Macros for one assignment. The live dish wins whenever it still exists, so
  * edits to a dish flow through to the plan; the snapshot taken at assignment
  * time is the fallback when the dish has since been deleted.

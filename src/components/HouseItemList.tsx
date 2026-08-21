@@ -7,7 +7,8 @@ import { getIngredient, ingredients, isEstimated } from "@/lib/database";
 import { categoryStyle } from "@/lib/categoryStyle";
 import { useHouseRecipes } from "@/store/houseRecipes";
 import HouseRecipeEditor from "@/components/HouseRecipeEditor";
-import { round0, round1 } from "@/lib/format";
+import { round0 } from "@/lib/format";
+import MacroChips from "@/components/MacroChips";
 
 export default function HouseItemList() {
   const version = useHouseRecipes((s) => s.version);
@@ -74,15 +75,9 @@ export default function HouseItemList() {
                 </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs tabular-nums text-charcoal-soft">
-                <span>
-                  <b className="font-700 text-tomato">{round0(m.energy_kcal)}</b> kcal
-                </span>
-                <span>P {round1(m.protein_g)}</span>
-                <span>C {round1(m.carbs_g)}</span>
-                <span>F {round1(m.fat_g)}</span>
+              <MacroChips macros={m} className="mt-3">
                 <span className="opacity-70">/100 g</span>
-              </div>
+              </MacroChips>
 
               {recipe && (
                 <p className="mt-2 text-[11px] text-charcoal-soft">

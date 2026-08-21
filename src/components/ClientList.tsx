@@ -8,7 +8,7 @@ import { DEFAULT_MEAL_SLOTS, type Client, type Dish } from "@/lib/storage/types"
 import { formatDate, round0 } from "@/lib/format";
 import { usePlannerMode } from "@/lib/coachMode";
 import { formatPrice } from "@/lib/pricing";
-import { weekPrice } from "@/lib/clients";
+import { byId, weekPrice } from "@/lib/clients";
 import PlannerModeToggle from "@/components/PlannerModeToggle";
 
 function todayIso(): string {
@@ -28,7 +28,7 @@ export default function ClientList() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [mode, setMode] = usePlannerMode();
 
-  const dishMap = useMemo(() => new Map(dishes.map((d) => [d.id, d])), [dishes]);
+  const dishMap = useMemo(() => byId(dishes), [dishes]);
 
   const refresh = useCallback(async () => {
     const [list, savedDishes] = await Promise.all([

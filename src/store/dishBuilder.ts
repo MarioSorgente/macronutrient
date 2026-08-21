@@ -1,7 +1,13 @@
 import { create } from "zustand";
-import { GRAM_UNIT_ID, type Ingredient, type MenuRecipe } from "@/types/nutrition";
+import type { Ingredient, MenuRecipe } from "@/types/nutrition";
 import { getIngredient } from "@/lib/database";
-import { findUnit, fromGrams, normalizeQuantity, toGrams } from "@/lib/units";
+import {
+  addItem,
+  makeItem,
+  removeItem,
+  setItemQuantity,
+  setItemUnit,
+} from "@/lib/dishItems";
 import type { Dish, DishItem } from "@/lib/storage/types";
 
 interface DishBuilderState {
@@ -21,33 +27,10 @@ interface DishBuilderState {
   reset: () => void;
 }
 
-const DEFAULT_GRAMS = 100;
-
-/** Builds a dish item using the ingredient's most natural unit. */
-function makeItem(ingredient: Ingredient, grams?: number): DishItem {
-  const unit = findUnit(ingredient, ingredient.defaultUnitId);
-
-  if (typeof grams === "number") {
-    return {
-      ingredientId: ingredient.ingredient_id,
-      name: ingredient.name,
-      grams,
-      unitId: unit.id,
-      quantity: fromGrams(unit, grams),
-    };
-  }
-
-  // A countable ingredient starts at one piece; anything weighed starts at 100 g.
-  const quantity = unit.id === GRAM_UNIT_ID ? DEFAULT_GRAMS : 1;
-  return {
-    ingredientId: ingredient.ingredient_id,
-    name: ingredient.name,
-    grams: toGrams(unit, quantity),
-    unitId: unit.id,
-    quantity,
-  };
-}
-
+/**
+ * The dish currently being built. Item-level rules live in `lib/dishItems` so
+ * the assign dialog's inline builder behaves identically without a second copy.
+ */
 export const useDishBuilder = create<DishBuilderState>((set, get) => ({
   editingId: null,
   name: "",
@@ -55,36 +38,16 @@ export const useDishBuilder = create<DishBuilderState>((set, get) => ({
 
   setName: (name) => set({ name }),
 
-  addIngredient: (ingredient) => {
-    if (get().items.some((it) => it.ingredientId === ingredient.ingredient_id)) {
-      return; // already in the dish; the amount is adjusted in the cart
-    }
-    set({ items: [...get().items, makeItem(ingredient)] });
-  },
+  addIngredient: (ingredient) => set({ items: addItem(get().items, ingredient) }),
 
   removeItem: (ingredientId) =>
-    set({ items: get().items.filter((it) => it.ingredientId !== ingredientId) }),
+    set({ items: removeItem(get().items, ingredientId) }),
 
   setQuantity: (ingredientId, quantity) =>
-    set({
-      items: get().items.map((it) => {
-        if (it.ingredientId !== ingredientId) return it;
-        const unit = findUnit(getIngredient(ingredientId), it.unitId);
-        const next = normalizeQuantity(unit, quantity);
-        return { ...it, quantity: next, grams: toGrams(unit, next) };
-      }),
-    }),
+    set({ items: setItemQuantity(get().items, ingredientId, quantity) }),
 
-  /** Switching units preserves the weight, so "100 g" becomes "2 large eggs". */
   setUnit: (ingredientId, unitId) =>
-    set({
-      items: get().items.map((it) => {
-        if (it.ingredientId !== ingredientId) return it;
-        const unit = findUnit(getIngredient(ingredientId), unitId);
-        const quantity = fromGrams(unit, it.grams);
-        return { ...it, unitId, quantity, grams: toGrams(unit, quantity) };
-      }),
-    }),
+    set({ items: setItemUnit(get().items, ingredientId, unitId) }),
 
   hasIngredient: (ingredientId) =>
     get().items.some((it) => it.ingredientId === ingredientId),

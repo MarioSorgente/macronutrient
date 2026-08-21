@@ -5,14 +5,15 @@ import { Hammer, Library, Minus, Plus, Search, X } from "lucide-react";
 import Link from "next/link";
 import type { Dish, DishItem } from "@/lib/storage/types";
 import type { Ingredient } from "@/types/nutrition";
-import { GRAM_UNIT_ID } from "@/types/nutrition";
-import { getIngredient, searchIngredients } from "@/lib/database";
-import { findUnit, fromGrams, normalizeQuantity, toGrams } from "@/lib/units";
-import { sumDishMacros, totalGrams } from "@/lib/calc";
+import { getIngredient } from "@/lib/database";
+import { addItem, setItemQuantity, setItemUnit } from "@/lib/dishItems";
+import { scaleMacros, sumDishMacros, totalGrams } from "@/lib/calc";
 import { formatPrice, priceItems } from "@/lib/pricing";
-import { round0, round1 } from "@/lib/format";
+import { round0 } from "@/lib/format";
 import DishItemRow from "@/components/DishItemRow";
 import SegmentedToggle from "@/components/SegmentedToggle";
+import MacroChips from "@/components/MacroChips";
+import IngredientTypeahead from "@/components/IngredientTypeahead";
 
 type Tab = "saved" | "build";
 
@@ -49,61 +50,28 @@ export default function AssignDishDialog({
   const [items, setItems] = useState<DishItem[]>([]);
   const [name, setName] = useState("");
   const [alsoSave, setAlsoSave] = useState(false);
-  const [buildQuery, setBuildQuery] = useState("");
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q ? dishes.filter((d) => d.name.toLowerCase().includes(q)) : dishes;
   }, [dishes, query]);
 
-  const buildResults = useMemo(() => {
-    if (!buildQuery.trim()) return [];
-    return searchIngredients(buildQuery, null)
-      .filter((i) => !items.some((it) => it.ingredientId === i.ingredient_id))
-      .slice(0, 6);
-  }, [buildQuery, items]);
-
   const totals = useMemo(() => sumDishMacros(items), [items]);
   const price = useMemo(() => priceItems(items), [items]);
   const grams = useMemo(() => totalGrams(items), [items]);
 
-  /** Adds an ingredient using its most natural unit, as the Builder does. */
+  // Item rules are shared with the Builder's store, so a meal composed here
+  // behaves exactly like one composed on the Build page.
   function addIngredient(ingredient: Ingredient) {
-    const unit = findUnit(ingredient, ingredient.defaultUnitId);
-    const quantity = unit.id === GRAM_UNIT_ID ? 100 : 1;
-    setItems([
-      ...items,
-      {
-        ingredientId: ingredient.ingredient_id,
-        name: ingredient.name,
-        grams: toGrams(unit, quantity),
-        unitId: unit.id,
-        quantity,
-      },
-    ]);
-    setBuildQuery("");
+    setItems((current) => addItem(current, ingredient));
   }
 
   function setQuantity(ingredientId: string, quantity: number) {
-    setItems(
-      items.map((it) => {
-        if (it.ingredientId !== ingredientId) return it;
-        const unit = findUnit(getIngredient(ingredientId), it.unitId);
-        const next = normalizeQuantity(unit, quantity);
-        return { ...it, quantity: next, grams: toGrams(unit, next) };
-      })
-    );
+    setItems((current) => setItemQuantity(current, ingredientId, quantity));
   }
 
   function setUnit(ingredientId: string, unitId: string) {
-    setItems(
-      items.map((it) => {
-        if (it.ingredientId !== ingredientId) return it;
-        const unit = findUnit(getIngredient(ingredientId), unitId);
-        const quantity = fromGrams(unit, it.grams);
-        return { ...it, unitId, quantity, grams: toGrams(unit, quantity) };
-      })
-    );
+    setItems((current) => setItemUnit(current, ingredientId, unitId));
   }
 
   /** Falls back to naming the meal after what is in it. */
@@ -114,6 +82,9 @@ export default function AssignDishDialog({
       .slice(0, 2)
       .join(" + ");
 
+  // Not built on ui/Modal: each tab owns its own scroll region and the Build
+  // tab has a footer the Saved tab does not, so the shared single-body shell
+  // would have to grow props that only this dialog would ever use.
   return (
     <div
       className="fixed inset-0 z-40 flex items-end justify-center bg-charcoal/40 p-0 sm:items-center sm:p-4"
@@ -226,12 +197,11 @@ export default function AssignDishDialog({
                             <div className="truncate font-600 text-charcoal">
                               {dish.name}
                             </div>
-                            <div className="text-[11px] tabular-nums text-charcoal-soft">
-                              {round0(dishTotals.energy_kcal * servings)} kcal · P{" "}
-                              {round1(dishTotals.protein_g * servings)} · C{" "}
-                              {round1(dishTotals.carbs_g * servings)} · F{" "}
-                              {round1(dishTotals.fat_g * servings)}
-                            </div>
+                            <MacroChips
+                              macros={scaleMacros(dishTotals, servings)}
+                              variant="dots"
+                              size="xxs"
+                            />
                           </div>
                           <Plus size={16} className="shrink-0 text-tomato" />
                         </button>
@@ -250,37 +220,12 @@ export default function AssignDishDialog({
         ) : (
           <>
             <div className="border-b border-cream-deep px-4 py-3">
-              <div className="relative">
-                <Search
-                  size={15}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-charcoal-soft"
-                />
-                <input
-                  autoFocus
-                  value={buildQuery}
-                  onChange={(e) => setBuildQuery(e.target.value)}
-                  placeholder="Search an ingredient to add…"
-                  className="w-full rounded-xl border border-cream-deep bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-tomato-soft focus:ring-2 focus:ring-tomato-soft/40"
-                />
-                {buildResults.length > 0 && (
-                  <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-cream-deep bg-white shadow-card">
-                    {buildResults.map((ingredient) => (
-                      <li key={ingredient.ingredient_id}>
-                        <button
-                          type="button"
-                          onClick={() => addIngredient(ingredient)}
-                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-cream"
-                        >
-                          <span className="truncate text-charcoal">
-                            {ingredient.name}
-                          </span>
-                          <Plus size={14} className="shrink-0 text-tomato" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              <IngredientTypeahead
+                autoFocus
+                placeholder="Search an ingredient to add…"
+                excludeIds={items.map((it) => it.ingredientId)}
+                onSelect={addIngredient}
+              />
             </div>
 
             <div className="scroll-slim flex-1 overflow-y-auto px-4 py-3">
@@ -320,20 +265,13 @@ export default function AssignDishDialog({
                         })}
                       </span>
                     </div>
-                    <div className="mt-1 flex flex-wrap gap-x-3 text-sm tabular-nums text-charcoal-soft">
-                      <span>
-                        <b className="font-700 text-tomato">
-                          {round0(totals.energy_kcal * servings)}
-                        </b>{" "}
-                        kcal
-                      </span>
-                      <span>P {round1(totals.protein_g * servings)}</span>
-                      <span>C {round1(totals.carbs_g * servings)}</span>
-                      <span>F {round1(totals.fat_g * servings)}</span>
-                      <span className="opacity-70">
-                        {round0(grams * servings)} g
-                      </span>
-                    </div>
+                    <MacroChips
+                      macros={scaleMacros(totals, servings)}
+                      size="sm"
+                      className="mt-1"
+                    >
+                      <span className="opacity-70">{round0(grams * servings)} g</span>
+                    </MacroChips>
                   </div>
 
                   <input

@@ -3,15 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Printer, UtensilsCrossed } from "lucide-react";
 import { getDishRepository } from "@/lib/storage";
 import type { Dish } from "@/lib/storage/types";
 import { getIngredient } from "@/lib/database";
 import { perItemMacros, sumDishMacros, totalGrams } from "@/lib/calc";
-import { formatDate, round0, round1 } from "@/lib/format";
+import { round0, round1 } from "@/lib/format";
 import { formatPrice, priceItems } from "@/lib/pricing";
-import { databaseMeta } from "@/lib/database";
 import MacroSummary from "@/components/MacroSummary";
+import ReportShell, { ReportMessage } from "@/components/ReportShell";
 
 type LoadState = "loading" | "ready" | "missing";
 
@@ -39,15 +38,15 @@ export default function ReportPage() {
 
   if (state === "loading") {
     return (
-      <CenterMessage>
+      <ReportMessage>
         <p className="text-charcoal-soft">Loading report…</p>
-      </CenterMessage>
+      </ReportMessage>
     );
   }
 
   if (state === "missing" || !dish || !totals) {
     return (
-      <CenterMessage>
+      <ReportMessage>
         <p className="font-display text-xl font-700 text-charcoal">
           Report not found
         </p>
@@ -60,56 +59,20 @@ export default function ReportPage() {
         >
           Back to saved dishes
         </Link>
-      </CenterMessage>
+      </ReportMessage>
     );
   }
 
   const grams = totalGrams(dish.items);
 
   return (
-    <div className="min-h-screen">
-      {/* Action bar (hidden when printing) */}
-      <div className="no-print sticky top-0 z-10 border-b border-cream-deep bg-cream/80 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-          <Link
-            href="/dishes"
-            className="flex items-center gap-1.5 text-sm font-600 text-charcoal-soft hover:text-charcoal"
-          >
-            <ArrowLeft size={16} /> Back
-          </Link>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="flex items-center gap-2 rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
-          >
-            <Printer size={16} /> Print / Save as PDF
-          </button>
-        </div>
-      </div>
-
-      <main className="mx-auto max-w-3xl px-4 py-6">
-        <article className="print-page rounded-xl2 border border-cream-deep bg-white p-6 shadow-card sm:p-8">
-          {/* Brand header */}
-          <div className="flex items-center justify-between border-b border-cream-deep pb-4">
-            <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl2 bg-tomato text-cream">
-                <UtensilsCrossed size={20} />
-              </span>
-              <div className="leading-tight">
-                <div className="font-display text-lg font-700 text-charcoal">
-                  Mamma Calories
-                </div>
-                <div className="text-[11px] font-600 uppercase tracking-[0.18em] text-tomato">
-                  For Negrita
-                </div>
-              </div>
-            </div>
-            <div className="text-right text-xs text-charcoal-soft">
-              <div>Nutrition report</div>
-              <div>{formatDate(dish.updatedAt)}</div>
-            </div>
-          </div>
-
+    <ReportShell
+      backHref="/dishes"
+      backLabel="Back"
+      kind="Nutrition report"
+      dateIso={dish.updatedAt}
+      footnote="Some restaurant values are estimates or proxies; confirm against weighed recipes for production accuracy."
+    >
           {/* Dish title */}
           <div className="py-5">
             <h1 className="font-display text-3xl font-700 text-charcoal">
@@ -203,25 +166,8 @@ export default function ReportPage() {
             </table>
           </div>
 
-          {/* Footer note */}
-          <p className="mt-6 border-t border-cream-deep pt-4 text-[11px] leading-relaxed text-charcoal-soft">
-            Macros are calculated from each ingredient&apos;s per-100&nbsp;g values
-            as{" "}
-            <span className="font-600">grams ÷ 100 × value per 100&nbsp;g</span>.
-            Source: {databaseMeta.name} (v{databaseMeta.version}). Some restaurant
-            values are estimates or proxies; confirm against weighed recipes for
-            production accuracy.
-          </p>
-        </article>
-      </main>
-    </div>
+    </ReportShell>
   );
 }
 
-function CenterMessage({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="grid min-h-screen place-items-center px-4">
-      <div className="text-center">{children}</div>
-    </div>
-  );
-}
+

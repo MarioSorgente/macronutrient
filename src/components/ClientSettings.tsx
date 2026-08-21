@@ -1,20 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { GripVertical, Plus, Trash2, X } from "lucide-react";
+import { GripVertical, Plus, Trash2 } from "lucide-react";
 import {
   MAX_PROGRAM_WEEKS,
   type Client,
   type MacroTargets,
 } from "@/lib/storage/types";
-import { TARGET_FIELDS } from "@/lib/clients";
-
-const EMPTY_TARGETS: MacroTargets = {
-  energy_kcal: 2000,
-  protein_g: 150,
-  carbs_g: 200,
-  fat_g: 65,
-};
+import { DEFAULT_TARGETS, TARGET_FIELDS } from "@/lib/clients";
+import Modal from "@/components/ui/Modal";
+import Field from "@/components/ui/Field";
 
 /**
  * Client program settings: name, start date, program length, editable meal slot
@@ -37,7 +32,7 @@ export default function ClientSettings({
   const [newSlot, setNewSlot] = useState("");
   const [targetsOn, setTargetsOn] = useState(Boolean(client.targets));
   const [targets, setTargets] = useState<MacroTargets>(
-    client.targets ?? EMPTY_TARGETS
+    client.targets ?? DEFAULT_TARGETS
   );
 
   function addSlot() {
@@ -65,164 +60,12 @@ export default function ClientSettings({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-end justify-center bg-charcoal/40 p-0 sm:items-center sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-xl2 bg-cream shadow-card sm:rounded-xl2"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-cream-deep px-4 py-3">
-          <h3 className="font-display text-lg font-700 text-charcoal">
-            Client settings
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-charcoal-soft hover:bg-cream-deep"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="scroll-slim flex-1 space-y-4 overflow-y-auto px-4 py-4">
-          <Field label="Name">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm outline-none focus:border-tomato-soft"
-            />
-          </Field>
-
-          <Field label="Notes" hint="Allergies, preferences, goals">
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              className="w-full resize-none rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm outline-none focus:border-tomato-soft"
-            />
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Program starts">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm outline-none focus:border-tomato-soft"
-              />
-            </Field>
-            <Field label="Weeks" hint={`Up to ${MAX_PROGRAM_WEEKS}`}>
-              <select
-                value={weekCount}
-                onChange={(e) => setWeekCount(Number(e.target.value))}
-                className="w-full rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm outline-none focus:border-tomato-soft"
-              >
-                {Array.from({ length: MAX_PROGRAM_WEEKS }, (_, i) => i + 1).map(
-                  (n) => (
-                    <option key={n} value={n}>
-                      {n} week{n === 1 ? "" : "s"}
-                    </option>
-                  )
-                )}
-              </select>
-            </Field>
-          </div>
-
-          {/* Meal slots */}
-          <Field label="Meal slots" hint="Rename or add your own">
-            <ul className="flex flex-col gap-1.5">
-              {slots.map((slot, index) => (
-                <li key={index} className="flex items-center gap-2">
-                  <GripVertical size={14} className="shrink-0 text-charcoal-soft" />
-                  <input
-                    value={slot}
-                    onChange={(e) => renameSlot(index, e.target.value)}
-                    className="flex-1 rounded-lg border border-cream-deep bg-white px-2.5 py-1.5 text-sm outline-none focus:border-tomato-soft"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSlots(slots.filter((_, i) => i !== index))}
-                    disabled={slots.length === 1}
-                    className="rounded-lg p-1.5 text-charcoal-soft hover:bg-tomato-soft/30 hover:text-tomato-dark disabled:opacity-30"
-                    aria-label={`Remove ${slot}`}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-2 flex gap-2">
-              <input
-                value={newSlot}
-                onChange={(e) => setNewSlot(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addSlot();
-                  }
-                }}
-                placeholder="e.g. Pre-workout"
-                className="flex-1 rounded-lg border border-cream-deep bg-white px-2.5 py-1.5 text-sm outline-none focus:border-tomato-soft"
-              />
-              <button
-                type="button"
-                onClick={addSlot}
-                className="flex items-center gap-1 rounded-lg bg-cream-deep px-2.5 py-1.5 text-xs font-600 text-charcoal hover:bg-tomato-soft/40"
-              >
-                <Plus size={14} /> Add
-              </button>
-            </div>
-          </Field>
-
-          {/* Targets */}
-          <div className="rounded-xl border border-cream-deep bg-white p-3">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={targetsOn}
-                onChange={(e) => setTargetsOn(e.target.checked)}
-                className="h-4 w-4 accent-tomato"
-              />
-              <span className="text-sm font-600 text-charcoal">
-                Track daily macro targets
-              </span>
-            </label>
-            <p className="mt-1 text-xs text-charcoal-soft">
-              Optional. When off, the planner just shows totals.
-            </p>
-
-            {targetsOn && (
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {TARGET_FIELDS.map((field) => (
-                  <label key={field.key} className="text-xs">
-                    <span className="mb-1 block font-600 text-charcoal-soft">
-                      {field.label} ({field.unit})
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={targets[field.key]}
-                      onChange={(e) =>
-                        setTargets({
-                          ...targets,
-                          [field.key]: Math.max(0, Number(e.target.value) || 0),
-                        })
-                      }
-                      className="no-spin w-full rounded-lg border border-cream-deep px-2 py-1.5 text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
-                    />
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 border-t border-cream-deep px-4 py-3">
+    <Modal
+      title="Client settings"
+      onClose={onClose}
+      bodyClassName="space-y-4"
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
@@ -237,28 +80,141 @@ export default function ClientSettings({
           >
             Save settings
           </button>
+        </>
+      }
+    >
+        <Field label="Name">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm outline-none focus:border-tomato-soft"
+          />
+        </Field>
+
+        <Field label="Notes" hint="Allergies, preferences, goals">
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            className="w-full resize-none rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm outline-none focus:border-tomato-soft"
+          />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Program starts">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm outline-none focus:border-tomato-soft"
+            />
+          </Field>
+          <Field label="Weeks" hint={`Up to ${MAX_PROGRAM_WEEKS}`}>
+            <select
+              value={weekCount}
+              onChange={(e) => setWeekCount(Number(e.target.value))}
+              className="w-full rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm outline-none focus:border-tomato-soft"
+            >
+              {Array.from({ length: MAX_PROGRAM_WEEKS }, (_, i) => i + 1).map(
+                (n) => (
+                  <option key={n} value={n}>
+                    {n} week{n === 1 ? "" : "s"}
+                  </option>
+                )
+              )}
+            </select>
+          </Field>
         </div>
-      </div>
-    </div>
+
+        {/* Meal slots */}
+        <Field label="Meal slots" hint="Rename or add your own">
+          <ul className="flex flex-col gap-1.5">
+            {slots.map((slot, index) => (
+              <li key={index} className="flex items-center gap-2">
+                <GripVertical size={14} className="shrink-0 text-charcoal-soft" />
+                <input
+                  value={slot}
+                  onChange={(e) => renameSlot(index, e.target.value)}
+                  className="flex-1 rounded-lg border border-cream-deep bg-white px-2.5 py-1.5 text-sm outline-none focus:border-tomato-soft"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSlots(slots.filter((_, i) => i !== index))}
+                  disabled={slots.length === 1}
+                  className="rounded-lg p-1.5 text-charcoal-soft hover:bg-tomato-soft/30 hover:text-tomato-dark disabled:opacity-30"
+                  aria-label={`Remove ${slot}`}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2 flex gap-2">
+            <input
+              value={newSlot}
+              onChange={(e) => setNewSlot(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addSlot();
+                }
+              }}
+              placeholder="e.g. Pre-workout"
+              className="flex-1 rounded-lg border border-cream-deep bg-white px-2.5 py-1.5 text-sm outline-none focus:border-tomato-soft"
+            />
+            <button
+              type="button"
+              onClick={addSlot}
+              className="flex items-center gap-1 rounded-lg bg-cream-deep px-2.5 py-1.5 text-xs font-600 text-charcoal hover:bg-tomato-soft/40"
+            >
+              <Plus size={14} /> Add
+            </button>
+          </div>
+        </Field>
+
+        {/* Targets */}
+        <div className="rounded-xl border border-cream-deep bg-white p-3">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={targetsOn}
+              onChange={(e) => setTargetsOn(e.target.checked)}
+              className="h-4 w-4 accent-tomato"
+            />
+            <span className="text-sm font-600 text-charcoal">
+              Track daily macro targets
+            </span>
+          </label>
+          <p className="mt-1 text-xs text-charcoal-soft">
+            Optional. When off, the planner just shows totals.
+          </p>
+
+          {targetsOn && (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {TARGET_FIELDS.map((field) => (
+                <label key={field.key} className="text-xs">
+                  <span className="mb-1 block font-600 text-charcoal-soft">
+                    {field.label} ({field.unit})
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={targets[field.key]}
+                    onChange={(e) =>
+                      setTargets({
+                        ...targets,
+                        [field.key]: Math.max(0, Number(e.target.value) || 0),
+                      })
+                    }
+                    className="no-spin w-full rounded-lg border border-cream-deep px-2 py-1.5 text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+    </Modal>
   );
 }
 
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-sm font-600 text-charcoal">{label}</span>
-        {hint && <span className="text-[11px] text-charcoal-soft">{hint}</span>}
-      </div>
-      {children}
-    </div>
-  );
-}
+
