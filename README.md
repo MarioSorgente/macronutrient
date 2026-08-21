@@ -26,6 +26,12 @@ Built with **Next.js (App Router) + TypeScript + Tailwind CSS**, deployed on
 - **Clients** — plan a client's meals across up to **6 weeks**, with editable
   meal slots, optional daily macro targets, adherence bars, and a printable
   per-week or whole-program report.
+- **For coaches** — the same client screen in **Coach mode**: set daily macro
+  targets and the planner auto-fills the week from what Negrita actually sells,
+  showing **cost per meal, per day and per week**. Review and shuffle before
+  anything is saved.
+- **Prices** — every DIY menu component carries its price, so dishes, plans and
+  reports show what the food costs.
 - **House items** — define a Negrita sauce/blend/bake from its own batch recipe
   and finished weight; the computed values replace the shipped estimate
   everywhere in the app.
@@ -40,16 +46,65 @@ across ingredients.
 mutated**. Enrichment lives in `data/enrichment/` and is merged at load, so every
 addition stays auditable.
 
-The database was checked against live USDA FoodData Central
-(`node scripts/enrich-from-usda.mjs`): **all 91 ingredients' macros verified with
-zero discrepancies**. What was genuinely missing was portion data — now curated
-into `data/enrichment/portions.json` (135 units across 85 ingredients) by
-`scripts/build-portions.mjs`.
+The original 91 ingredients were checked against live USDA FoodData Central
+(`node scripts/enrich-from-usda.mjs`): **all macros verified with zero
+discrepancies**. Portion data was missing entirely and is now curated into
+`data/enrichment/portions.json` by `scripts/build-portions.mjs`.
 
-Eight house items (chimichurri, syrniki, banana bread, Island sauce, peri-peri,
-shio kombu, and two spice blends) have no public equivalent, so their values are
-estimates flagged **est** in the UI. Entering their real recipe on the
-**House items** page makes them exact.
+**Negrita's DIY menu** (`data/enrichment/diy-menu.json`) adds 49 orderable
+components with portion sizes and prices. It brought **25 ingredients that were
+missing from the database**, held in `data/enrichment/added-ingredients.json`
+with strict provenance:
+
+| Provenance | Count | Meaning |
+|---|---|---|
+| `verified_usda` | 8 | Real `fdc_id`, values retrieved from USDA |
+| `menu_stated` | 13 | Derived from the menu's printed macros — no USDA record verified |
+| house preparations | 4 | Negrita's own recipes; editable on the House items page |
+
+Where the DIY menu and USDA disagree for an ingredient in both, **USDA wins** —
+the source database is never overwritten; the menu contributes prices and
+portions only.
+
+Several menu-derived values land on well-known reference figures, which is good
+corroboration: cheddar 403 kcal/100 g (reference 403), feta 263 (264),
+watermelon 30 (30), beetroot 45 (44).
+
+> **Menu correction found:** Spanish Anchovy is printed as 30 g with **10 g
+> carbs**. Anchovies have none, and the menu's own 90 kcal only reconciles at
+> 0 C (4/4/9 gives 91; with 10 C it gives 131). The app records 0 C — worth
+> fixing on the printed menu.
+
+House items (chimichurri, syrniki, banana bread, the sauces and spice blends,
+plus the four DIY chicken/butter preparations) have no public equivalent, so
+their values are estimates flagged **est** in the UI. Entering their real recipe
+on the **House items** page makes them exact.
+
+## Pricing
+
+DIY prices are printed in thousands of rupiah (65 = Rp 65,000) and stored as full
+rupiah. Cost is counted in **whole portions**, because that is what the kitchen
+sells: 100 g taken from a 200 g rice portion still costs one portion.
+
+Anything not on the DIY menu has no price. The app then shows `from Rp …` or `—`
+rather than a total that silently omits ingredients.
+
+## Coach mode
+
+`Clients` and `For coaches` are **the same screen in two modes**, over one client
+record — there is no second roster, plan or report to keep in sync. The nav link
+just lands in coach mode.
+
+The generator (`src/lib/mealPlanner.ts`) builds each meal from two sources:
+composed DIY combinations (protein + carb + veg + fat, in whole portions) and
+ready menu/saved dishes scored whole. It weights **protein at 2×** since that is
+what a coach holds a client to, applies a mild cost preference, keeps snacks
+smaller than main meals, and varies proteins across the week.
+
+It deliberately refuses to fake a plan: a protein must be a real portion to
+anchor a meal (tobiko and a single ham slice are garnishes, not dinner), and if
+no sensible meal fits the constraints the slot is **left empty and reported**
+rather than padded with something wildly off target.
 
 ---
 
@@ -125,20 +180,25 @@ Switching backends changes no UI or logic — only environment variables.
 ## Project structure
 
 ```
-data/negrita-database.json      Bundled nutrition database (never mutated)
-data/enrichment/portions.json   Curated portion units merged at load
-scripts/enrich-from-usda.mjs    Dev tool: refresh portions + verify vs USDA
-scripts/build-portions.mjs      Dev tool: curate raw USDA portions
-src/types/nutrition.ts          Ingredient / MenuRecipe / Macros / PortionUnit
-src/lib/database.ts             Load, merge overlays, index + search
-src/lib/calc.ts                 Macro calculation helpers
-src/lib/units.ts                Grams <-> portion unit conversion
-src/lib/clients.ts              Weekly plan totals, averages, adherence
-src/lib/storage/                Repository: local (now) + firebase (prepared)
-src/store/                      Dish-builder + house-recipe state (Zustand)
-src/components/                 UI (picker, builder, planner, reports, …)
-src/app/                        Routes: /, /dishes, /report/[id], /clients,
-                                /clients/[id], /clients/[id]/report, /house-items
+data/negrita-database.json           Bundled nutrition database (never mutated)
+data/enrichment/portions.json        Curated portion units merged at load
+data/enrichment/diy-menu.json        DIY components: portions + prices
+data/enrichment/added-ingredients.json  25 ingredients the database lacked
+scripts/enrich-from-usda.mjs         Dev tool: refresh portions + verify vs USDA
+scripts/build-portions.mjs           Dev tool: curate raw USDA portions
+src/types/nutrition.ts               Ingredient / Macros / PortionUnit / DiyMenuItem
+src/lib/database.ts                  Load, merge overlays, index + search
+src/lib/calc.ts                      Macro calculation helpers
+src/lib/units.ts                     Grams <-> portion unit conversion
+src/lib/pricing.ts                   Whole-portion costing in IDR
+src/lib/mealPlanner.ts               Coach auto-planner
+src/lib/clients.ts                   Plan totals, averages, adherence, cost
+src/lib/coachMode.ts                 Manual/Coach mode state
+src/lib/storage/                     Repository: local (now) + firebase (prepared)
+src/store/                           Dish-builder + house-recipe state (Zustand)
+src/components/                      UI (picker, builder, planner, reports, …)
+src/app/                             Routes: /, /dishes, /report/[id], /clients,
+                                     /clients/[id], /clients/[id]/report, /house-items
 ```
 
 ---

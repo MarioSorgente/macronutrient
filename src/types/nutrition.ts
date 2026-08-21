@@ -62,6 +62,39 @@ export interface Ingredient {
   units: PortionUnit[];
   /** Which unit the picker should preselect. */
   defaultUnitId: string;
+  /**
+   * Price of one DIY menu portion, in full rupiah. Undefined when the item is
+   * not sold as a DIY component — the app must then report the price as unknown
+   * rather than guessing.
+   */
+  price_idr?: number;
+  /** Weight of the DIY portion the price buys. */
+  diy_portion_g?: number;
+  /** Display name of the DIY menu line this ingredient is sold as. */
+  diy_name?: string;
+  /** Which DIY section it belongs to: carbs | protein | veg | fats. */
+  diy_section?: DiySection;
+}
+
+export type DiySection = "carbs" | "protein" | "veg" | "fats";
+
+export interface DiyMenuItem {
+  id: string;
+  name: string;
+  section: DiySection;
+  portion_g: number;
+  price_idr: number;
+  ingredient_id: string;
+  variants?: string[];
+  notes?: string;
+  derived_portion?: boolean;
+  menu_correction?: string;
+  menu_macros: {
+    protein_g: number;
+    fat_g: number;
+    carbs_g: number;
+    energy_kcal: number;
+  };
 }
 
 export interface RecipeComponent {

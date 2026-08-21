@@ -1,6 +1,13 @@
 import type { Macros } from "@/types/nutrition";
 import { EMPTY_MACROS, addMacros, scaleMacros, sumDishMacros } from "@/lib/calc";
-import type { Assignment, Client, Dish, MacroTargets } from "@/lib/storage/types";
+import { ZERO_PRICE, addPrices, priceItems, type PriceResult } from "@/lib/pricing";
+import type {
+  Assignment,
+  Client,
+  Dish,
+  DishItem,
+  MacroTargets,
+} from "@/lib/storage/types";
 
 export const DAY_NAMES = [
   "Monday",
@@ -19,12 +26,24 @@ export const DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
  * edits to a dish flow through to the plan; the snapshot taken at assignment
  * time is the fallback when the dish has since been deleted.
  */
+/** The ingredient list backing an assignment, if we still have one. */
+export function assignmentItems(
+  assignment: Assignment,
+  dishes: Map<string, Dish>
+): DishItem[] | null {
+  if (assignment.dishId) {
+    const dish = dishes.get(assignment.dishId);
+    if (dish) return dish.items;
+  }
+  return assignment.items ?? null;
+}
+
 export function assignmentMacros(
   assignment: Assignment,
   dishes: Map<string, Dish>
 ): Macros {
-  const dish = dishes.get(assignment.dishId);
-  const base = dish ? sumDishMacros(dish.items) : assignment.snapshot.totals;
+  const items = assignmentItems(assignment, dishes);
+  const base = items ? sumDishMacros(items) : assignment.snapshot.totals;
   return scaleMacros(base, assignment.servings);
 }
 
@@ -33,15 +52,75 @@ export function assignmentName(
   assignment: Assignment,
   dishes: Map<string, Dish>
 ): string {
-  return dishes.get(assignment.dishId)?.name ?? assignment.snapshot.name;
+  if (assignment.dishId) {
+    const dish = dishes.get(assignment.dishId);
+    if (dish) return dish.name;
+  }
+  return assignment.snapshot.name;
 }
 
-/** True when the underlying dish has been deleted and we're on the snapshot. */
+/**
+ * True when a saved dish backing this assignment has been deleted, so the plan
+ * is rendering from its snapshot. Generated meals carry their own items and are
+ * never orphaned.
+ */
 export function isOrphaned(
   assignment: Assignment,
   dishes: Map<string, Dish>
 ): boolean {
-  return !dishes.has(assignment.dishId);
+  if (!assignment.dishId) return false;
+  return !dishes.has(assignment.dishId) && !assignment.items;
+}
+
+/** Cost of an assignment, scaled by servings. Null when nothing is priced. */
+export function assignmentPrice(
+  assignment: Assignment,
+  dishes: Map<string, Dish>
+): PriceResult {
+  // An authoritative price (e.g. a menu dish's own price) wins over summing
+  // components, which would otherwise produce a different, partial figure.
+  if (assignment.price) {
+    return {
+      totalIdr: assignment.price.totalIdr * assignment.servings,
+      unpricedCount: assignment.price.complete ? 0 : 1,
+      complete: assignment.price.complete,
+    };
+  }
+  const items = assignmentItems(assignment, dishes);
+  if (!items) return { ...ZERO_PRICE, unpricedCount: 1, complete: false };
+  const base = priceItems(items);
+  return {
+    totalIdr: base.totalIdr * assignment.servings,
+    unpricedCount: base.unpricedCount,
+    complete: base.complete,
+  };
+}
+
+export function sumAssignmentPrices(
+  assignments: Assignment[],
+  dishes: Map<string, Dish>
+): PriceResult {
+  return assignments.reduce<PriceResult>(
+    (total, a) => addPrices(total, assignmentPrice(a, dishes)),
+    { ...ZERO_PRICE }
+  );
+}
+
+export function dayPrice(
+  client: Client,
+  week: number,
+  day: number,
+  dishes: Map<string, Dish>
+): PriceResult {
+  return sumAssignmentPrices(assignmentsFor(client, week, day), dishes);
+}
+
+export function weekPrice(
+  client: Client,
+  week: number,
+  dishes: Map<string, Dish>
+): PriceResult {
+  return sumAssignmentPrices(assignmentsFor(client, week), dishes);
 }
 
 export function assignmentsFor(

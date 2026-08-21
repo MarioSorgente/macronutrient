@@ -45,10 +45,23 @@ export interface Assignment {
   day: number;
   /** Meal slot name, matching one of the client's `mealSlots`. */
   slot: string;
-  dishId: string;
+  /** Set when the meal came from a saved dish. Absent for generated meals. */
+  dishId?: string;
+  /**
+   * Ingredients of a meal built by the auto-planner. Held inline so generated
+   * plans do not flood the saved-dish library; a meal worth keeping can still
+   * be saved as a dish explicitly.
+   */
+  items?: DishItem[];
   servings: number;
   /**
-   * Copy of the dish at assignment time. Keeps a plan readable even if the
+   * Known cost of one serving. Set when the meal has an authoritative price —
+   * a menu dish is sold for its menu price, not the sum of its parts — so the
+   * plan does not re-derive a different (and partial) figure from components.
+   */
+  price?: { totalIdr: number; complete: boolean };
+  /**
+   * Copy of the meal at assignment time. Keeps a plan readable even if the
    * dish is later deleted; the live dish wins whenever it still exists.
    */
   snapshot: { name: string; totals: Macros };

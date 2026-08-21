@@ -1,11 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CalendarDays, Plus, Target, Trash2, Users } from "lucide-react";
-import { getClientRepository, isCloudBackend } from "@/lib/storage";
-import { DEFAULT_MEAL_SLOTS, type Client } from "@/lib/storage/types";
+import { getClientRepository, getDishRepository, isCloudBackend } from "@/lib/storage";
+import { DEFAULT_MEAL_SLOTS, type Client, type Dish } from "@/lib/storage/types";
 import { formatDate, round0 } from "@/lib/format";
+import { usePlannerMode } from "@/lib/coachMode";
+import { formatPrice } from "@/lib/pricing";
+import { weekPrice } from "@/lib/clients";
+import PlannerModeToggle from "@/components/PlannerModeToggle";
 
 function todayIso(): string {
   const d = new Date();
@@ -19,11 +23,20 @@ function todayIso(): string {
 
 export default function ClientList() {
   const [clients, setClients] = useState<Client[] | null>(null);
+  const [dishes, setDishes] = useState<Dish[]>([]);
   const [name, setName] = useState("");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [mode, setMode] = usePlannerMode();
+
+  const dishMap = useMemo(() => new Map(dishes.map((d) => [d.id, d])), [dishes]);
 
   const refresh = useCallback(async () => {
-    setClients(await getClientRepository().list());
+    const [list, savedDishes] = await Promise.all([
+      getClientRepository().list(),
+      getDishRepository().list(),
+    ]);
+    setClients(list);
+    setDishes(savedDishes);
   }, []);
 
   useEffect(() => {
@@ -59,6 +72,15 @@ export default function ClientList() {
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <PlannerModeToggle mode={mode} onChange={setMode} />
+        {mode === "coach" && (
+          <p className="text-xs text-charcoal-soft">
+            Coach view — targets, generated plans and cost per week.
+          </p>
+        )}
+      </div>
+
       {/* Create */}
       <form
         onSubmit={createClient}
@@ -130,14 +152,32 @@ export default function ClientList() {
                 <p className="mt-1 text-[11px] text-charcoal-soft">
                   Updated {formatDate(client.updatedAt)}
                 </p>
+
+                {mode === "coach" && (
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 rounded-lg bg-basil/5 px-2.5 py-1.5 text-xs">
+                    <span className="text-charcoal-soft">
+                      Week 1 cost{" "}
+                      <b className="tabular-nums text-charcoal">
+                        {formatPrice(weekPrice(client, 1, dishMap))}
+                      </b>
+                    </span>
+                    {!client.targets && (
+                      <span className="font-600 text-gold">No targets set</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 flex items-center gap-2">
                 <Link
-                  href={`/clients/${client.id}`}
+                  href={
+                    mode === "coach"
+                      ? `/clients/${client.id}?mode=coach`
+                      : `/clients/${client.id}`
+                  }
                   className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-tomato px-3 py-2 text-sm font-600 text-cream hover:bg-tomato-dark"
                 >
-                  Open planner
+                  {mode === "coach" ? "Open coach planner" : "Open planner"}
                 </Link>
                 {pendingDelete === client.id ? (
                   <button

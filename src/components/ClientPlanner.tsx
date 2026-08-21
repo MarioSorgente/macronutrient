@@ -9,6 +9,7 @@ import {
   FileText,
   Plus,
   Settings2,
+  Sparkles,
   X,
 } from "lucide-react";
 import { getClientRepository, getDishRepository } from "@/lib/storage";
@@ -17,21 +18,29 @@ import {
   DAY_SHORT,
   assignmentMacros,
   assignmentName,
+  assignmentPrice,
   assignmentsFor,
   dateFor,
+  dayPrice,
   dayTotals,
   formatShortDate,
   isOrphaned,
   newAssignmentId,
   weekDailyAverage,
+  weekPrice,
   weekTotals,
 } from "@/lib/clients";
 import { sumDishMacros } from "@/lib/calc";
+import { formatIdr, formatPrice } from "@/lib/pricing";
+import { usePlannerMode } from "@/lib/coachMode";
+import type { GeneratedDay } from "@/lib/mealPlanner";
 import { round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import AssignDishDialog from "@/components/AssignDishDialog";
 import ClientSettings from "@/components/ClientSettings";
 import TargetAdherence from "@/components/TargetAdherence";
+import PlannerModeToggle from "@/components/PlannerModeToggle";
+import GeneratePlanDialog from "@/components/GeneratePlanDialog";
 
 export default function ClientPlanner() {
   const params = useParams<{ id: string }>();
@@ -42,6 +51,8 @@ export default function ClientPlanner() {
   const [loading, setLoading] = useState(true);
   const [week, setWeek] = useState(1);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [mode, setMode] = usePlannerMode();
   const [assigning, setAssigning] = useState<{ day: number; slot: string } | null>(
     null
   );
@@ -91,6 +102,34 @@ export default function ClientPlanner() {
       ...client,
       plan: client.plan.filter((a) => a.id !== assignmentId),
     });
+  }
+
+  /** Writes a generated week into the plan as inline meals. */
+  function applyGenerated(generated: GeneratedDay[], replace: boolean) {
+    if (!client) return;
+    const kept = replace
+      ? client.plan.filter((a) => a.week !== currentWeek)
+      : [...client.plan];
+
+    const additions: Assignment[] = [];
+    for (const day of generated) {
+      for (const meal of day.meals) {
+        additions.push({
+          id: newAssignmentId(),
+          week: currentWeek,
+          day: day.day,
+          slot: meal.slot,
+          items: meal.items,
+          servings: 1,
+          price: { totalIdr: meal.price.totalIdr, complete: meal.price.complete },
+          snapshot: { name: meal.name, totals: meal.macros },
+          ...(meal.sourceDishId ? { dishId: meal.sourceDishId } : {}),
+        });
+      }
+    }
+
+    persist({ ...client, plan: [...kept, ...additions] });
+    setGenerateOpen(false);
   }
 
   if (loading) {
@@ -143,7 +182,17 @@ export default function ClientPlanner() {
             {formatShortDate(dateFor(client, 1, 0))}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <PlannerModeToggle mode={mode} onChange={setMode} />
+          {mode === "coach" && (
+            <button
+              type="button"
+              onClick={() => setGenerateOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl bg-basil px-3 py-2 text-sm font-700 text-cream hover:opacity-90"
+            >
+              <Sparkles size={15} /> Generate plan
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -159,6 +208,42 @@ export default function ClientPlanner() {
           </Link>
         </div>
       </div>
+
+      {/* Coach summary: targets and what the week costs */}
+      {mode === "coach" && (
+        <section className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl2 border border-basil/30 bg-basil/5 px-4 py-3">
+          <div>
+            <div className="text-[11px] font-700 uppercase tracking-wide text-basil">
+              Daily target
+            </div>
+            <div className="text-sm font-600 tabular-nums text-charcoal">
+              {client.targets
+                ? `${round0(client.targets.energy_kcal)} kcal · P ${round0(
+                    client.targets.protein_g
+                  )} · C ${round0(client.targets.carbs_g)} · F ${round0(
+                    client.targets.fat_g
+                  )}`
+                : "Not set — open Settings or set them when generating"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] font-700 uppercase tracking-wide text-basil">
+              Week {currentWeek} cost
+            </div>
+            <div className="text-sm font-700 tabular-nums text-charcoal">
+              {formatPrice(weekPrice(client, currentWeek, dishMap))}
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] font-700 uppercase tracking-wide text-basil">
+              Avg / day
+            </div>
+            <div className="text-sm font-600 tabular-nums text-charcoal">
+              {formatIdr(weekPrice(client, currentWeek, dishMap).totalIdr / 7)}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Week switcher */}
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
@@ -260,12 +345,17 @@ export default function ClientPlanner() {
                                     <X size={12} />
                                   </button>
                                 </div>
-                                <div className="mt-0.5 flex items-center gap-1 text-[10px] tabular-nums text-charcoal-soft">
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] tabular-nums text-charcoal-soft">
                                   <span className="font-700 text-tomato">
                                     {round0(macros.energy_kcal)}
                                   </span>
                                   kcal
                                   {a.servings !== 1 && <span>×{a.servings}</span>}
+                                  {mode === "coach" && (
+                                    <span className="font-600">
+                                      {formatPrice(assignmentPrice(a, dishMap))}
+                                    </span>
+                                  )}
                                   {orphan && (
                                     <AlertTriangle
                                       size={10}
@@ -298,6 +388,11 @@ export default function ClientPlanner() {
                   <div className="text-[9px] uppercase tracking-wide text-charcoal-soft">
                     kcal
                   </div>
+                  {mode === "coach" && (
+                    <div className="text-[10px] font-600 tabular-nums text-charcoal-soft">
+                      {formatPrice(dayPrice(client, currentWeek, dayIndex, dishMap))}
+                    </div>
+                  )}
                   {client.targets && (
                     <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-cream-deep">
                       <span
@@ -350,6 +445,16 @@ export default function ClientPlanner() {
           )}`}
           onAssign={assign}
           onClose={() => setAssigning(null)}
+        />
+      )}
+
+      {generateOpen && (
+        <GeneratePlanDialog
+          client={client}
+          week={currentWeek}
+          savedDishes={dishes}
+          onApply={applyGenerated}
+          onClose={() => setGenerateOpen(false)}
         />
       )}
 

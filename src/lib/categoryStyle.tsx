@@ -35,6 +35,7 @@ const STYLES: Record<string, { icon: LucideIcon; tone: string }> = {
   vegetable: { icon: Carrot, tone: "text-emerald-700 bg-emerald-100" },
   herb: { icon: Leaf, tone: "text-emerald-800 bg-emerald-100" },
   seeds: { icon: Sprout, tone: "text-lime-800 bg-lime-100" },
+  legume: { icon: Sprout, tone: "text-emerald-900 bg-emerald-100" },
   nuts: { icon: Nut, tone: "text-amber-800 bg-amber-100" },
   meat: { icon: Beef, tone: "text-red-800 bg-red-100" },
   fish: { icon: Fish, tone: "text-sky-800 bg-sky-100" },

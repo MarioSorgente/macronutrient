@@ -8,6 +8,7 @@ import { getDishRepository, isCloudBackend } from "@/lib/storage";
 import type { Dish } from "@/lib/storage/types";
 import { useDishBuilder } from "@/store/dishBuilder";
 import { formatDate, round0, round1 } from "@/lib/format";
+import { formatPrice, priceItems } from "@/lib/pricing";
 
 export default function SavedDishList() {
   const router = useRouter();
@@ -94,6 +95,9 @@ export default function SavedDishList() {
                 <span>P {round1(dish.totals.protein_g)}g</span>
                 <span>C {round1(dish.totals.carbs_g)}g</span>
                 <span>F {round1(dish.totals.fat_g)}g</span>
+                <span className="font-600 text-charcoal">
+                  {formatPrice(priceItems(dish.items))}
+                </span>
               </div>
             </div>
 

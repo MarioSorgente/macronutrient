@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { BookOpen, FileText, RotateCcw, Save } from "lucide-react";
 import { useDishBuilder } from "@/store/dishBuilder";
 import { sumDishMacros, totalGrams } from "@/lib/calc";
+import { formatPrice, priceItems } from "@/lib/pricing";
 import { getDishRepository } from "@/lib/storage";
 import type { Dish } from "@/lib/storage/types";
 import DishItemRow from "@/components/DishItemRow";
@@ -25,6 +26,7 @@ export default function DishBuilder() {
 
   const totals = useMemo(() => sumDishMacros(items), [items]);
   const grams = useMemo(() => totalGrams(items), [items]);
+  const price = useMemo(() => priceItems(items), [items]);
   const empty = items.length === 0;
 
   async function persist(): Promise<Dish | null> {
@@ -141,6 +143,22 @@ export default function DishBuilder() {
       {!empty && (
         <div className="mt-5 border-t border-cream-deep pt-4">
           <MacroSummary macros={totals} totalGrams={grams} />
+
+          <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 rounded-lg bg-cream px-3 py-2 text-xs">
+            <span className="font-600 text-charcoal-soft">
+              Cost at DIY menu prices
+            </span>
+            <span className="font-700 tabular-nums text-charcoal">
+              {formatPrice(price)}
+            </span>
+            {price.unpricedCount > 0 && (
+              <span className="w-full text-[11px] text-charcoal-soft">
+                {price.unpricedCount} ingredient
+                {price.unpricedCount === 1 ? " is" : "s are"} not sold as a DIY
+                component, so this is a minimum.
+              </span>
+            )}
+          </div>
 
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <button

@@ -10,13 +10,17 @@ import {
   DAY_NAMES,
   assignmentMacros,
   assignmentName,
+  assignmentPrice,
   assignmentsFor,
   dateFor,
+  dayPrice,
   dayTotals,
   formatShortDate,
   weekDailyAverage,
+  weekPrice,
   weekTotals,
 } from "@/lib/clients";
+import { formatIdr, formatPrice } from "@/lib/pricing";
 import { databaseMeta } from "@/lib/database";
 import { formatDate, round0, round1 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
@@ -183,6 +187,30 @@ export default function ClientReport() {
                       {round1(average.carbs_g)} g · F {round1(average.fat_g)} g
                     </p>
 
+                    {/* Cost */}
+                    <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 rounded-lg bg-cream px-3 py-2 text-xs">
+                      <span className="text-charcoal-soft">
+                        Week cost{" "}
+                        <b className="tabular-nums text-charcoal">
+                          {formatPrice(weekPrice(client, week, dishMap))}
+                        </b>
+                      </span>
+                      <span className="text-charcoal-soft">
+                        Average per day{" "}
+                        <b className="tabular-nums text-charcoal">
+                          {formatIdr(
+                            weekPrice(client, week, dishMap).totalIdr / 7
+                          )}
+                        </b>
+                      </span>
+                      {!weekPrice(client, week, dishMap).complete && (
+                        <span className="text-gold">
+                          Some items are not sold as DIY components, so the total
+                          is a minimum.
+                        </span>
+                      )}
+                    </div>
+
                     {client.targets && (
                       <div className="mt-4">
                         <h3 className="mb-2 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
@@ -224,7 +252,10 @@ export default function ClientReport() {
                                 </b>{" "}
                                 kcal · P {round1(dTotals.protein_g)} · C{" "}
                                 {round1(dTotals.carbs_g)} · F{" "}
-                                {round1(dTotals.fat_g)}
+                                {round1(dTotals.fat_g)} ·{" "}
+                                {formatPrice(
+                                  dayPrice(client, week, dayIndex, dishMap)
+                                )}
                               </span>
                             </div>
                             <ul className="divide-y divide-cream-deep/60">
@@ -257,6 +288,11 @@ export default function ClientReport() {
                                           {round0(macros.energy_kcal)}
                                         </b>{" "}
                                         kcal
+                                        <span className="ml-2">
+                                          {formatPrice(
+                                            assignmentPrice(a, dishMap)
+                                          )}
+                                        </span>
                                       </span>
                                     </li>
                                   );

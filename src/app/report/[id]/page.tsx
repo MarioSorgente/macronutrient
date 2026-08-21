@@ -9,6 +9,7 @@ import type { Dish } from "@/lib/storage/types";
 import { getIngredient } from "@/lib/database";
 import { perItemMacros, sumDishMacros, totalGrams } from "@/lib/calc";
 import { formatDate, round0, round1 } from "@/lib/format";
+import { formatPrice, priceItems } from "@/lib/pricing";
 import { databaseMeta } from "@/lib/database";
 import MacroSummary from "@/components/MacroSummary";
 
@@ -116,7 +117,10 @@ export default function ReportPage() {
             </h1>
             <p className="mt-1 text-sm text-charcoal-soft">
               {dish.items.length} ingredient{dish.items.length === 1 ? "" : "s"} ·{" "}
-              {round0(grams)} g total
+              {round0(grams)} g total ·{" "}
+              <span className="font-600 text-charcoal">
+                {formatPrice(priceItems(dish.items))}
+              </span>
             </p>
           </div>
 

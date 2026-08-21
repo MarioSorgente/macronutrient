@@ -1,8 +1,11 @@
 import rawDatabase from "@data/negrita-database.json";
 import portionData from "@data/enrichment/portions.json";
+import addedData from "@data/enrichment/added-ingredients.json";
+import diyData from "@data/enrichment/diy-menu.json";
 import {
   GRAM_UNIT,
   GRAM_UNIT_ID,
+  type DiyMenuItem,
   type Ingredient,
   type Macros,
   type MenuRecipe,
@@ -30,15 +33,50 @@ const portions = (
   }
 ).ingredients;
 
-export const ingredients: Ingredient[] = database.ingredients.map((base) => {
+/** Items on Negrita's DIY menu, keyed by the ingredient they are sold as. */
+export const diyMenu: DiyMenuItem[] = (diyData as { items: DiyMenuItem[] }).items;
+
+const diyByIngredient = new Map<string, DiyMenuItem>();
+for (const item of diyMenu) {
+  // A few ingredients back two DIY lines (ground beef / patty). Keep the first;
+  // they share the same portion and price.
+  if (!diyByIngredient.has(item.ingredient_id)) {
+    diyByIngredient.set(item.ingredient_id, item);
+  }
+}
+
+type BaseIngredient = NutritionDatabase["ingredients"][number];
+
+/**
+ * Ingredients present on the DIY menu but absent from the source database.
+ * Provenance is preserved per record (verified_usda vs menu_stated).
+ */
+const addedIngredients = (addedData as { ingredients: BaseIngredient[] })
+  .ingredients;
+
+function decorate(base: BaseIngredient): Ingredient {
   const overlay = portions[base.ingredient_id];
+  const diy = diyByIngredient.get(base.ingredient_id);
   return {
     ...base,
     // Grams first: always available, always the fallback.
     units: [GRAM_UNIT, ...(overlay?.units ?? [])],
     defaultUnitId: overlay?.defaultUnitId ?? GRAM_UNIT_ID,
+    ...(diy
+      ? {
+          price_idr: diy.price_idr,
+          diy_portion_g: diy.portion_g,
+          diy_name: diy.name,
+          diy_section: diy.section,
+        }
+      : {}),
   };
-});
+}
+
+export const ingredients: Ingredient[] = [
+  ...database.ingredients,
+  ...addedIngredients,
+].map(decorate);
 
 export const menuRecipes: MenuRecipe[] = database.menu_recipes;
 export const databaseMeta = {
@@ -62,12 +100,29 @@ export function setHouseOverrides(overrides: Map<string, Macros>): void {
   houseOverrides = overrides;
 }
 
-/** Ingredients that ship with estimated values and no USDA source to fix them. */
+/**
+ * House items: Negrita's own preparations, whose values are estimates only the
+ * restaurant's real recipe can fix. These are what the House items page lists.
+ */
 export function isEstimated(ingredient: Ingredient): boolean {
   return (
     ingredient.source_status === "estimated_online_proxy" ||
     ingredient.source_status === "estimated_formula"
   );
+}
+
+/**
+ * Values taken from Negrita's printed DIY menu because no USDA record for the
+ * actual product was verified. Distinct from house items: these are ordinary
+ * foods (cheddar, watermelon) that simply need no recipe.
+ */
+export function isMenuStated(ingredient: Ingredient): boolean {
+  return ingredient.source_status === "menu_stated";
+}
+
+/** Ingredients Negrita sells as a DIY component, so they carry a price. */
+export function isPriced(ingredient: Ingredient): boolean {
+  return typeof ingredient.price_idr === "number";
 }
 
 /** True once Negrita has defined a real recipe for this house item. */

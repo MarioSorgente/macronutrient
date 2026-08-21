@@ -1,12 +1,17 @@
 import Link from "next/link";
 import { UtensilsCrossed } from "lucide-react";
 
-export type NavKey = "builder" | "dishes" | "clients" | "house";
+export type NavKey = "builder" | "dishes" | "clients" | "coaches" | "house";
 
+/**
+ * "Clients" and "For coaches" are the same screen in two modes, not two data
+ * silos — the coach link just lands in coach mode.
+ */
 const LINKS: { key: NavKey; href: string; label: string }[] = [
   { key: "builder", href: "/", label: "Builder" },
   { key: "dishes", href: "/dishes", label: "Dishes" },
   { key: "clients", href: "/clients", label: "Clients" },
+  { key: "coaches", href: "/clients?mode=coach", label: "For coaches" },
   { key: "house", href: "/house-items", label: "House items" },
 ];
 
