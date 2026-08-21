@@ -5,3 +5,8 @@ declare module "vitest" {
   export const it: (name: string, callback: () => unknown) => void;
   export const vi: any;
 }
+
+declare module "@testing-library/react" {
+  export const render: (element: import("react").ReactNode) => unknown;
+  export const screen: any;
+}
