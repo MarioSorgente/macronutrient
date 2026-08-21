@@ -118,6 +118,37 @@ export const MAX_PROGRAM_WEEKS = 6;
 
 export const DEFAULT_MEAL_SLOTS = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
+// --- Accounts ---------------------------------------------------------------
+
+/**
+ * Who someone is to the restaurant.
+ *
+ * The authoritative copy lives in the Firebase Auth token as a custom claim —
+ * security rules read `request.auth.token.role` and nothing else. The copy on
+ * the user document below is for rendering only, and a user is never allowed
+ * to write it.
+ */
+export type Role = "client" | "restaurant" | "admin";
+
+export interface UserProfile extends Entity {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  phone?: string;
+  defaultAddress?: string;
+  /** DISPLAY MIRROR of the custom claim — never trusted for access decisions. */
+  role: Role;
+  /** Restaurant this account belongs to. */
+  rid: string;
+  /** Bumped when a role changes, so the client knows to refresh its token. */
+  roleUpdatedAt?: string;
+  // --- usage metrics, stamped by the client on sign-in ---
+  lastLoginAt?: string;
+  loginCount?: number;
+  signupMethod?: "google" | "password";
+}
+
 // --- House recipes ----------------------------------------------------------
 
 export interface HouseRecipeComponent {

@@ -13,7 +13,7 @@ import type {
 import { DEFAULT_MEAL_SLOTS } from "@/lib/storage/types";
 import { createLocalRepository } from "@/lib/storage/local";
 import { createFirestoreRepository } from "@/lib/storage/firebase";
-import { isFirebaseConfigured } from "@/lib/storage/firebaseClient";
+import { isFirebaseConfigured } from "@/lib/firebaseEnv";
 
 export type {
   Assignment,

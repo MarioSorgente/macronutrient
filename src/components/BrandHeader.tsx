@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UtensilsCrossed } from "lucide-react";
 import { cn } from "@/components/ui/cn";
+import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
+import AccountMenu from "@/components/AccountMenu";
 
 /**
  * App shell header. "Mamma Calories" is the product brand; "For Negrita" is the
@@ -24,14 +26,15 @@ const LINKS: NavLink[] = [
   },
 ];
 
-/** Shown once the signed-in user has the role for them (wired up in Phase 2). */
+/** Only rendered for accounts whose role actually grants them. */
 const STAFF_LINKS: NavLink[] = [
   { href: "/admin/house-items", label: "House items", match: (p) => p.startsWith("/admin") },
 ];
 
 export default function BrandHeader() {
   const pathname = usePathname() ?? "/";
-  const links = [...LINKS, ...STAFF_LINKS];
+  const { role } = useAuth();
+  const links = isStaff(role) ? [...LINKS, ...STAFF_LINKS] : LINKS;
 
   return (
     <header className="no-print sticky top-0 z-20 border-b border-cream-deep bg-cream/80 backdrop-blur">
@@ -66,6 +69,7 @@ export default function BrandHeader() {
               {link.label}
             </Link>
           ))}
+          <AccountMenu />
         </nav>
       </div>
     </header>

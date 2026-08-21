@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 import HouseRecipeLoader from "@/components/HouseRecipeLoader";
+import { AuthProvider } from "@/lib/auth/AuthProvider";
+import { ToastProvider } from "@/components/ui/Toast";
 
 const display = Fraunces({
   subsets: ["latin"],
@@ -30,8 +32,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${display.variable} ${sans.variable}`}>
       <body className="font-sans antialiased">
-        <HouseRecipeLoader />
-        {children}
+        <AuthProvider>
+          <ToastProvider>
+            <HouseRecipeLoader />
+            {children}
+          </ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );

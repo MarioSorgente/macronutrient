@@ -1,0 +1,93 @@
+rules_version = '2';
+
+// Access rules for Mamma Calories.
+//
+// Posture: keep the protections that cost nothing, drop the ones that only add
+// friction. The four that are load-bearing:
+//   1. Deny by default — the catch-all at the bottom.
+//   2. A plan is readable only by its owner; the restaurant never sees one.
+//   3. Nobody can write their own `role`. That is what stops self-promotion.
+//   4. Orders and prep tasks are created only by the submitOrder function,
+//      so prices and the weekly cutoff cannot be forged from a browser.
+// Everything else is intentionally permissive for trusted staff.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn()     { return request.auth != null; }
+    function uid()          { return request.auth.uid; }
+    function claims()       { return request.auth.token; }
+    function roleIs(r)      { return signedIn() && claims().role == r; }
+    function isAdmin()      { return roleIs('admin'); }
+    function isSelf(userId) { return signedIn() && uid() == userId; }
+    function isStaffOf(rid) {
+      return isAdmin() || (roleIs('restaurant') && claims().rid == rid);
+    }
+    function notTouching(locked) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(locked);
+    }
+
+    // ---------- restaurant: public menu data ----------
+    match /restaurants/{rid} {
+      allow read:  if true;
+      allow write: if isStaffOf(rid);
+
+      // House recipes correct the macros shown to everyone, guests included,
+      // so they are readable without an account.
+      match /houseRecipes/{docId} {
+        allow read:  if true;
+        allow write: if isStaffOf(rid);
+      }
+
+      // Written by the submitOrder Cloud Function via the Admin SDK, which
+      // bypasses these rules. Staff may then manage them freely.
+      match /orders/{orderId} {
+        allow get:  if isStaffOf(rid) || (signedIn() && resource.data.userId == uid());
+        // Per-document; a client's query MUST be constrained by
+        // where('userId', '==', uid) or it is rejected wholesale.
+        allow list: if isStaffOf(rid) || (signedIn() && resource.data.userId == uid());
+        allow create: if false;
+        allow update, delete: if isStaffOf(rid);
+      }
+
+      match /prepTasks/{taskId} {
+        allow get, list: if isStaffOf(rid);
+        allow create: if false;
+        allow update, delete: if isStaffOf(rid);
+      }
+    }
+
+    // ---------- users ----------
+    match /users/{userId} {
+      allow get:  if isSelf(userId) || isAdmin();
+      allow list: if isAdmin();          // the owner dashboard
+
+      allow create: if isSelf(userId)
+                    && request.resource.data.uid == userId
+                    && !('role' in request.resource.data);
+
+      // The rule worth keeping strict: a user may edit their own profile but
+      // never their role, their restaurant, or the fields the role function owns.
+      allow update: if isAdmin()
+                    || (isSelf(userId)
+                        && notTouching(['role', 'rid', 'uid', 'createdAt', 'roleUpdatedAt']));
+
+      allow delete: if isAdmin();
+
+      // A plan is private to the person it belongs to. The restaurant does not
+      // read it — a submitted order carries its own copy of what was ordered.
+      match /plans/{planId} {
+        allow read, write, delete: if isSelf(userId) || isAdmin();
+      }
+
+      match /dishes/{dishId} {
+        allow read, write, delete: if isSelf(userId) || isAdmin();
+      }
+    }
+
+    // Anything not matched above is denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
