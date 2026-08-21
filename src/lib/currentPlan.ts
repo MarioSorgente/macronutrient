@@ -35,8 +35,8 @@ export function newPlan(title = DEFAULT_PLAN_TITLE): Client {
  */
 export async function loadCurrentPlan(): Promise<Client> {
   const repo = getClientRepository();
-  const existing = await repo.list(); // already sorted by updatedAt, newest first
-  if (existing.length > 0) return existing[0];
+  const existing = await repo.latest();
+  if (existing) return existing;
 
   const created = newPlan();
   await repo.save(created);

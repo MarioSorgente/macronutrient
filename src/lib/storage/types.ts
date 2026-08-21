@@ -178,6 +178,8 @@ export interface HouseRecipe extends Entity {
  */
 export interface Repository<T extends Entity> {
   list(): Promise<T[]>;
+  /** Returns the most recently updated entity without loading the full list. */
+  latest(): Promise<T | null>;
   get(id: string): Promise<T | null>;
   save(entity: T): Promise<T>;
   remove(id: string): Promise<void>;
