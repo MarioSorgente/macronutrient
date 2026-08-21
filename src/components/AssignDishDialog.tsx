@@ -24,6 +24,8 @@ type Tab = "saved" | "build";
  */
 export default function AssignDishDialog({
   dishes,
+  dishesLoading,
+  dishesError,
   slot,
   dayLabel,
   onAssign,
@@ -31,6 +33,8 @@ export default function AssignDishDialog({
   onClose,
 }: {
   dishes: Dish[];
+  dishesLoading: boolean;
+  dishesError: string | null;
   slot: string;
   dayLabel: string;
   onAssign: (dish: Dish, servings: number) => void;
@@ -169,7 +173,19 @@ export default function AssignDishDialog({
             </div>
 
             <div className="scroll-slim flex-1 overflow-y-auto px-4 py-3">
-              {dishes.length === 0 ? (
+              {dishesLoading ? (
+                <p className="py-8 text-center text-sm text-charcoal-soft">
+                  Loading saved dishes…
+                </p>
+              ) : dishesError ? (
+                <div className="py-8 text-center">
+                  <p className="font-600 text-charcoal">Saved dishes unavailable</p>
+                  <p className="mt-1 text-sm text-charcoal-soft">{dishesError}</p>
+                  <p className="mt-2 text-sm text-charcoal-soft">
+                    You can still switch to <b>Build</b> to create a meal.
+                  </p>
+                </div>
+              ) : dishes.length === 0 ? (
                 <div className="py-8 text-center">
                   <p className="font-600 text-charcoal">No saved dishes yet</p>
                   <p className="mt-1 text-sm text-charcoal-soft">

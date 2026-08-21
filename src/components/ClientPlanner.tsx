@@ -54,6 +54,8 @@ export default function ClientPlanner() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [dishesLoading, setDishesLoading] = useState(true);
+  const [dishesError, setDishesError] = useState<string | null>(null);
   const [week, setWeek] = useState(1);
   const [day, setDay] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -66,12 +68,18 @@ export default function ClientPlanner() {
   );
 
   useEffect(() => {
-    Promise.all([loadCurrentPlan(), getDishRepository().list()])
-      .then(([plan, d]) => {
+    let active = true;
+
+    loadCurrentPlan()
+      .then((plan) => {
+        if (!active) return;
         setClient(plan);
-        setDishes(d);
+        // The plan is self-contained: assignment snapshots and inline items
+        // are enough to render it while the dish library catches up.
+        setLoading(false);
       })
       .catch((cause) => {
+        if (!active) return;
         // Without this a rejected read (an expired session, a denied rule)
         // leaves the planner on its loading line indefinitely, which reads as
         // a hang rather than as something the reader can act on.
@@ -79,8 +87,29 @@ export default function ClientPlanner() {
         setLoadError(
           "We could not load your plan. Check your connection and reload."
         );
+        setLoading(false);
       })
-      .finally(() => setLoading(false));
+
+    getDishRepository()
+      .list()
+      .then((loadedDishes) => {
+        if (!active) return;
+        setDishes(loadedDishes);
+      })
+      .catch((cause) => {
+        if (!active) return;
+        console.error("Could not load the dish library:", cause);
+        setDishesError(
+          "We could not load your saved dishes. Check your connection and try again."
+        );
+      })
+      .finally(() => {
+        if (active) setDishesLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const dishMap = useMemo(() => byId(dishes), [dishes]);
@@ -263,7 +292,13 @@ export default function ClientPlanner() {
           <button
             type="button"
             onClick={() => setGenerateOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl bg-basil px-3 py-2 text-sm font-700 text-cream hover:opacity-90"
+            disabled={dishesLoading || Boolean(dishesError)}
+            title={
+              dishesLoading
+                ? "Loading your dish library…"
+                : dishesError ?? undefined
+            }
+            className="flex items-center gap-1.5 rounded-xl bg-basil px-3 py-2 text-sm font-700 text-cream hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Sparkles size={15} /> Auto-fill my week
           </button>
@@ -438,6 +473,8 @@ export default function ClientPlanner() {
       {assigning && (
         <AssignDishDialog
           dishes={dishes}
+          dishesLoading={dishesLoading}
+          dishesError={dishesError}
           slot={assigning.slot}
           dayLabel={`Week ${currentWeek} · ${DAY_NAMES[assigning.day]} ${formatShortDate(
             dateFor(client, currentWeek, assigning.day)
