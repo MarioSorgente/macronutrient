@@ -1,0 +1,40 @@
+{
+  "generated_on": "2026-08-21",
+  "source": "Negrita FITNESS FOOD menu, transcribed from photographs",
+  "note": "Descriptions only. Prices and macros on this menu were checked against the database and already matched exactly (25/25 prices, 124/125 macro values), so nothing else was changed. The one exception, Bulking at 765 vs 755 kcal, was left at the database value at the restaurant's request.",
+  "menu_note": "Weights and macros are estimated from raw ingredients before cooking.",
+  "brand_note": "Organic chicken. Grass fed beef. No seed oil. Organic locally grown veggies. Omega eggs.",
+  "section_notes": {
+    "kebab_combo": "Includes a skewer, onion paratha, hummus, tzatziki, grilled mixed vegetables, Kalamata and Halkidiki olives, and pickled cucumber. Free choice of 2 sauces: chimichurri, Negrita Island Sauce, spicy mayo, mustard, teriyaki."
+  },
+  "descriptions": {
+    "greek_god_chicken": "Kefir smoked paprika marinated.",
+    "greek_god_tenderloin": "Tomato, garlic, onion, salt, pepper. Georgian marinated (Jaku Legacy grass-fed).",
+    "greek_god_wagyu": "Kofta Delhi — parsley, salt, pepper, onion, baharat (Vintage Galician grass-fed).",
+    "greek_god_salmon": "Tasmanian salmon with zucchini and paprika. Choice of chimichurri or shio kombu marinade.",
+    "greek_god_scallops": "Orkney scallops with paprika and onion. Choice of chimichurri or shio kombu marinade.",
+
+    "before_cardio": "Grilled banana with cinnamon, fruit cuts, honeycomb, and two-time-cooked scrambled egg whites on 10K toast.",
+    "recovery_salmon": "Pan-seared salmon trout 200 g, grilled asparagus 30 g, jasmine rice 150 g.",
+    "bali_boy": "A rice bowl with jasmine rice 200 g and ayam sayur (pulled chicken 200 g), two-time-cooked — steamed then sautéed with heritage Bali coconut oil, Bali spices, chili and kaffir lime. Double chicken for 50K adds 62 g protein.",
+    "beef_ritual_burger": "A real grass-fed 300 g Wagyu AUS smash patty, triple American cheddar cheese, baby romaine, pickles, jalapeño, potato bun 80 g.",
+    "peri_peri_chicken": "Organic free-range chicken breast 300 g, homemade low-fat yogurt, peri-peri sauce, jasmine rice 150 g, sautéed wild mushrooms 100 g.",
+    "unagi_shogun": "Muscle repair. A 200 g portion of Japanese freshwater eel: high-quality protein plus omega-3 fats, high in vitamins A and B12, and a source of iron and calcium.",
+
+    "cheese_cake": "Low-fat cottage cheese syrniki (Slavic pancake) 100 g, whey powder 20 g, stevia berry compote 20 g, sour cream 20 g (1 pc).",
+    "protein_banana_bread": "Banana bread with organic bananas, almond flour and dates (sugar-free), 30 g protein powder. Served with creamy Greek yogurt.",
+    "special_protein_pancake": "A stack of 3 pancakes, 300 g, with 30 g whey protein, berry compote sweetened with stevia, seasonal fruits, banana, cacao and ice cream.",
+    "protein_bountiful_fruit_waffle": "Waffle bread 300 g with 30 g whey protein, berry compote sweetened with stevia, seasonal fruits, banana, cacao and ice cream.",
+    "oatmeal_banana_peanut_butter": "Rolled oats cooked with fresh milk and peanut butter, garnished with crunchy roasted almonds and strawberries, with 30 g whey protein.",
+    "oatmeal_baked_apple_cinnamon": "Rolled oats cooked with fresh milk and peanut butter, garnished with crunchy roasted almonds and strawberries, with 30 g whey protein. Baked apple and cinnamon.",
+    "bulking_chicken": "2 soft-boiled omega-3 eggs, organic avocado half-slice, dressing with EVOO, pumpkin seeds.",
+
+    "geisha": "Organic free-range chicken breast teriyaki 300 g, 150 g organic jasmine rice, boiled organic broccoli 100 g, kyuri, cherry tomato.",
+    "breakfast_protein_burrito": "Tortilla bread, sliced avocado, cucumber, baby romaine and grilled organic free-range chicken breast 250 g.",
+    "chicken_pita": "Two pieces of half pita bread 100 g filled with grilled chicken 300 g, tomato, julienne carrot, Kalamata olives, mixed salad, sesame dressing and Parmesan cheese.",
+    "thai_boy_beefy": "Pad Krapao stir beef basil style with Wagyu on an onion bed, jasmine rice 150 g, 2 sunny-side-up omega-3 eggs, Thai corn 50 g.",
+    "thai_boy_chicky": "Pad Krapao stir chicken basil style with organic free-range chicken 300 g, steamed jasmine rice 150 g, 2 sunny-side-up omega-3 eggs, sweet Thai corn 50 g.",
+    "buckwheat_bluefin_tuna": "Ukrainian organic buckwheat 200 g, cucumber, lettuce, cherry tomato, bluefin tuna tataki 150 g.",
+    "buckwheat_chicken_teriyaki": "Ukrainian organic buckwheat 200 g, organic free-range chicken breast 200 g sautéed with paprika, 1 boiled egg, sweet corn 20 g."
+  }
+}

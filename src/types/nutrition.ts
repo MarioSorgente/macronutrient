@@ -119,6 +119,8 @@ export interface MenuRecipe {
   recipe_calculation_ready: boolean;
   notes: string | null;
   quantity_complete: boolean;
+  /** What the dish actually contains, as printed on the menu. */
+  description?: string;
 }
 
 export interface NutritionDatabase {

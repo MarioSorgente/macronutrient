@@ -2,6 +2,7 @@ import rawDatabase from "@data/negrita-database.json";
 import portionData from "@data/enrichment/portions.json";
 import addedData from "@data/enrichment/added-ingredients.json";
 import diyData from "@data/enrichment/diy-menu.json";
+import menuDescriptionData from "@data/enrichment/menu-descriptions.json";
 import {
   GRAM_UNIT,
   GRAM_UNIT_ID,
@@ -78,7 +79,26 @@ export const ingredients: Ingredient[] = [
   ...addedIngredients,
 ].map(decorate);
 
-export const menuRecipes: MenuRecipe[] = database.menu_recipes;
+const menuText = menuDescriptionData as {
+  menu_note: string;
+  brand_note: string;
+  section_notes: Record<string, string>;
+  descriptions: Record<string, string>;
+};
+
+/** What the printed menu says about each dish, and about the menu as a whole. */
+export const menuNotes = {
+  /** "Weights and macros are estimated from raw ingredients before cooking." */
+  measurement: menuText.menu_note,
+  brand: menuText.brand_note,
+  forSection: (section: string): string | undefined =>
+    menuText.section_notes[section],
+};
+
+export const menuRecipes: MenuRecipe[] = database.menu_recipes.map((recipe) => ({
+  ...recipe,
+  description: menuText.descriptions[recipe.recipe_id],
+}));
 export const databaseMeta = {
   name: database.database_name,
   version: database.schema_version,
