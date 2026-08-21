@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChefHat, LogOut, ShieldCheck, User as UserIcon } from "lucide-react";
-import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
+import { LogOut, Receipt, User as UserIcon } from "lucide-react";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import { cn } from "@/components/ui/cn";
 
 /** Initials for the avatar, falling back to the email's first character. */
@@ -101,26 +101,13 @@ export default function AccountMenu() {
           >
             <UserIcon size={15} className="text-charcoal-soft" /> My week
           </Link>
-
-          {isStaff(role) && (
-            <Link
-              href="/admin/house-items"
-              role="menuitem"
-              className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream"
-            >
-              <ChefHat size={15} className="text-charcoal-soft" /> House items
-            </Link>
-          )}
-
-          {role === "admin" && (
-            <Link
-              href="/admin"
-              role="menuitem"
-              className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream"
-            >
-              <ShieldCheck size={15} className="text-charcoal-soft" /> Admin
-            </Link>
-          )}
+          <Link
+            href="/orders"
+            role="menuitem"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream"
+          >
+            <Receipt size={15} className="text-charcoal-soft" /> My orders
+          </Link>
 
           <button
             type="button"

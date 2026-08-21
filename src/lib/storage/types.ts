@@ -165,6 +165,169 @@ export interface UserProfile extends Entity {
   signupMethod?: "google" | "password";
 }
 
+// --- Orders -----------------------------------------------------------------
+
+export type FulfilmentMode = "pickup" | "delivery";
+
+/** How one day's food reaches the person. Chosen per day, not per week. */
+export interface Fulfilment {
+  mode: FulfilmentMode;
+  /** "12:30" — Bali wall-clock time. */
+  time: string;
+  /** Required when mode is "delivery". */
+  address?: string;
+  note?: string;
+}
+
+export interface OrderMeal {
+  assignmentId: string;
+  slot: string;
+  name: string;
+  servings: number;
+  /** Resolved ingredients, so the kitchen sees exact grams without a lookup. */
+  items: DishItem[];
+  /** Recomputed on the server; never taken from the client. */
+  totals: Macros;
+  priceIdr: number;
+}
+
+export interface OrderDay {
+  /** ISO yyyy-mm-dd, Bali calendar date. */
+  date: string;
+  fulfilment: Fulfilment;
+  meals: OrderMeal[];
+}
+
+export type OrderStatus =
+  | "submitted"
+  | "accepted"
+  | "in_prep"
+  | "ready"
+  | "completed"
+  | "rejected"
+  | "cancelled";
+
+/** Statuses that still represent a live commitment from the kitchen. */
+export const LIVE_ORDER_STATUSES: OrderStatus[] = [
+  "submitted",
+  "accepted",
+  "in_prep",
+  "ready",
+  "completed",
+];
+
+/**
+ * Reserved now so adding a payment provider later is a feature rather than a
+ * migration. Nothing writes anything but the default today.
+ */
+export interface OrderPayment {
+  status: "unpaid" | "paid" | "refunded";
+  method: "cash" | "transfer" | "online";
+  amountIdr: number;
+  paidAt?: string;
+  provider?: string;
+  reference?: string;
+}
+
+export interface OrderStatusChange {
+  status: OrderStatus;
+  at: string;
+  byUid: string;
+}
+
+/**
+ * A week of meals committed to the kitchen.
+ *
+ * Carries its own copy of everything ordered rather than pointing at the plan,
+ * which is what lets the restaurant work from it without ever reading someone's
+ * private plan — and what keeps the record honest if the plan changes later.
+ */
+export interface Order extends Entity {
+  restaurantId: string;
+  userId: string;
+  planId: string;
+  weekNumber: number;
+  /** ISO yyyy-mm-dd of the Monday this order covers. */
+  weekStartDate: string;
+  status: OrderStatus;
+  /** Snapshot, so the kitchen is not reading the customer's profile. */
+  customer: { name: string; email: string; phone?: string };
+  days: OrderDay[];
+  totals: Macros;
+  /** Server-computed. The revenue figure the dashboard sums. */
+  priceIdr: number;
+  mealCount: number;
+  payment: OrderPayment;
+  submittedAt: string;
+  /** The cutoff instant that applied when this was accepted. */
+  lockedAt: string;
+  statusHistory: OrderStatusChange[];
+  restaurantNote?: string;
+}
+
+export type PrepStatus = "todo" | "prepping" | "ready" | "done";
+
+/** One meal, one day, one customer — the atom of the kitchen's todo list. */
+export interface PrepTask extends Entity {
+  restaurantId: string;
+  orderId: string;
+  userId: string;
+  /** ISO yyyy-mm-dd, Bali. The key the kitchen board queries on. */
+  date: string;
+  slot: string;
+  /** "12:30" Bali — what the board sorts and groups by. */
+  readyBy: string;
+  mode: FulfilmentMode;
+  customerName: string;
+  address?: string;
+  mealName: string;
+  servings: number;
+  items: DishItem[];
+  totals: Macros;
+  status: PrepStatus;
+  doneAt?: string;
+  doneByUid?: string;
+}
+
+// --- Restaurant -------------------------------------------------------------
+
+export interface DeliveryZone {
+  name: string;
+  feeIdr: number;
+}
+
+/** Everything about how Negrita takes orders, editable by the admin. */
+export interface RestaurantConfig extends Entity {
+  name: string;
+  /** IANA zone. Bali: "Asia/Makassar". */
+  timezone: string;
+  /** 0 = Monday .. 6 = Sunday. */
+  cutoffDay: number;
+  /** "18:00" in the restaurant's own timezone. */
+  cutoffTime: string;
+  serviceSlots: string[];
+  /** Earliest and latest a meal can be asked for, Bali wall-clock. */
+  serviceOpen: string;
+  serviceClose: string;
+  deliveryZones: DeliveryZone[];
+  /** Percentage added to the DIY component cost to reach the menu price. */
+  markupPct: number;
+  acceptingOrders: boolean;
+}
+
+export const DEFAULT_RESTAURANT_CONFIG: Omit<RestaurantConfig, keyof Entity> = {
+  name: "Negrita",
+  timezone: "Asia/Makassar",
+  cutoffDay: 6, // Sunday
+  cutoffTime: "18:00",
+  serviceSlots: [...DEFAULT_MEAL_SLOTS],
+  serviceOpen: "07:00",
+  serviceClose: "21:00",
+  deliveryZones: [],
+  markupPct: 0,
+  acceptingOrders: true,
+};
+
 // --- House recipes ----------------------------------------------------------
 
 export interface HouseRecipeComponent {
@@ -202,5 +365,7 @@ export interface Repository<T extends Entity> {
 }
 
 export type DishRepository = Repository<Dish>;
+export type OrderRepository = Repository<Order>;
+export type PrepTaskRepository = Repository<PrepTask>;
 export type PlanRepository = Repository<Plan>;
 export type HouseRecipeRepository = Repository<HouseRecipe>;

@@ -1,12 +1,11 @@
 # Mamma Calories — For Negrita
 
-A simple, restaurant-focused macro builder (think MyFitnessPal, but simpler and
-for a kitchen). Pick ingredients from Negrita's nutrition database, set the grams
-for each, combine them into a **dish**, watch the macros add up, **save** the
-dish, and generate a **printable report**.
+Plan a week of real food from Negrita's menu, see exactly what it delivers, and
+send it to the kitchen to prepare. Diners plan on verified macros; the kitchen
+works from a day-by-day prep board; the owner sees signups, usage and revenue.
 
-Built with **Next.js (App Router) + TypeScript + Tailwind CSS**, deployed on
-**Vercel**.
+Built with **Next.js (App Router) + TypeScript + Tailwind CSS** on **Vercel**,
+with **Firebase** for accounts, data and the server-side order pipeline.
 
 ---
 
@@ -23,13 +22,14 @@ Built with **Next.js (App Router) + TypeScript + Tailwind CSS**, deployed on
   protein/carb/fat energy split update live.
 - **Menu templates** — load any of Negrita's 25 menu dishes as an editable
   starting point (quantities not printed on the menu load as 0 to fill in).
-- **Clients** — plan a client's meals across up to **6 weeks**, with editable
-  meal slots, optional daily macro targets, adherence bars, and a printable
-  per-week or whole-program report.
-- **For coaches** — the same client screen in **Coach mode**: set daily macro
-  targets and the planner auto-fills the week from what Negrita actually sells,
-  showing **cost per meal, per day and per week**. Review and shuffle before
-  anything is saved.
+- **Weekly planner** — plan meals across up to **6 weeks**, with editable meal
+  slots, optional daily macro targets, adherence bars, and a printable per-week
+  or whole-program report.
+- **Auto-fill** — set daily macro targets and the planner assembles a week from
+  what Negrita actually sells, showing **cost per meal, per day and per week**.
+  Review and shuffle before anything is saved.
+- **Send it to the kitchen** — submit a week as a prep order, choosing pickup or
+  delivery for each day. The kitchen gets a day-by-day board; you get a receipt.
 - **Prices** — every DIY menu component carries its price, so dishes, plans and
   reports show what the food costs.
 - **House items** — define a Negrita sauce/blend/bake from its own batch recipe
@@ -89,20 +89,19 @@ sells: 100 g taken from a 200 g rice portion still costs one portion.
 Anything not on the DIY menu has no price. The app then shows `from Rp …` or `—`
 rather than a total that silently omits ingredients.
 
-## Coach mode
+## Auto-fill a week
 
-`Clients` and `For coaches` are **the same screen in two modes**, over one client
-record — there is no second roster, plan or report to keep in sync. The nav link
-just lands in coach mode.
+There is no coach role and no client roster: a person plans their own week, and
+everything they do lives under one **Plan & Build** destination.
 
 The generator (`src/lib/mealPlanner.ts`) runs in two steps: **what the client
 likes**, then **the plan**. It builds each meal from composed DIY combinations
 (protein + carb + veg + fat, in whole portions), Negrita menu dishes, and your
 own saved/custom dishes — each source toggled separately. It weights **protein at
-2×** since that is what a coach holds a client to, applies a mild cost preference,
+2×** since that is what people hold themselves to, applies a mild cost preference,
 and keeps snacks smaller than main meals.
 
-**Preferences** are remembered per client:
+**Preferences** are remembered with the plan:
 
 - **Macro style** (high protein / balanced / low carb / high carb) turns a
   calorie figure into gram targets, which stay editable.
@@ -170,54 +169,113 @@ npm run typecheck  # TypeScript check, no emit
 
 ---
 
-## Deploy to Vercel
+## Accounts and roles
 
-1. Push this repo to GitHub.
-2. In Vercel, **Add New → Project** and import the repo.
-3. Framework is auto-detected as **Next.js** (build `next build`). Nothing to
-   configure.
-4. **Deploy.** That's it — the app runs with zero environment variables.
+Planning works with no account at all — a guest's week lives in `localStorage`
+on their device. Signing in is required only to **send a week to the kitchen**,
+and at that moment the device's work is copied into the account.
+
+Three roles, held as **Firebase Auth custom claims** rather than in a document,
+because a document is something a user could try to write:
+
+| Role | Can |
+|---|---|
+| `client` | Plan, build dishes, submit weeks, see their own orders |
+| `restaurant` | All of the above, plus the kitchen board and the order book |
+| `admin` | All of the above, plus revenue, customers and settings |
+
+The first admin is bootstrapped from an `ADMIN_EMAILS` allowlist held in Secret
+Manager; after that, roles are granted from **Admin → Settings**.
+
+---
+
+## Orders and the kitchen
+
+A submitted week becomes an **order** plus one **prep task** per meal per day.
+The kitchen board (`/kitchen`) reads those tasks directly, grouped by when they
+have to be ready, with a mise-en-place roll-up summing every outstanding
+ingredient for the day.
+
+Three things are deliberately server-side, in the `submitOrder` Cloud Function:
+
+- **The price and macros are recomputed** from the plan the server reads itself,
+  using the same `calc`/`pricing` modules the browser uses. Nothing in the
+  request is trusted.
+- **The cutoff is enforced** in Bali time (`Asia/Makassar`). Orders for a week
+  close on the configured day of the preceding week.
+- **Orders cannot be created by a client at all** — the security rules deny it,
+  so the function is the only path.
+
+The restaurant never reads anyone's plan: the order carries its own copy of what
+was ordered.
 
 ---
 
 ## Storage
 
-Saved dishes, clients, and house recipes all use one small `Repository<T>`
-interface with two interchangeable backends:
+Everything goes through one small `Repository<T>` interface with two backends:
 
-- **`local`** (default) — the browser's `localStorage`. Zero setup; dishes live
-  on the device that created them.
-- **`firebase`** — Cloud Firestore, so dishes are shared across devices/staff.
-  Prepared and ready, but dormant until you configure it.
+- **`local`** — the browser's `localStorage`. Zero setup; this is guest mode.
+- **`firebase`** — Cloud Firestore, scoped per account.
 
-Switching backends changes no UI or logic — only environment variables.
+```
+users/{uid}                                profile (role mirror, login metrics)
+users/{uid}/plans/{planId}                 private to its owner
+users/{uid}/dishes/{dishId}                private to its owner
+restaurants/{rid}                          settings: cutoff, hours, mark-up
+restaurants/{rid}/houseRecipes/{id}        public read — corrects everyone's macros
+restaurants/{rid}/orders/{orderId}         written only by submitOrder
+restaurants/{rid}/prepTasks/{taskId}       the kitchen board
+```
 
-### Turning on Firebase (later)
+The Firestore SDK is imported **lazily** inside the repository, so a guest never
+downloads it — worth roughly 120 kB on every page.
 
-1. Create a project at <https://console.firebase.google.com>.
-2. Enable **Firestore Database**.
-3. Add a **Web app** and copy its SDK config.
-4. Set these in **Vercel → Project → Settings → Environment Variables** (and in
-   a local `.env.local`, copied from `.env.local.example`):
+---
 
-   ```
-   NEXT_PUBLIC_STORAGE_BACKEND=firebase
-   NEXT_PUBLIC_FIREBASE_API_KEY=…
-   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=…
-   NEXT_PUBLIC_FIREBASE_PROJECT_ID=…
-   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=…
-   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=…
-   NEXT_PUBLIC_FIREBASE_APP_ID=…
-   ```
+## Deploying
 
-5. Redeploy.
+### 1. Vercel (the app)
 
-> **Security note:** the app is currently an open link with no login. If you
-> enable Firestore, its default rules would let anyone read/write. Before going
-> live with Firebase, either lock the Firestore security rules down or add
-> authentication. This matters more now that **client names and plans** are
-> stored: that is personal data. Collections used: `dishes`, `clients`,
-> `houseRecipes` — one document per record.
+Import the repo; Next.js is auto-detected. Set these environment variables —
+everything `NEXT_PUBLIC_*` is shipped to the browser **by design**, since the
+Firebase web config is not a secret and security lives in the rules:
+
+```
+NEXT_PUBLIC_STORAGE_BACKEND=firebase
+NEXT_PUBLIC_FIREBASE_API_KEY=…
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=…
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=…
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=…
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=…
+NEXT_PUBLIC_FIREBASE_APP_ID=…
+NEXT_PUBLIC_RESTAURANT_ID=negrita
+```
+
+### 2. Firebase (rules, indexes, functions)
+
+**Deploy the rules before switching the backend on**, or every read is denied:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes
+firebase functions:secrets:set ADMIN_EMAILS   # your email, comma-separated
+firebase deploy --only functions
+```
+
+### 3. Before going live
+
+- [ ] Firestore created in **production mode**, region `asia-southeast2`
+- [ ] Email/Password and Google sign-in enabled
+- [ ] Email enumeration protection ON
+- [ ] Your Vercel domains added to **Authorized domains**
+- [ ] Rules and indexes deployed
+- [ ] `ADMIN_EMAILS` secret set, and you can reach `/admin`
+- [ ] Budget alert set on the Blaze plan
+- [ ] Submit one real week end to end and check it reaches `/kitchen`
+
+Optional hardening, worth doing once there is real traffic: enable **App Check**
+(reCAPTCHA Enterprise) for Firestore and Functions, and turn on scheduled
+Firestore backups.
 
 ---
 
@@ -235,15 +293,37 @@ src/lib/database.ts                  Load, merge overlays, index + search
 src/lib/calc.ts                      Macro calculation helpers
 src/lib/units.ts                     Grams <-> portion unit conversion
 src/lib/pricing.ts                   Whole-portion costing in IDR
-src/lib/mealPlanner.ts               Coach auto-planner
+src/lib/mealPlanner.ts               Auto-fill a week from macro targets
 src/lib/clients.ts                   Plan totals, averages, adherence, cost
-src/lib/coachMode.ts                 Manual/Coach mode state
-src/lib/planView.ts                  Day/Week view + show-prices state
-src/lib/storage/                     Repository: local (now) + firebase (prepared)
+src/lib/cutoff.ts                    Bali-time order deadlines (shared with the server)
+src/lib/orders.ts                    Plan -> order -> prep tasks (shared with the server)
+src/lib/admin/analytics.ts           Revenue and customer roll-ups
+src/lib/format.ts                    Rounding + Bali time helpers
+src/lib/auth/                        AuthProvider, role claims, error copy
+src/lib/storage/                     Repository (local + Firestore), orders, claim
 src/store/                           Dish-builder + house-recipe state (Zustand)
-src/components/                      UI (picker, builder, planner, reports, …)
-src/app/                             Routes: /, /dishes, /report/[id], /clients,
-                                     /clients/[id], /clients/[id]/report, /house-items
+src/components/ui/                   Button, Card, Modal, Field, Toast, DataTable…
+src/components/                      Planner, builder, kitchen board, dashboard…
+functions/src/                       Cloud Functions: roles, submitOrder
+firestore.rules                      Access rules
+firestore.indexes.json               Composite indexes for the queries above
+```
+
+### Routes
+
+```
+/                       Landing page
+/login /signup /reset   Accounts
+/plan                   My week          /plan/build    Build a dish
+/plan/dishes            Saved dishes     /plan/report   Printable plan
+/plan/submit            Send a week to the kitchen
+/orders  /orders/[id]   A customer's orders and receipts
+/kitchen                Today's prep board       (restaurant, admin)
+/kitchen/[date]         A specific day           (restaurant, admin)
+/kitchen/orders         The order book           (restaurant, admin)
+/admin                  Owner dashboard          (admin)
+/admin/settings         Cutoff, hours, roles     (admin)
+/admin/house-items      House recipes            (restaurant, admin)
 ```
 
 ---

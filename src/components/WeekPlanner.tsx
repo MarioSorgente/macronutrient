@@ -8,6 +8,7 @@ import {
   CalendarRange,
   FileText,
   Plus,
+  Send,
   Settings2,
   Sparkles,
   Wallet,
@@ -335,9 +336,15 @@ export default function WeekPlanner() {
           </button>
           <Link
             href="/plan/report"
-            className="flex items-center gap-1.5 rounded-xl bg-tomato px-3 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
+            className="flex items-center gap-1.5 rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm font-600 text-charcoal hover:border-tomato-soft"
           >
             <FileText size={15} /> Report
+          </Link>
+          <Link
+            href="/plan/submit"
+            className="flex items-center gap-1.5 rounded-xl bg-tomato px-3 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
+          >
+            <Send size={15} /> Send to kitchen
           </Link>
         </div>
       </div>

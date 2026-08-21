@@ -47,13 +47,26 @@ service cloud.firestore {
         // where('userId', '==', uid) or it is rejected wholesale.
         allow list: if isStaffOf(rid) || (signedIn() && resource.data.userId == uid());
         allow create: if false;
-        allow update, delete: if isStaffOf(rid);
+        // A customer may cancel their own week, and nothing else about it.
+        allow update: if isStaffOf(rid)
+                      || (signedIn()
+                          && resource.data.userId == uid()
+                          && resource.data.status == 'submitted'
+                          && request.resource.data.status == 'cancelled'
+                          && notTouching(['priceIdr', 'days', 'userId', 'totals',
+                                          'mealCount', 'payment', 'restaurantId']));
+        allow delete: if isStaffOf(rid);
       }
 
+      // Created by submitOrder alongside the order. Staff move them through
+      // the board; the meal itself is not theirs to rewrite.
       match /prepTasks/{taskId} {
         allow get, list: if isStaffOf(rid);
         allow create: if false;
-        allow update, delete: if isStaffOf(rid);
+        allow update: if isStaffOf(rid)
+                      && notTouching(['orderId', 'userId', 'items', 'servings',
+                                      'date', 'mealName', 'restaurantId']);
+        allow delete: if isStaffOf(rid);
       }
     }
 
