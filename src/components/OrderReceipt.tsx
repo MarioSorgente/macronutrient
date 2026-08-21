@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Bike, ShoppingBag } from "lucide-react";
-import { getOrder } from "@/lib/storage/orders";
+import { cancelOrder, getOrder } from "@/lib/storage/orders";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import ConfirmButton from "@/components/ui/ConfirmButton";
 import { authErrorMessage } from "@/lib/auth/errors";
 import { BALI_LABEL, formatBaliDay, formatBaliDateTime, round0 } from "@/lib/format";
 import { formatIdr } from "@/lib/pricing";
@@ -21,6 +23,7 @@ export default function OrderReceipt() {
   const [order, setOrder] = useState<Order | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "missing">("loading");
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     if (!id) return;
@@ -65,6 +68,23 @@ export default function OrderReceipt() {
       kind="Kitchen order"
       dateIso={order.submittedAt}
       footnote="Payment is arranged directly with the restaurant."
+      toolbar={
+        order.status === "submitted" && order.userId === user?.uid ? (
+          <ConfirmButton
+            text="Cancel this week"
+            confirmLabel="Yes, cancel it"
+            label="Cancel this order"
+            onConfirm={async () => {
+              try {
+                await cancelOrder(order, user?.uid ?? "");
+                setOrder({ ...order, status: "cancelled" });
+              } catch (cause) {
+                setError(authErrorMessage(cause));
+              }
+            }}
+          />
+        ) : undefined
+      }
     >
       <div className="py-5">
         <div className="flex flex-wrap items-center gap-2">

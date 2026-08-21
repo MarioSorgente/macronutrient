@@ -1,0 +1,185 @@
+/**
+ * Whether a food belongs at a given time of day.
+ *
+ * The planner already gets the arithmetic right — a saucy peri peri chicken can
+ * hit a breakfast macro target perfectly well. It is still the wrong answer at
+ * eight in the morning, and a plan full of technically-correct nonsense is one
+ * nobody follows.
+ *
+ * This is a *bias*, in keeping with how preferences work everywhere else in the
+ * planner: a strong penalty rather than a filter, so an unusual choice is
+ * avoided when there is an alternative but a slot is never left empty purely
+ * for being unconventional.
+ *
+ * Bali matters here. Rice, eggs and sambal at breakfast are entirely normal
+ * locally, so the rule is about *heaviness and sauciness*, not about imposing a
+ * European breakfast. Rice and sweet potato stay neutral.
+ */
+
+export type SlotKind = "breakfast" | "main" | "snack";
+
+export function slotKindOf(slot: string): SlotKind {
+  const name = slot.toLowerCase();
+  if (/breakfast|brunch|morning/.test(name)) return "breakfast";
+  if (/snack|shake|pre-?workout|post-?workout|dessert/.test(name)) return "snack";
+  return "main";
+}
+
+/**
+ * Things people genuinely eat in the morning: eggs, cured and smoked things,
+ * bread, yogurt, fruit, avocado, cheese.
+ */
+const BREAKFAST_FRIENDLY = new Set([
+  // protein
+  "egg_whole_hard_boiled",
+  "bacon_streaky",
+  "ham_sliced",
+  "salmon_smoked",
+  "sausage_chicken",
+  "sausage_beef",
+  // carbs
+  "bread_sourdough",
+  "bread_brioche",
+  "hash_brown",
+  "honey",
+  "baked_beans",
+  "buckwheat_cooked",
+  "quinoa_cooked",
+  "paratha_wholewheat",
+  "sweet_potato_baked",
+  // fats
+  "greek_yogurt_nonfat",
+  "avocado_raw",
+  "cheese_cream",
+  "cheese_cottage_lowfat",
+  "cheese_halloumi",
+  "cheese_feta",
+  // veg and fruit
+  "tomato_cherry_raw",
+  "mushrooms_white_proxy",
+  "banana_raw",
+  "watermelon_raw",
+  "iceberg_or_mixed_lettuce",
+]);
+
+/**
+ * Dinner food. Cooked-to-order mains and anything built around a sauce — the
+ * category the "peri peri chicken at breakfast" complaint was about.
+ */
+const DINNER_ONLY = new Set([
+  "chicken_peri_peri_negrita",
+  "chicken_teriyaki_negrita",
+  "chicken_mushroom_negrita",
+  "chicken_breast_raw",
+  "beef_tenderloin_raw",
+  "salmon_atlantic_raw",
+  "wagyu_ground_raw_proxy",
+  "anchovy_garlic_butter",
+  "tzatziki_proxy",
+  "hummus",
+  "pickled_ginger",
+  "beetroot_cooked",
+  "broccoli_boiled",
+  "grilled_mixed_vegetables_proxy",
+]);
+
+/** Too much to chew on for a snack: anything that needs a knife and a plate. */
+const NOT_A_SNACK = new Set([
+  "chicken_peri_peri_negrita",
+  "chicken_teriyaki_negrita",
+  "chicken_mushroom_negrita",
+  "beef_tenderloin_raw",
+  "salmon_atlantic_raw",
+  "wagyu_ground_raw_proxy",
+  "rice_jasmine_cooked_proxy",
+  "potato_roasted",
+  "paratha_wholewheat",
+]);
+
+/**
+ * Penalties added to a candidate's score, sized against the planner's variety penalties (a repeated meal costs 1.2, a
+ * repeated protein 0.45). Eating bacon twice in a week is a much smaller
+ * problem than eating peri peri chicken at breakfast once, so being wrong for
+ * the time of day has to outweigh being repetitive.
+ */
+const WRONG_TIME_PENALTY = 1.8;
+const MILDLY_WRONG_PENALTY = 0.45;
+const RIGHT_TIME_BONUS = -0.25;
+
+/**
+ * The protein decides whether a meal reads as breakfast; the side rarely
+ * rescues it. Weighting the anchor stops "peri peri chicken + hash brown" from
+ * averaging its way down to something acceptable.
+ */
+const ANCHOR_WEIGHT = 3;
+
+/** How well one ingredient suits a slot. Lower is better, as with every score. */
+export function ingredientSlotPenalty(
+  ingredientId: string,
+  kind: SlotKind
+): number {
+  if (kind === "breakfast") {
+    if (DINNER_ONLY.has(ingredientId)) return WRONG_TIME_PENALTY;
+    if (BREAKFAST_FRIENDLY.has(ingredientId)) return RIGHT_TIME_BONUS;
+    return MILDLY_WRONG_PENALTY * 0.5; // neutral-ish: rice, potato, corn
+  }
+
+  if (kind === "snack") {
+    if (NOT_A_SNACK.has(ingredientId)) return WRONG_TIME_PENALTY;
+    return 0;
+  }
+
+  // Main meals: breakfast-only items feel thin as a dinner, but only mildly —
+  // eggs for dinner is a real meal, brioche as a main course is not.
+  if (kind === "main" && BREAKFAST_FRIENDLY.has(ingredientId)) {
+    return MILDLY_WRONG_PENALTY * 0.4;
+  }
+  return 0;
+}
+
+/**
+ * Suitability of a whole meal.
+ *
+ * A weighted average rather than a sum, so a four-component breakfast is not
+ * punished four times over for one odd item — but the first component is taken
+ * to be the anchor protein and counts for more, because that is what actually
+ * determines whether the plate looks like breakfast.
+ */
+export function mealSlotPenalty(
+  ingredientIds: string[],
+  slot: string
+): number {
+  if (ingredientIds.length === 0) return 0;
+  const kind = slotKindOf(slot);
+
+  let weighted = 0;
+  let weight = 0;
+  ingredientIds.forEach((id, index) => {
+    const w = index === 0 ? ANCHOR_WEIGHT : 1;
+    weighted += w * ingredientSlotPenalty(id, kind);
+    weight += w;
+  });
+  return weighted / weight;
+}
+
+/**
+ * Menu dishes and saved dishes are matched by name, since they are not built
+ * from a component list the planner controls.
+ */
+const DINNERY_WORDS =
+  /steak|kebab|kofta|peri.?peri|teriyaki|mushroom sauce|wagyu|curry|rendang|satay|burger|bowl of rice/i;
+const BREAKFASTY_WORDS =
+  /breakfast|omelet|omelette|scrambl|benedict|pancake|granola|porridge|oat|toast|croissant|smoothie|yogurt|acai/i;
+
+export function namedDishSlotPenalty(name: string, slot: string): number {
+  const kind = slotKindOf(slot);
+  if (kind === "breakfast") {
+    if (BREAKFASTY_WORDS.test(name)) return RIGHT_TIME_BONUS;
+    if (DINNERY_WORDS.test(name)) return WRONG_TIME_PENALTY;
+    return MILDLY_WRONG_PENALTY * 0.5;
+  }
+  if (kind === "main" && BREAKFASTY_WORDS.test(name)) {
+    return MILDLY_WRONG_PENALTY * 0.4;
+  }
+  return 0;
+}

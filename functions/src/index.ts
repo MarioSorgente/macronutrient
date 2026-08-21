@@ -10,3 +10,4 @@ setGlobalOptions({ region: REGION, maxInstances: 10 });
 
 export { onUserCreate, setUserRole } from "./roles";
 export { submitOrder } from "./submitOrder";
+export { onOrderStatusChanged } from "./orderLifecycle";

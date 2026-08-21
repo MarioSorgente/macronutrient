@@ -29,13 +29,13 @@ import {
   dateFor,
   formatShortDate,
   newAssignmentId,
-  weekDailyAverage,
   weekPrice,
   weekTotals,
 } from "@/lib/clients";
-import { sumDishMacros } from "@/lib/calc";
 import { formatIdr, formatPrice, priceItems } from "@/lib/pricing";
 import { usePlanView, useShowPrices } from "@/lib/planView";
+import { EMPTY_MACROS, scaleMacros, sumDishMacros } from "@/lib/calc";
+import { ZERO_PRICE } from "@/lib/pricing";
 import { loadCurrentPlan } from "@/lib/currentPlan";
 import type { GeneratedDay } from "@/lib/mealPlanner";
 import { round0 } from "@/lib/format";
@@ -49,6 +49,7 @@ import MealDetailDialog from "@/components/MealDetailDialog";
 import PlanWeekGrid from "@/components/PlanWeekGrid";
 import PlanDayView from "@/components/PlanDayView";
 import EmptyState from "@/components/ui/EmptyState";
+import ConfirmButton from "@/components/ui/ConfirmButton";
 import HouseRecipeLoader from "@/components/HouseRecipeLoader";
 import { getIngredient, isEstimated } from "@/lib/database";
 import { useHouseRecipes } from "@/store/houseRecipes";
@@ -138,6 +139,21 @@ export default function WeekPlanner() {
     });
   }, [plan, dishMap, week]);
 
+  // Every one of these walks the week's assignments and re-derives macros for
+  // each meal. Unmemoised they ran on every render — three full passes for the
+  // summary alone, before the grid adds one per day — which is what made a
+  // full four-week plan feel sluggish to click around.
+  const currentWeekSafe = plan ? Math.min(week, plan.weekCount) : 1;
+  const weekSummary = useMemo(() => {
+    if (!plan) return null;
+    const totals = weekTotals(plan, currentWeekSafe, dishMap);
+    return {
+      totals,
+      average: scaleMacros(totals, 1 / 7),
+      cost: weekPrice(plan, currentWeekSafe, dishMap),
+    };
+  }, [plan, currentWeekSafe, dishMap]);
+
   const persist = useCallback(async (next: Plan) => {
     const updated = { ...next, updatedAt: new Date().toISOString() };
     setClient(updated);
@@ -204,6 +220,22 @@ export default function WeekPlanner() {
     };
     persist({ ...plan, assignments: [...plan.assignments, assignment] });
     setAssigning(null);
+  }
+
+  /**
+   * Empties the week on screen.
+   *
+   * Only the visible week, and never one already sent to the kitchen — the
+   * restaurant is cooking from that, so it has to be cancelled rather than
+   * quietly emptied.
+   */
+  function clearWeek() {
+    if (!plan) return;
+    persist({
+      ...plan,
+      assignments: plan.assignments.filter((a) => a.week !== currentWeekSafe),
+    });
+    setOpenMealId(null);
   }
 
   function unassign(assignmentId: string) {
@@ -290,11 +322,14 @@ export default function WeekPlanner() {
   }
 
   const currentWeek = Math.min(week, plan.weekCount);
-  const totals = weekTotals(plan, currentWeek, dishMap);
-  const average = weekDailyAverage(plan, currentWeek, dishMap);
-  const cost = weekPrice(plan, currentWeek, dishMap);
 
   // Re-read from the plan so the dialog reflects edits made inside it.
+  const { totals, average, cost } = weekSummary ?? {
+    totals: EMPTY_MACROS,
+    average: EMPTY_MACROS,
+    cost: ZERO_PRICE,
+  };
+
   const openMeal = openMealId
     ? plan.assignments.find((a) => a.id === openMealId) ?? null
     : null;
@@ -428,7 +463,16 @@ export default function WeekPlanner() {
           )}
         </div>
 
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {assignmentsFor(plan, currentWeekSafe).length > 0 && (
+            <ConfirmButton
+              text={`Clear week ${currentWeekSafe}`}
+              confirmLabel={`Clear all ${assignmentsFor(plan, currentWeekSafe).length}?`}
+              label={`Clear every meal in week ${currentWeekSafe}`}
+              disabled={plan.submittedWeeks?.includes(currentWeekSafe)}
+              onConfirm={clearWeek}
+            />
+          )}
           <SegmentedToggle
             ariaLabel="Plan view"
             value={planView}

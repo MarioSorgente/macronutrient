@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Trash2 } from "lucide-react";
 import { IconButton } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
@@ -16,6 +16,9 @@ export default function ConfirmButton({
   onConfirm,
   label,
   confirmLabel = "Confirm",
+  text,
+  icon,
+  disabled,
   timeoutMs = 4000,
   className,
 }: {
@@ -23,6 +26,10 @@ export default function ConfirmButton({
   /** Accessible name for the armed state, e.g. "Delete Chicken bowl". */
   label: string;
   confirmLabel?: string;
+  /** Render a labelled button instead of the bare icon. */
+  text?: string;
+  icon?: ReactNode;
+  disabled?: boolean;
   timeoutMs?: number;
   className?: string;
 }) {
@@ -53,10 +60,30 @@ export default function ConfirmButton({
     );
   }
 
+  if (text) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label={label}
+        onClick={() => setArmed(true)}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm font-600 text-charcoal-soft transition-colors",
+          "hover:border-tomato-soft hover:text-tomato-dark disabled:cursor-not-allowed disabled:opacity-50",
+          className
+        )}
+      >
+        {icon ?? <Trash2 size={15} />}
+        {text}
+      </button>
+    );
+  }
+
   return (
     <IconButton
       variant="danger"
       aria-label={label}
+      disabled={disabled}
       onClick={() => setArmed(true)}
       className={className}
     >
