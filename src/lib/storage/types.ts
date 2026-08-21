@@ -73,11 +73,44 @@ export interface Assignment {
   snapshot: { name: string; totals: Macros };
 }
 
+export type MacroStyle =
+  | "high_protein"
+  | "balanced"
+  | "low_carb"
+  | "high_carb";
+
+export type ProteinSource =
+  | "chicken"
+  | "beef"
+  | "fish"
+  | "eggs"
+  | "pork"
+  | "veg";
+
+/**
+ * What a client likes. `proteinLean` biases the mix toward those sources
+ * without ever excluding the others; `avoidIngredientIds` is the hard rule,
+ * because a dislike or allergy is not a preference.
+ */
+export interface ClientPreferences {
+  macroStyle: MacroStyle;
+  proteinLean: ProteinSource[];
+  avoidIngredientIds: string[];
+}
+
+export const DEFAULT_PREFERENCES: ClientPreferences = {
+  macroStyle: "balanced",
+  proteinLean: [],
+  avoidIngredientIds: [],
+};
+
 export interface Client extends Entity {
   name: string;
   notes?: string;
   /** Optional daily goals; adherence UI only appears when this is set. */
   targets: MacroTargets | null;
+  /** Tastes, remembered between generations. */
+  preferences?: ClientPreferences;
   /** Editable meal slot names, e.g. ["Breakfast", "Lunch", "Dinner"]. */
   mealSlots: string[];
   /** ISO date (yyyy-mm-dd) of week 1, day 1. */

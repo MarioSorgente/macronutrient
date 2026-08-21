@@ -18,7 +18,9 @@ import {
   MAX_PROGRAM_WEEKS,
   type Assignment,
   type Client,
+  type ClientPreferences,
   type Dish,
+  type DishItem,
 } from "@/lib/storage/types";
 import {
   DAY_NAMES,
@@ -31,7 +33,7 @@ import {
   weekTotals,
 } from "@/lib/clients";
 import { sumDishMacros } from "@/lib/calc";
-import { formatIdr, formatPrice } from "@/lib/pricing";
+import { formatIdr, formatPrice, priceItems } from "@/lib/pricing";
 import { usePlannerMode } from "@/lib/coachMode";
 import { usePlanView, useShowPrices } from "@/lib/planView";
 import type { GeneratedDay } from "@/lib/mealPlanner";
@@ -102,6 +104,52 @@ export default function ClientPlanner() {
     setAssigning(null);
   }
 
+  /**
+   * A meal built in the popup goes into the plan inline, exactly like a
+   * generated one, so the dish library stays clean unless the coach asks to
+   * keep it.
+   */
+  async function assignCustom(
+    name: string,
+    items: DishItem[],
+    servings: number,
+    alsoSave: boolean
+  ) {
+    if (!client || !assigning) return;
+    const totals = sumDishMacros(items);
+    const price = priceItems(items);
+
+    let dishId: string | undefined;
+    if (alsoSave) {
+      const now = new Date().toISOString();
+      const dish: Dish = {
+        id: crypto.randomUUID(),
+        name,
+        items,
+        totals,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await getDishRepository().save(dish);
+      setDishes(await getDishRepository().list());
+      dishId = dish.id;
+    }
+
+    const assignment: Assignment = {
+      id: newAssignmentId(),
+      week,
+      day: assigning.day,
+      slot: assigning.slot,
+      items,
+      servings,
+      price: { totalIdr: price.totalIdr, complete: price.complete },
+      snapshot: { name, totals },
+      ...(dishId ? { dishId } : {}),
+    };
+    persist({ ...client, plan: [...client.plan, assignment] });
+    setAssigning(null);
+  }
+
   function unassign(assignmentId: string) {
     if (!client) return;
     persist({
@@ -123,7 +171,11 @@ export default function ClientPlanner() {
   }
 
   /** Writes a generated week into the plan as inline meals. */
-  function applyGenerated(generated: GeneratedDay[], replace: boolean) {
+  function applyGenerated(
+    generated: GeneratedDay[],
+    replace: boolean,
+    preferences: ClientPreferences
+  ) {
     if (!client) return;
     const kept = replace
       ? client.plan.filter((a) => a.week !== currentWeek)
@@ -146,7 +198,9 @@ export default function ClientPlanner() {
       }
     }
 
-    persist({ ...client, plan: [...kept, ...additions] });
+    // Tastes are remembered with the plan, so the next generation starts from
+    // what the coach already told us about this client.
+    persist({ ...client, preferences, plan: [...kept, ...additions] });
     setGenerateOpen(false);
   }
 
@@ -398,6 +452,7 @@ export default function ClientPlanner() {
             dateFor(client, currentWeek, assigning.day)
           )}`}
           onAssign={assign}
+          onAssignCustom={assignCustom}
           onClose={() => setAssigning(null)}
         />
       )}

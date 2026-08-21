@@ -3,7 +3,15 @@ import { GRAM_UNIT_ID } from "@/types/nutrition";
 import { diyMenu, getIngredient, menuRecipes } from "@/lib/database";
 import { EMPTY_MACROS, addMacros, perItemMacros, sumDishMacros } from "@/lib/calc";
 import { priceItems, type PriceResult } from "@/lib/pricing";
-import type { Dish, DishItem, MacroTargets } from "@/lib/storage/types";
+import { proteinSourceOf } from "@/lib/preferences";
+import {
+  DEFAULT_PREFERENCES,
+  type ClientPreferences,
+  type Dish,
+  type DishItem,
+  type MacroTargets,
+  type ProteinSource,
+} from "@/lib/storage/types";
 
 /**
  * Auto-planner: given a coach's daily macro targets, assemble meals that hit
@@ -45,10 +53,14 @@ export interface GeneratedDay {
 export interface GenerateOptions {
   targets: MacroTargets;
   slots: string[];
-  /** Include the 25 Negrita menu dishes and saved dishes as whole-meal options. */
-  includeReadyDishes: boolean;
+  /** Use the 25 Negrita menu dishes as whole-meal options. */
+  includeMenuDishes: boolean;
+  /** Use the user's own saved and custom dishes as whole-meal options. */
+  includeSavedDishes: boolean;
   /** Saved dishes available as ready meals. */
   savedDishes: Dish[];
+  /** Client tastes. Leans bias the mix; the avoid list is absolute. */
+  preferences?: ClientPreferences;
   /** Optional ceiling on a single day's food cost, in rupiah. */
   dailyBudgetIdr?: number | null;
   /** Days to generate (0 = Monday). */
@@ -112,6 +124,31 @@ function pricePenalty(priceIdr: number): number {
  */
 const ANCHOR_MIN_PORTION_G = 60;
 const ANCHOR_MIN_PROTEIN_G = 10;
+
+/**
+ * How strongly a leaned-toward protein is favoured. A bonus, never a filter:
+ * "more fish" should tilt the week toward fish, not make everything else
+ * ineligible and leave slots the planner cannot fill.
+ */
+const LEAN_BONUS = 0.45;
+
+/**
+ * How much of the repeat penalty a leaned-toward protein carries. Asking for
+ * "more fish" should tolerate seeing fish more often, otherwise the repeat
+ * penalty cancels the bonus after a single use and the lean barely registers —
+ * which matters here because the DIY menu has only two fish items big enough to
+ * anchor a meal, against nine meat ones.
+ */
+const LEAN_REPEAT_RELIEF = 0.4;
+
+function leanBonus(
+  ingredient: Ingredient,
+  proteinLean: ProteinSource[]
+): number {
+  if (!proteinLean.length) return 0;
+  const source = proteinSourceOf(ingredient);
+  return source && proteinLean.includes(source) ? -LEAN_BONUS : 0;
+}
 
 function isAnchorProtein(component: Component): boolean {
   return (
@@ -205,7 +242,13 @@ interface Candidate {
   macros: Macros;
   priceIdr: number;
   score: number;
+  /** Identity of the meal itself — used to stop exact repeats. */
+  mealKey: string;
   proteinKey: string;
+  /** Tracked so the same carbohydrate doesn't run all week unnoticed. */
+  carbKey: string;
+  /** Whether this meal's protein is one the client leans toward. */
+  leaned: boolean;
   kind: "composed" | "ready";
   sourceDishId?: string;
 }
@@ -218,14 +261,21 @@ interface Candidate {
 function composedCandidates(
   target: MacroTargets,
   pools: Record<DiySection, Component[]>,
-  budgetIdr: number | null
+  budgetIdr: number | null,
+  preferences: ClientPreferences
 ): Candidate[] {
   const out: Candidate[] = [];
-  const anchors = pools.protein.filter(isAnchorProtein);
-  const accents = pools.protein.filter((c) => !isAnchorProtein(c) && c.portions === 1);
+  const avoid = preferences.avoidIngredientIds;
+  const usable = (c: Component) => !avoid.includes(c.ingredient.ingredient_id);
+
+  const anchors = pools.protein.filter((c) => isAnchorProtein(c) && usable(c));
+  const accents = pools.protein.filter(
+    (c) => !isAnchorProtein(c) && c.portions === 1 && usable(c)
+  );
 
   for (const protein of anchors) {
     for (const carb of pools.carbs) {
+      if (!usable(carb)) continue;
       let macros = addMacros(protein.macros, carb.macros);
       let priceIdr = protein.priceIdr + carb.priceIdr;
       const parts: Component[] = [protein, carb];
@@ -233,8 +283,8 @@ function composedCandidates(
       // Close the remaining gap: a vegetable, then a fat, then optionally a
       // small protein accent — each only if it genuinely improves the fit.
       const closers: Component[][] = [
-        pools.veg,
-        pools.fats.filter((c) => c.portions === 1),
+        pools.veg.filter(usable),
+        pools.fats.filter((c) => c.portions === 1 && usable(c)),
         accents,
       ];
 
@@ -273,8 +323,14 @@ function composedCandidates(
         items: parts.map(toDishItem),
         macros,
         priceIdr,
-        score: scoreAgainst(macros, target) + pricePenalty(priceIdr),
+        score:
+          scoreAgainst(macros, target) +
+          pricePenalty(priceIdr) +
+          leanBonus(protein.ingredient, preferences.proteinLean),
+        mealKey: `${protein.ingredient.ingredient_id}+${carb.ingredient.ingredient_id}`,
         proteinKey: protein.ingredient.ingredient_id,
+        carbKey: carb.ingredient.ingredient_id,
+        leaned: leanBonus(protein.ingredient, preferences.proteinLean) < 0,
         kind: "composed",
       });
     }
@@ -287,11 +343,17 @@ function composedCandidates(
 function readyCandidates(
   target: MacroTargets,
   savedDishes: Dish[],
-  budgetIdr: number | null
+  menuDishes: boolean,
+  budgetIdr: number | null,
+  preferences: ClientPreferences
 ): Candidate[] {
   const out: Candidate[] = [];
+  const avoid = preferences.avoidIngredientIds;
+  const hasAvoided = (items: DishItem[]) =>
+    items.some((i) => avoid.includes(i.ingredientId));
 
   for (const dish of savedDishes) {
+    if (hasAvoided(dish.items)) continue;
     const macros = sumDishMacros(dish.items);
     if (macros.energy_kcal <= 0) continue;
     const price = priceItems(dish.items);
@@ -307,13 +369,16 @@ function readyCandidates(
       macros,
       priceIdr: price.totalIdr,
       score: scoreAgainst(macros, target),
+      mealKey: `dish:${dish.id}`,
       proteinKey: `dish:${dish.id}`,
+      carbKey: `dish:${dish.id}`,
+      leaned: false,
       kind: "ready",
       sourceDishId: dish.id,
     });
   }
 
-  for (const recipe of menuRecipes) {
+  for (const recipe of menuDishes ? menuRecipes : []) {
     const items: DishItem[] = [];
     for (const component of recipe.components) {
       const ingredient = getIngredient(component.ingredient_id);
@@ -326,7 +391,7 @@ function readyCandidates(
         quantity: component.quantity_g,
       });
     }
-    if (!items.length) continue;
+    if (!items.length || hasAvoided(items)) continue;
     const macros = sumDishMacros(items);
     // Menu dishes carry their own price; that is the real order cost.
     const priceIdr = recipe.price_idr ?? 0;
@@ -337,7 +402,10 @@ function readyCandidates(
       macros,
       priceIdr,
       score: scoreAgainst(macros, target),
+      mealKey: `recipe:${recipe.recipe_id}`,
       proteinKey: `recipe:${recipe.recipe_id}`,
+      carbKey: `recipe:${recipe.recipe_id}`,
+      leaned: false,
       kind: "ready",
     });
   }
@@ -349,8 +417,12 @@ function readyCandidates(
 
 /** How many top candidates to randomise between, for variety across a week. */
 const TOP_K = 8;
-/** Score penalty applied per previous use of the same protein in the week. */
-const REPEAT_PENALTY = 0.35;
+/**
+ * Repeat penalties, applied per previous use in the week. Tiered so the exact
+ * same meal is discouraged hardest, then the protein, then the carbohydrate —
+ * without the carb tier a single rice or potato quietly runs the whole week.
+ */
+const REPEAT_PENALTY = { meal: 1.2, protein: 0.45, carb: 0.3 };
 /**
  * A meal must be recognisably the size the slot asked for. Without this, a slot
  * whose candidates were all filtered out (by a tight budget, say) would accept
@@ -369,6 +441,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
     fats: buildComponents("fats"),
   };
 
+  const preferences = options.preferences ?? DEFAULT_PREFERENCES;
   const slots = options.slots.length ? options.slots : ["Meal"];
 
   // Split the day by slot weight rather than evenly, so a snack stays a snack.
@@ -394,20 +467,30 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
       slot,
       target,
       pool: [
-        ...composedCandidates(target, pools, budget),
-        ...(options.includeReadyDishes
-          ? readyCandidates(target, options.savedDishes, budget)
-          : []),
+        ...composedCandidates(target, pools, budget, preferences),
+        ...readyCandidates(
+          target,
+          options.includeSavedDishes ? options.savedDishes : [],
+          options.includeMenuDishes,
+          budget,
+          preferences
+        ),
       ],
     };
   });
 
-  const usage = new Map<string, number>();
+  const usage = {
+    meal: new Map<string, number>(),
+    protein: new Map<string, number>(),
+    carb: new Map<string, number>(),
+  };
   const days: GeneratedDay[] = [];
 
   for (const day of options.days) {
     const meals: GeneratedMeal[] = [];
     const unfilledSlots: string[] = [];
+    /** Meals already placed today — nothing repeats within a single day. */
+    const usedToday = new Set<string>();
     let dayMacros: Macros = { ...EMPTY_MACROS };
     let dayPrice: PriceResult = {
       totalIdr: 0,
@@ -421,10 +504,12 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
         continue;
       }
 
-      // Re-score with a penalty for proteins already used this week, so the
-      // seven days don't come back identical.
+      // Re-score against what the week has already used, so seven days don't
+      // come back identical.
       const ranked = pool
         .filter((candidate) => {
+          // A meal already on today's plate cannot fill another slot today.
+          if (usedToday.has(candidate.mealKey)) return false;
           if (target.energy_kcal <= 0) return true;
           const ratio = candidate.macros.energy_kcal / target.energy_kcal;
           return ratio <= MAX_ENERGY_RATIO && ratio >= MIN_ENERGY_RATIO;
@@ -433,7 +518,11 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
           candidate,
           adjusted:
             candidate.score +
-            REPEAT_PENALTY * (usage.get(candidate.proteinKey) ?? 0),
+            REPEAT_PENALTY.meal * (usage.meal.get(candidate.mealKey) ?? 0) +
+            REPEAT_PENALTY.protein *
+              (candidate.leaned ? LEAN_REPEAT_RELIEF : 1) *
+              (usage.protein.get(candidate.proteinKey) ?? 0) +
+            REPEAT_PENALTY.carb * (usage.carb.get(candidate.carbKey) ?? 0),
         }))
         .sort((a, b) => a.adjusted - b.adjusted)
         .slice(0, TOP_K);
@@ -448,9 +537,18 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
       const picked = ranked[Math.floor(random() * ranked.length)] ?? ranked[0];
 
       const candidate = picked.candidate;
-      usage.set(
+      usedToday.add(candidate.mealKey);
+      usage.meal.set(
+        candidate.mealKey,
+        (usage.meal.get(candidate.mealKey) ?? 0) + 1
+      );
+      usage.protein.set(
         candidate.proteinKey,
-        (usage.get(candidate.proteinKey) ?? 0) + 1
+        (usage.protein.get(candidate.proteinKey) ?? 0) + 1
+      );
+      usage.carb.set(
+        candidate.carbKey,
+        (usage.carb.get(candidate.carbKey) ?? 0) + 1
       );
 
       const price =

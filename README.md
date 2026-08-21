@@ -95,11 +95,31 @@ rather than a total that silently omits ingredients.
 record — there is no second roster, plan or report to keep in sync. The nav link
 just lands in coach mode.
 
-The generator (`src/lib/mealPlanner.ts`) builds each meal from two sources:
-composed DIY combinations (protein + carb + veg + fat, in whole portions) and
-ready menu/saved dishes scored whole. It weights **protein at 2×** since that is
-what a coach holds a client to, applies a mild cost preference, keeps snacks
-smaller than main meals, and varies proteins across the week.
+The generator (`src/lib/mealPlanner.ts`) runs in two steps: **what the client
+likes**, then **the plan**. It builds each meal from composed DIY combinations
+(protein + carb + veg + fat, in whole portions), Negrita menu dishes, and your
+own saved/custom dishes — each source toggled separately. It weights **protein at
+2×** since that is what a coach holds a client to, applies a mild cost preference,
+and keeps snacks smaller than main meals.
+
+**Preferences** are remembered per client:
+
+- **Macro style** (high protein / balanced / low carb / high carb) turns a
+  calorie figure into gram targets, which stay editable.
+- **Protein lean** — "more fish", "more beef" — is a *bias, not a filter*.
+  Everything stays eligible, so no slot goes unfilled because of a preference;
+  leaned proteins also tolerate more repetition, since asking for more fish means
+  expecting to see it more often.
+- **Avoid list** is the one hard rule: those ingredients appear in no meal.
+
+**Variety** is enforced, not hoped for: the same meal can never appear twice in a
+day, and repeats across the week are penalised in tiers — the exact meal hardest,
+then the protein, then the carbohydrate, so a single rice or potato can't quietly
+run all seven days.
+
+> Note on leanings: Negrita's DIY menu has only **two fish items large enough to
+> anchor a meal** against nine meat ones, so "more fish" shifts the week as far as
+> the menu allows rather than dominating it.
 
 It deliberately refuses to fake a plan: a protein must be a real portion to
 anchor a meal (tobiko and a single ham slice are garnishes, not dinner), and if
@@ -115,7 +135,13 @@ explicit choice.
 
 Any meal is **clickable**: the dialog shows its macros, price and the full
 ingredient breakdown with each ingredient's contribution, and is where servings,
-price and removal are edited.
+price and removal are edited. The price shown is the **total**, so it moves as
+servings change.
+
+Adding a meal offers two tabs: pick a **saved** dish, or **build** one on the
+spot from Negrita's ingredients — with the same portion units as the main builder
+("2 large eggs"), live macros and cost. Built meals go into the plan inline, with
+an optional "also save to my dishes".
 
 **Prices can be raised, never lowered.** The calculated menu price is a hard
 floor; typing a lower figure snaps the field back to it rather than silently

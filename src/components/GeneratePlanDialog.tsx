@@ -1,9 +1,32 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { RefreshCw, Sparkles, Wallet, X } from "lucide-react";
-import type { Client, Dish, MacroTargets } from "@/lib/storage/types";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Ban,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Wallet,
+  X,
+} from "lucide-react";
+import type {
+  Client,
+  ClientPreferences,
+  Dish,
+  MacroStyle,
+  MacroTargets,
+  ProteinSource,
+} from "@/lib/storage/types";
+import { DEFAULT_PREFERENCES } from "@/lib/storage/types";
 import { TARGET_FIELDS, DAY_SHORT } from "@/lib/clients";
+import {
+  MACRO_STYLES,
+  PROTEIN_SOURCES,
+  targetsFromStyle,
+} from "@/lib/preferences";
+import { getIngredient, searchIngredients } from "@/lib/database";
 import { generatePlan, type GeneratedDay } from "@/lib/mealPlanner";
 import { formatIdr, formatPrice } from "@/lib/pricing";
 import { round0, round1 } from "@/lib/format";
@@ -16,9 +39,8 @@ const DEFAULT_TARGETS: MacroTargets = {
 };
 
 /**
- * Coach workflow: set the targets, generate a week of meals from what Negrita
- * sells, review it (with cost), then write it into the client's plan.
- * Nothing is saved until the coach accepts.
+ * Coach workflow in two steps: say what the client likes, then produce and
+ * review a week. Split so neither screen becomes a wall of controls.
  */
 export default function GeneratePlanDialog({
   client,
@@ -30,20 +52,57 @@ export default function GeneratePlanDialog({
   client: Client;
   week: number;
   savedDishes: Dish[];
-  onApply: (days: GeneratedDay[], replace: boolean) => void;
+  onApply: (
+    days: GeneratedDay[],
+    replace: boolean,
+    preferences: ClientPreferences
+  ) => void;
   onClose: () => void;
 }) {
+  const [step, setStep] = useState<1 | 2>(1);
+
+  const [preferences, setPreferences] = useState<ClientPreferences>(
+    client.preferences ?? DEFAULT_PREFERENCES
+  );
   const [targets, setTargets] = useState<MacroTargets>(
     client.targets ?? DEFAULT_TARGETS
   );
-  const [includeReady, setIncludeReady] = useState(true);
+
+  const [includeMenu, setIncludeMenu] = useState(true);
+  const [includeSaved, setIncludeSaved] = useState(true);
   const [budgetOn, setBudgetOn] = useState(false);
-  const [budget, setBudget] = useState(250000);
+  const [budget, setBudget] = useState(400000);
   const [replace, setReplace] = useState(true);
   const [seed, setSeed] = useState(1);
   const [preview, setPreview] = useState<GeneratedDay[] | null>(null);
+  const [avoidQuery, setAvoidQuery] = useState("");
 
   const days = useMemo(() => [0, 1, 2, 3, 4, 5, 6], []);
+
+  /** Picking a style restates the targets; the numbers stay editable after. */
+  function chooseStyle(macroStyle: MacroStyle) {
+    setPreferences({ ...preferences, macroStyle });
+    setTargets(targetsFromStyle(targets.energy_kcal, macroStyle));
+    setPreview(null);
+  }
+
+  function toggleLean(source: ProteinSource) {
+    const has = preferences.proteinLean.includes(source);
+    setPreferences({
+      ...preferences,
+      proteinLean: has
+        ? preferences.proteinLean.filter((s) => s !== source)
+        : [...preferences.proteinLean, source],
+    });
+    setPreview(null);
+  }
+
+  const avoidResults = useMemo(() => {
+    if (!avoidQuery.trim()) return [];
+    return searchIngredients(avoidQuery, null)
+      .filter((i) => !preferences.avoidIngredientIds.includes(i.ingredient_id))
+      .slice(0, 5);
+  }, [avoidQuery, preferences.avoidIngredientIds]);
 
   function run(nextSeed: number) {
     setSeed(nextSeed);
@@ -51,8 +110,10 @@ export default function GeneratePlanDialog({
       generatePlan({
         targets,
         slots: client.mealSlots,
-        includeReadyDishes: includeReady,
+        includeMenuDishes: includeMenu,
+        includeSavedDishes: includeSaved,
         savedDishes,
+        preferences,
         dailyBudgetIdr: budgetOn ? budget : null,
         days,
         seed: nextSeed,
@@ -60,8 +121,8 @@ export default function GeneratePlanDialog({
     );
   }
 
-  const weekPrice = preview?.reduce((sum, d) => sum + d.price.totalIdr, 0) ?? 0;
-  const avgDay = preview?.length
+  const weekCost = preview?.reduce((s, d) => s + d.price.totalIdr, 0) ?? 0;
+  const avgKcal = preview?.length
     ? preview.reduce((s, d) => s + d.macros.energy_kcal, 0) / preview.length
     : 0;
   const avgProtein = preview?.length
@@ -83,10 +144,13 @@ export default function GeneratePlanDialog({
           <div>
             <h3 className="flex items-center gap-2 font-display text-lg font-700 text-charcoal">
               <Sparkles size={18} className="text-tomato" />
-              Generate week {week} for {client.name}
+              {step === 1 ? "What does " + client.name + " like?" : `Week ${week} plan`}
             </h3>
             <p className="text-xs text-charcoal-soft">
-              Set the daily targets — the planner fills the week from Negrita&apos;s menu.
+              Step {step} of 2 ·{" "}
+              {step === 1
+                ? "Tastes shape the mix, not the maths"
+                : "Targets, sources, then review"}
             </p>
           </div>
           <button
@@ -100,207 +164,373 @@ export default function GeneratePlanDialog({
         </div>
 
         <div className="scroll-slim flex-1 overflow-y-auto px-4 py-4">
-          {/* Targets */}
-          <h4 className="mb-2 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
-            Daily targets
-          </h4>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {TARGET_FIELDS.map((field) => (
-              <label key={field.key} className="text-xs">
-                <span className="mb-1 block font-600 text-charcoal-soft">
-                  {field.label} ({field.unit})
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  value={targets[field.key]}
-                  onChange={(e) =>
-                    setTargets({
-                      ...targets,
-                      [field.key]: Math.max(0, Number(e.target.value) || 0),
-                    })
-                  }
-                  className="no-spin w-full rounded-lg border border-cream-deep bg-white px-2 py-1.5 text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
-                />
-              </label>
-            ))}
-          </div>
-
-          {/* Options */}
-          <div className="mt-4 space-y-2 rounded-xl border border-cream-deep bg-white p-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={includeReady}
-                onChange={(e) => setIncludeReady(e.target.checked)}
-                className="h-4 w-4 accent-tomato"
-              />
-              <span className="font-600 text-charcoal">
-                Also use ready menu dishes
-              </span>
-              <span className="text-xs text-charcoal-soft">
-                (alongside built-to-order combinations)
-              </span>
-            </label>
-
-            <label className="flex flex-wrap items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={budgetOn}
-                onChange={(e) => setBudgetOn(e.target.checked)}
-                className="h-4 w-4 accent-tomato"
-              />
-              <span className="flex items-center gap-1.5 font-600 text-charcoal">
-                <Wallet size={14} /> Daily budget
-              </span>
-              {budgetOn && (
-                <span className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    min={0}
-                    step={10000}
-                    value={budget}
-                    onChange={(e) => setBudget(Number(e.target.value) || 0)}
-                    className="no-spin w-28 rounded-lg border border-cream-deep px-2 py-1 text-right text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
-                  />
-                  <span className="text-xs text-charcoal-soft">
-                    IDR / day ({formatIdr(budget)})
-                  </span>
-                </span>
-              )}
-            </label>
-
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={replace}
-                onChange={(e) => setReplace(e.target.checked)}
-                className="h-4 w-4 accent-tomato"
-              />
-              <span className="font-600 text-charcoal">
-                Replace anything already planned this week
-              </span>
-            </label>
-          </div>
-
-          {/* Generate */}
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              onClick={() => run(seed)}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-tomato px-4 py-2.5 font-700 text-cream hover:bg-tomato-dark"
-            >
-              <Sparkles size={16} /> {preview ? "Regenerate" : "Generate plan"}
-            </button>
-            {preview && (
-              <button
-                type="button"
-                onClick={() => run(seed + 1)}
-                className="flex items-center justify-center gap-2 rounded-xl border border-cream-deep bg-white px-4 py-2.5 font-600 text-charcoal hover:border-tomato-soft"
-              >
-                <RefreshCw size={15} /> Shuffle
-              </button>
-            )}
-          </div>
-
-          {/* Preview */}
-          {preview && (
-            <div className="mt-4">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <h4 className="text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
-                  Preview
-                </h4>
-                <div className="flex flex-wrap gap-3 text-xs tabular-nums text-charcoal-soft">
-                  <span>
-                    avg{" "}
-                    <b className="text-charcoal">{round0(avgDay)}</b> kcal/day
-                    <span className="ml-1 opacity-70">
-                      (target {round0(targets.energy_kcal)})
-                    </span>
-                  </span>
-                  <span>
-                    avg <b className="text-charcoal">{round1(avgProtein)}</b> g P
-                    <span className="ml-1 opacity-70">
-                      (target {round0(targets.protein_g)})
-                    </span>
-                  </span>
-                  <span className="font-700 text-tomato">
-                    {formatIdr(weekPrice)} / week
-                  </span>
-                </div>
+          {step === 1 ? (
+            <>
+              {/* Macro style */}
+              <h4 className="mb-2 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
+                Macro style
+              </h4>
+              <div className="grid grid-cols-2 gap-2">
+                {MACRO_STYLES.map((style) => {
+                  const active = preferences.macroStyle === style.id;
+                  return (
+                    <button
+                      key={style.id}
+                      type="button"
+                      onClick={() => chooseStyle(style.id)}
+                      className={
+                        "rounded-xl border px-3 py-2 text-left transition-colors " +
+                        (active
+                          ? "border-tomato bg-tomato/5"
+                          : "border-cream-deep bg-white hover:border-tomato-soft")
+                      }
+                    >
+                      <div className="text-sm font-700 text-charcoal">
+                        {style.label}
+                      </div>
+                      <div className="text-[11px] text-charcoal-soft">
+                        {style.description}
+                      </div>
+                      <div className="mt-0.5 text-[10px] tabular-nums text-charcoal-soft">
+                        P {Math.round(style.split.protein * 100)}% · C{" "}
+                        {Math.round(style.split.carbs * 100)}% · F{" "}
+                        {Math.round(style.split.fat * 100)}%
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* Say plainly when constraints prevented a full plan. */}
-              {preview.some((d) => d.unfilledSlots.length > 0) && (
-                <p className="mb-2 rounded-lg bg-gold/10 px-3 py-2 text-xs text-charcoal">
-                  Some meal slots could not be filled without going far off
-                  target
-                  {budgetOn ? " within this budget" : ""}, so they were left
-                  empty rather than padded with something that misses the mark.
-                  {budgetOn && " Raising the daily budget usually fixes it."}
-                </p>
+              {/* Protein lean */}
+              <h4 className="mb-1 mt-5 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
+                More of…
+              </h4>
+              <p className="mb-2 text-[11px] text-charcoal-soft">
+                A leaning, not a restriction — everything else still appears, just
+                less often. Leave empty for no preference.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {PROTEIN_SOURCES.map((source) => {
+                  const active = preferences.proteinLean.includes(source.id);
+                  return (
+                    <button
+                      key={source.id}
+                      type="button"
+                      onClick={() => toggleLean(source.id)}
+                      className={
+                        "rounded-full px-3 py-1.5 text-xs font-600 transition-colors " +
+                        (active
+                          ? "bg-charcoal text-cream"
+                          : "bg-cream-deep text-charcoal-soft hover:text-charcoal")
+                      }
+                    >
+                      {source.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Avoid */}
+              <h4 className="mb-1 mt-5 flex items-center gap-1.5 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
+                <Ban size={12} /> Never include
+              </h4>
+              <p className="mb-2 text-[11px] text-charcoal-soft">
+                Allergies and hard dislikes. These are excluded from every meal.
+              </p>
+
+              {preferences.avoidIngredientIds.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {preferences.avoidIngredientIds.map((avoidId) => (
+                    <button
+                      key={avoidId}
+                      type="button"
+                      onClick={() => {
+                        setPreferences({
+                          ...preferences,
+                          avoidIngredientIds:
+                            preferences.avoidIngredientIds.filter(
+                              (x) => x !== avoidId
+                            ),
+                        });
+                        setPreview(null);
+                      }}
+                      className="flex items-center gap-1 rounded-full bg-tomato-soft/30 px-2.5 py-1 text-xs font-600 text-tomato-dark"
+                    >
+                      {getIngredient(avoidId)?.name ?? avoidId}
+                      <X size={12} />
+                    </button>
+                  ))}
+                </div>
               )}
 
-              <ul className="flex flex-col gap-2">
-                {preview.map((day) => (
-                  <li
-                    key={day.day}
-                    className="rounded-xl border border-cream-deep bg-white p-3"
-                  >
-                    <div className="mb-1.5 flex items-baseline justify-between">
-                      <span className="font-display text-sm font-700 text-charcoal">
-                        {DAY_SHORT[day.day]}
+              <div className="relative">
+                <Search
+                  size={15}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-charcoal-soft"
+                />
+                <input
+                  value={avoidQuery}
+                  onChange={(e) => setAvoidQuery(e.target.value)}
+                  placeholder="Search an ingredient to exclude…"
+                  className="w-full rounded-xl border border-cream-deep bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-tomato-soft"
+                />
+                {avoidResults.length > 0 && (
+                  <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-cream-deep bg-white shadow-card">
+                    {avoidResults.map((ingredient) => (
+                      <li key={ingredient.ingredient_id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPreferences({
+                              ...preferences,
+                              avoidIngredientIds: [
+                                ...preferences.avoidIngredientIds,
+                                ingredient.ingredient_id,
+                              ],
+                            });
+                            setAvoidQuery("");
+                            setPreview(null);
+                          }}
+                          className="w-full px-3 py-2 text-left text-sm text-charcoal hover:bg-cream"
+                        >
+                          {ingredient.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Targets */}
+              <h4 className="mb-2 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
+                Daily targets
+              </h4>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {TARGET_FIELDS.map((field) => (
+                  <label key={field.key} className="text-xs">
+                    <span className="mb-1 block font-600 text-charcoal-soft">
+                      {field.label} ({field.unit})
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={targets[field.key]}
+                      onChange={(e) => {
+                        const value = Math.max(0, Number(e.target.value) || 0);
+                        // Changing calories restates the split; changing a macro
+                        // is taken as a deliberate override and left alone.
+                        setTargets(
+                          field.key === "energy_kcal"
+                            ? targetsFromStyle(value, preferences.macroStyle)
+                            : { ...targets, [field.key]: value }
+                        );
+                        setPreview(null);
+                      }}
+                      className="no-spin w-full rounded-lg border border-cream-deep bg-white px-2 py-1.5 text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
+                    />
+                  </label>
+                ))}
+              </div>
+
+              {/* Sources */}
+              <h4 className="mb-2 mt-4 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
+                Build meals from
+              </h4>
+              <div className="space-y-2 rounded-xl border border-cream-deep bg-white p-3">
+                <p className="text-xs text-charcoal-soft">
+                  Ingredient combinations are always used. Add whole dishes too:
+                </p>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={includeMenu}
+                    onChange={(e) => {
+                      setIncludeMenu(e.target.checked);
+                      setPreview(null);
+                    }}
+                    className="h-4 w-4 accent-tomato"
+                  />
+                  <span className="font-600 text-charcoal">
+                    Negrita menu dishes
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={includeSaved}
+                    onChange={(e) => {
+                      setIncludeSaved(e.target.checked);
+                      setPreview(null);
+                    }}
+                    className="h-4 w-4 accent-tomato"
+                  />
+                  <span className="font-600 text-charcoal">
+                    Saved &amp; custom dishes
+                  </span>
+                  <span className="text-xs text-charcoal-soft">
+                    ({savedDishes.length})
+                  </span>
+                </label>
+
+                <label className="flex flex-wrap items-center gap-2 border-t border-cream-deep pt-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={budgetOn}
+                    onChange={(e) => {
+                      setBudgetOn(e.target.checked);
+                      setPreview(null);
+                    }}
+                    className="h-4 w-4 accent-tomato"
+                  />
+                  <span className="flex items-center gap-1.5 font-600 text-charcoal">
+                    <Wallet size={14} /> Daily budget
+                  </span>
+                  {budgetOn && (
+                    <span className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={0}
+                        step={10000}
+                        value={budget}
+                        onChange={(e) => {
+                          setBudget(Number(e.target.value) || 0);
+                          setPreview(null);
+                        }}
+                        className="no-spin w-28 rounded-lg border border-cream-deep px-2 py-1 text-right text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
+                      />
+                      <span className="text-xs text-charcoal-soft">
+                        {formatIdr(budget)}
                       </span>
-                      <span className="text-xs tabular-nums text-charcoal-soft">
-                        <b className="text-tomato">
-                          {round0(day.macros.energy_kcal)}
-                        </b>{" "}
-                        kcal · P {round1(day.macros.protein_g)} · C{" "}
-                        {round1(day.macros.carbs_g)} · F {round1(day.macros.fat_g)}
-                        <b className="ml-2 text-charcoal">
-                          {formatPrice(day.price)}
-                        </b>
+                    </span>
+                  )}
+                </label>
+
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={replace}
+                    onChange={(e) => setReplace(e.target.checked)}
+                    className="h-4 w-4 accent-tomato"
+                  />
+                  <span className="font-600 text-charcoal">
+                    Replace what is already planned this week
+                  </span>
+                </label>
+              </div>
+
+              {/* Generate */}
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => run(seed)}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-tomato px-4 py-2.5 font-700 text-cream hover:bg-tomato-dark"
+                >
+                  <Sparkles size={16} /> {preview ? "Regenerate" : "Generate"}
+                </button>
+                {preview && (
+                  <button
+                    type="button"
+                    onClick={() => run(seed + 1)}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-cream-deep bg-white px-4 py-2.5 font-600 text-charcoal hover:border-tomato-soft"
+                  >
+                    <RefreshCw size={15} /> Shuffle
+                  </button>
+                )}
+              </div>
+
+              {/* Preview */}
+              {preview && (
+                <div className="mt-4">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
+                      Preview
+                    </h4>
+                    <div className="flex flex-wrap gap-3 text-xs tabular-nums text-charcoal-soft">
+                      <span>
+                        avg <b className="text-charcoal">{round0(avgKcal)}</b> kcal
+                      </span>
+                      <span>
+                        avg <b className="text-charcoal">{round1(avgProtein)}</b> g P
+                      </span>
+                      <span className="font-700 text-tomato">
+                        {formatIdr(weekCost)} / week
                       </span>
                     </div>
-                    <ul className="space-y-0.5">
-                      {day.meals.map((meal, i) => (
-                        <li
-                          key={`${day.day}-${i}`}
-                          className="flex items-baseline justify-between gap-2 text-xs"
-                        >
-                          <span className="min-w-0">
-                            <span className="mr-1.5 text-[10px] font-700 uppercase tracking-wide text-charcoal-soft">
-                              {meal.slot}
-                            </span>
-                            <span className="text-charcoal">{meal.name}</span>
-                            {meal.kind === "ready" && (
-                              <span className="ml-1 rounded bg-cream-deep px-1 text-[9px] font-700 uppercase text-charcoal-soft">
-                                menu
+                  </div>
+
+                  {preview.some((d) => d.unfilledSlots.length > 0) && (
+                    <p className="mb-2 rounded-lg bg-gold/10 px-3 py-2 text-xs text-charcoal">
+                      Some slots could not be filled without going far off target
+                      {budgetOn ? " within this budget" : ""}, so they were left
+                      empty rather than padded.
+                    </p>
+                  )}
+
+                  <ul className="flex flex-col gap-2">
+                    {preview.map((day) => (
+                      <li
+                        key={day.day}
+                        className="rounded-xl border border-cream-deep bg-white p-3"
+                      >
+                        <div className="mb-1.5 flex items-baseline justify-between">
+                          <span className="font-display text-sm font-700 text-charcoal">
+                            {DAY_SHORT[day.day]}
+                          </span>
+                          <span className="text-xs tabular-nums text-charcoal-soft">
+                            <b className="text-tomato">
+                              {round0(day.macros.energy_kcal)}
+                            </b>{" "}
+                            kcal · P {round1(day.macros.protein_g)} ·{" "}
+                            <b className="text-charcoal">
+                              {formatPrice(day.price)}
+                            </b>
+                          </span>
+                        </div>
+                        <ul className="space-y-0.5">
+                          {day.meals.map((meal, i) => (
+                            <li
+                              key={`${day.day}-${i}`}
+                              className="flex items-baseline justify-between gap-2 text-xs"
+                            >
+                              <span className="min-w-0">
+                                <span className="mr-1.5 text-[10px] font-700 uppercase tracking-wide text-charcoal-soft">
+                                  {meal.slot}
+                                </span>
+                                <span className="text-charcoal">{meal.name}</span>
                               </span>
-                            )}
-                          </span>
-                          <span className="shrink-0 tabular-nums text-charcoal-soft">
-                            {round0(meal.macros.energy_kcal)} kcal ·{" "}
-                            {formatPrice(meal.price)}
-                          </span>
-                        </li>
-                      ))}
-                      {day.unfilledSlots.length > 0 && (
-                        <li className="pt-0.5 text-[11px] text-gold">
-                          Could not fill {day.unfilledSlots.join(", ")} within the
-                          constraints
-                          {budgetOn ? " — try raising the daily budget." : "."}
-                        </li>
-                      )}
-                    </ul>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                              <span className="shrink-0 tabular-nums text-charcoal-soft">
+                                {round0(meal.macros.energy_kcal)} kcal
+                              </span>
+                            </li>
+                          ))}
+                          {day.unfilledSlots.length > 0 && (
+                            <li className="pt-0.5 text-[11px] text-gold">
+                              Could not fill {day.unfilledSlots.join(", ")}
+                            </li>
+                          )}
+                        </ul>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-cream-deep px-4 py-3">
+        <div className="flex items-center gap-2 border-t border-cream-deep px-4 py-3">
+          {step === 2 && (
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-600 text-charcoal-soft hover:text-charcoal"
+            >
+              <ArrowLeft size={15} /> Preferences
+            </button>
+          )}
+          <div className="flex-1" />
           <button
             type="button"
             onClick={onClose}
@@ -308,14 +538,24 @@ export default function GeneratePlanDialog({
           >
             Cancel
           </button>
-          <button
-            type="button"
-            disabled={!preview}
-            onClick={() => preview && onApply(preview, replace)}
-            className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
-          >
-            Apply to week {week}
-          </button>
+          {step === 1 ? (
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              className="flex items-center gap-1.5 rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
+            >
+              Next <ArrowRight size={15} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={!preview}
+              onClick={() => preview && onApply(preview, replace, preferences)}
+              className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
+            >
+              Apply to week {week}
+            </button>
+          )}
         </div>
       </div>
     </div>

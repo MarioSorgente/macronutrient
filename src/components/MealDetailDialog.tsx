@@ -128,66 +128,68 @@ export default function MealDetailDialog({
             </div>
           </div>
 
-          {/* Price */}
+          {/* Price — the total leads, so it visibly moves with servings. */}
           <div className="mt-2 rounded-xl border border-cream-deep bg-white px-3 py-2.5">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm font-600 text-charcoal">Price</span>
-              {canMarkUp ? (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-charcoal-soft">Rp</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onBlur={(e) => commitMarkUp(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        (e.target as HTMLInputElement).blur();
-                      }
-                    }}
-                    className="w-28 rounded-lg border border-cream-deep px-2 py-1 text-right text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
-                    aria-label="Price per serving"
-                  />
-                  {markedUp && (
-                    <button
-                      type="button"
-                      onClick={() => onChangeMarkUp(undefined)}
-                      className="rounded-lg p-1.5 text-charcoal-soft hover:text-tomato-dark"
-                      title="Reset to menu price"
-                      aria-label="Reset to menu price"
-                    >
-                      <RotateCcw size={14} />
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <span className="text-sm font-700 tabular-nums text-charcoal">
-                  {formatPrice(price)}
-                </span>
-              )}
+              <span className="font-display text-xl font-700 tabular-nums text-charcoal">
+                {formatPrice(price)}
+              </span>
             </div>
 
-            {canMarkUp && (
-              <p className="mt-1 text-[11px] text-charcoal-soft">
-                {markedUp ? (
-                  <>
-                    Marked up from the menu price of{" "}
-                    <b className="text-charcoal">{formatIdr(base.totalIdr)}</b>.
-                  </>
-                ) : (
-                  <>Menu price. It can be raised, but not lowered.</>
-                )}
-                {assignment.servings !== 1 && (
-                  <>
-                    {" "}
-                    Total for {assignment.servings} servings:{" "}
-                    <b className="text-charcoal">{formatIdr(price.totalIdr)}</b>.
-                  </>
-                )}
-              </p>
-            )}
-            {!canMarkUp && (
+            {canMarkUp ? (
+              <>
+                <div className="mt-2 flex items-center justify-between gap-2 border-t border-cream-deep pt-2">
+                  <span className="text-xs font-600 text-charcoal-soft">
+                    Per serving
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-charcoal-soft">Rp</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onBlur={(e) => commitMarkUp(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      className="w-28 rounded-lg border border-cream-deep px-2 py-1 text-right text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
+                      aria-label="Price per serving"
+                    />
+                    {markedUp && (
+                      <button
+                        type="button"
+                        onClick={() => onChangeMarkUp(undefined)}
+                        className="rounded-lg p-1.5 text-charcoal-soft hover:text-tomato-dark"
+                        title="Reset to menu price"
+                        aria-label="Reset to menu price"
+                      >
+                        <RotateCcw size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <p className="mt-1 text-[11px] text-charcoal-soft">
+                  {assignment.servings !== 1 && (
+                    <>
+                      {formatIdr(currentUnit)} × {assignment.servings} servings.{" "}
+                    </>
+                  )}
+                  {markedUp ? (
+                    <>
+                      Marked up from the menu price of{" "}
+                      <b className="text-charcoal">{formatIdr(base.totalIdr)}</b>.
+                    </>
+                  ) : (
+                    <>Menu price. It can be raised, but not lowered.</>
+                  )}
+                </p>
+              </>
+            ) : (
               <p className="mt-1 text-[11px] text-charcoal-soft">
                 Some ingredients are not sold as DIY components, so there is no
                 menu price to mark up.
