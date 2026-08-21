@@ -36,8 +36,8 @@ export function usePlanView(): [PlanView, (view: PlanView) => void] {
 }
 
 /**
- * Whether cost is shown in the planner. Coaches costing a programme want it;
- * anyone just arranging meals does not need the extra column of numbers.
+ * Whether cost is shown in the planner. Some people plan on budget as well as
+ * macros; anyone who does not want the extra column can turn it off.
  */
 export function useShowPrices(): [boolean, (show: boolean) => void] {
   const [showPrices, setShowPrices] = useState(true);

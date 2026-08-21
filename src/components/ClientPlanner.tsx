@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft,
   CalendarDays,
   CalendarRange,
   FileText,
@@ -35,15 +33,14 @@ import {
 } from "@/lib/clients";
 import { sumDishMacros } from "@/lib/calc";
 import { formatIdr, formatPrice, priceItems } from "@/lib/pricing";
-import { usePlannerMode } from "@/lib/coachMode";
 import { usePlanView, useShowPrices } from "@/lib/planView";
+import { loadCurrentPlan } from "@/lib/currentPlan";
 import type { GeneratedDay } from "@/lib/mealPlanner";
 import { round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import AssignDishDialog from "@/components/AssignDishDialog";
 import ClientSettings from "@/components/ClientSettings";
 import TargetAdherence from "@/components/TargetAdherence";
-import PlannerModeToggle from "@/components/PlannerModeToggle";
 import SegmentedToggle from "@/components/SegmentedToggle";
 import GeneratePlanDialog from "@/components/GeneratePlanDialog";
 import MealDetailDialog from "@/components/MealDetailDialog";
@@ -51,9 +48,6 @@ import PlanWeekGrid from "@/components/PlanWeekGrid";
 import PlanDayView from "@/components/PlanDayView";
 
 export default function ClientPlanner() {
-  const params = useParams<{ id: string }>();
-  const id = params?.id;
-
   const [client, setClient] = useState<Client | null>(null);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +56,6 @@ export default function ClientPlanner() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [openMealId, setOpenMealId] = useState<string | null>(null);
-  const [mode, setMode] = usePlannerMode();
   const [planView, setPlanView] = usePlanView();
   const [showPrices, setShowPrices] = useShowPrices();
   const [assigning, setAssigning] = useState<{ day: number; slot: string } | null>(
@@ -70,16 +63,14 @@ export default function ClientPlanner() {
   );
 
   useEffect(() => {
-    if (!id) return;
-    Promise.all([
-      getClientRepository().get(id),
-      getDishRepository().list(),
-    ]).then(([c, d]) => {
-      setClient(c);
-      setDishes(d);
-      setLoading(false);
-    });
-  }, [id]);
+    Promise.all([loadCurrentPlan(), getDishRepository().list()]).then(
+      ([plan, d]) => {
+        setClient(plan);
+        setDishes(d);
+        setLoading(false);
+      }
+    );
+  }, []);
 
   const dishMap = useMemo(() => byId(dishes), [dishes]);
 
@@ -107,7 +98,7 @@ export default function ClientPlanner() {
 
   /**
    * A meal built in the popup goes into the plan inline, exactly like a
-   * generated one, so the dish library stays clean unless the coach asks to
+   * generated one, so the dish library stays clean unless you ask to
    * keep it.
    */
   async function assignCustom(
@@ -200,7 +191,7 @@ export default function ClientPlanner() {
     }
 
     // Tastes are remembered with the plan, so the next generation starts from
-    // what the coach already told us about this client.
+    // what you already told the generator.
     persist({ ...client, preferences, plan: [...kept, ...additions] });
     setGenerateOpen(false);
   }
@@ -213,24 +204,8 @@ export default function ClientPlanner() {
     );
   }
 
-  if (!client) {
-    return (
-      <main className="mx-auto max-w-6xl px-4 py-10 text-center">
-        <p className="font-display text-xl font-700 text-charcoal">
-          Client not found
-        </p>
-        <p className="mt-1 text-sm text-charcoal-soft">
-          This client may have been saved on a different device or deleted.
-        </p>
-        <Link
-          href="/clients"
-          className="mt-4 inline-flex rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
-        >
-          Back to clients
-        </Link>
-      </main>
-    );
-  }
+  // loadCurrentPlan always resolves to a plan, creating one if needed.
+  if (!client) return null;
 
   const currentWeek = Math.min(week, client.weekCount);
   const totals = weekTotals(client, currentWeek, dishMap);
@@ -247,12 +222,6 @@ export default function ClientPlanner() {
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link
-            href="/clients"
-            className="mb-1 flex items-center gap-1.5 text-xs font-600 text-charcoal-soft hover:text-charcoal"
-          >
-            <ArrowLeft size={14} /> All clients
-          </Link>
           <h1 className="font-display text-2xl font-700 text-charcoal sm:text-3xl">
             {client.name}
           </h1>
@@ -262,16 +231,13 @@ export default function ClientPlanner() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <PlannerModeToggle mode={mode} onChange={setMode} />
-          {mode === "coach" && (
-            <button
-              type="button"
-              onClick={() => setGenerateOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-basil px-3 py-2 text-sm font-700 text-cream hover:opacity-90"
-            >
-              <Sparkles size={15} /> Generate
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setGenerateOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-basil px-3 py-2 text-sm font-700 text-cream hover:opacity-90"
+          >
+            <Sparkles size={15} /> Auto-fill my week
+          </button>
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -280,7 +246,7 @@ export default function ClientPlanner() {
             <Settings2 size={15} /> Settings
           </button>
           <Link
-            href={`/clients/${client.id}/report`}
+            href="/plan/report"
             className="flex items-center gap-1.5 rounded-xl bg-tomato px-3 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
           >
             <FileText size={15} /> Report
@@ -288,39 +254,37 @@ export default function ClientPlanner() {
         </div>
       </div>
 
-      {/* Coach summary — one line, not three stacked blocks */}
-      {mode === "coach" && (
-        <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-basil/30 bg-basil/5 px-3 py-2 text-sm">
-          <span className="text-charcoal-soft">
-            Target{" "}
-            <b className="tabular-nums text-charcoal">
-              {client.targets
-                ? `${round0(client.targets.energy_kcal)} kcal · P ${round0(
-                    client.targets.protein_g
-                  )}`
-                : "not set"}
-            </b>
-          </span>
-          <span className="text-charcoal-soft">
-            Week {currentWeek}{" "}
-            <b className="tabular-nums text-charcoal">{formatPrice(cost)}</b>
-          </span>
-          <span className="text-charcoal-soft">
-            Avg/day{" "}
-            <b className="tabular-nums text-charcoal">
-              {formatIdr(cost.totalIdr / 7)}
-            </b>
-          </span>
-          <button
-            type="button"
-            onClick={() => setShowPrices(!showPrices)}
-            className="ml-auto flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-600 text-charcoal-soft hover:text-charcoal"
-            aria-pressed={showPrices}
-          >
-            <Wallet size={13} /> {showPrices ? "Hide prices" : "Show prices"}
-          </button>
-        </div>
-      )}
+      {/* Week summary — one line, not three stacked blocks */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-basil/30 bg-basil/5 px-3 py-2 text-sm">
+        <span className="text-charcoal-soft">
+          Target{" "}
+          <b className="tabular-nums text-charcoal">
+            {client.targets
+              ? `${round0(client.targets.energy_kcal)} kcal · P ${round0(
+                  client.targets.protein_g
+                )}`
+              : "not set"}
+          </b>
+        </span>
+        <span className="text-charcoal-soft">
+          Week {currentWeek}{" "}
+          <b className="tabular-nums text-charcoal">{formatPrice(cost)}</b>
+        </span>
+        <span className="text-charcoal-soft">
+          Avg/day{" "}
+          <b className="tabular-nums text-charcoal">
+            {formatIdr(cost.totalIdr / 7)}
+          </b>
+        </span>
+        <button
+          type="button"
+          onClick={() => setShowPrices(!showPrices)}
+          className="ml-auto flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-600 text-charcoal-soft hover:text-charcoal"
+          aria-pressed={showPrices}
+        >
+          <Wallet size={13} /> {showPrices ? "Hide prices" : "Show prices"}
+        </button>
+      </div>
 
       {/* Week switcher + view toggle */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -436,9 +400,6 @@ export default function ClientPlanner() {
           )}`}
           onChangeServings={(servings) =>
             updateAssignment(openMeal.id, { servings })
-          }
-          onChangeMarkUp={(priceIdr) =>
-            updateAssignment(openMeal.id, { priceOverrideIdr: priceIdr })
           }
           onRemove={() => unassign(openMeal.id)}
           onClose={() => setOpenMealId(null)}

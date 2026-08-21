@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
-import { getClientRepository, getDishRepository } from "@/lib/storage";
+import { getDishRepository } from "@/lib/storage";
+import { loadCurrentPlan } from "@/lib/currentPlan";
 import type { Client, Dish } from "@/lib/storage/types";
 import {
   byId,
@@ -27,25 +26,20 @@ import TargetAdherence from "@/components/TargetAdherence";
 import ReportShell, { ReportMessage } from "@/components/ReportShell";
 
 export default function ClientReport() {
-  const params = useParams<{ id: string }>();
-  const id = params?.id;
-
   const [client, setClient] = useState<Client | null>(null);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<"all" | number>("all");
 
   useEffect(() => {
-    if (!id) return;
-    Promise.all([
-      getClientRepository().get(id),
-      getDishRepository().list(),
-    ]).then(([c, d]) => {
-      setClient(c);
-      setDishes(d);
-      setLoading(false);
-    });
-  }, [id]);
+    Promise.all([loadCurrentPlan(), getDishRepository().list()]).then(
+      ([plan, d]) => {
+        setClient(plan);
+        setDishes(d);
+        setLoading(false);
+      }
+    );
+  }, []);
 
   const dishMap = useMemo(() => byId(dishes), [dishes]);
 
@@ -53,21 +47,7 @@ export default function ClientReport() {
     return <ReportMessage>Loading report…</ReportMessage>;
   }
 
-  if (!client) {
-    return (
-      <ReportMessage>
-        <p className="font-display text-xl font-700 text-charcoal">
-          Client not found
-        </p>
-        <Link
-          href="/clients"
-          className="mt-4 inline-flex rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
-        >
-          Back to clients
-        </Link>
-      </ReportMessage>
-    );
-  }
+  if (!client) return null;
 
   const weeks =
     scope === "all"
@@ -76,9 +56,9 @@ export default function ClientReport() {
 
   return (
     <ReportShell
-      backHref={`/clients/${client.id}`}
+      backHref="/plan"
       backLabel="Back to planner"
-      kind="Client meal plan"
+      kind="Meal plan"
       dateIso={client.updatedAt}
       footnote="Some restaurant values are estimates; define house recipes to make them exact."
       toolbar={

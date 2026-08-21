@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Minus, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, Minus, Plus, Trash2 } from "lucide-react";
 import type { Assignment, Dish } from "@/lib/storage/types";
 import {
   assignmentBasePrice,
@@ -9,7 +9,6 @@ import {
   assignmentMacros,
   assignmentName,
   assignmentPrice,
-  clampMarkUp,
   isOrphaned,
 } from "@/lib/clients";
 import { getIngredient } from "@/lib/database";
@@ -29,7 +28,6 @@ export default function MealDetailDialog({
   dishes,
   contextLabel,
   onChangeServings,
-  onChangeMarkUp,
   onRemove,
   onClose,
 }: {
@@ -38,7 +36,6 @@ export default function MealDetailDialog({
   /** e.g. "Breakfast · Monday, Aug 17" */
   contextLabel: string;
   onChangeServings: (servings: number) => void;
-  onChangeMarkUp: (priceIdr: number | undefined) => void;
   onRemove: () => void;
   onClose: () => void;
 }) {
@@ -49,26 +46,7 @@ export default function MealDetailDialog({
   const orphan = isOrphaned(assignment, dishes);
   const name = assignmentName(assignment, dishes);
 
-  // A mark-up needs a known menu price to sit above; without one there is no
-  // floor to enforce, so the field is not offered.
-  const canMarkUp = base.complete && base.totalIdr > 0;
-  const currentUnit =
-    typeof assignment.priceOverrideIdr === "number"
-      ? Math.max(assignment.priceOverrideIdr, base.totalIdr)
-      : base.totalIdr;
-  const markedUp = currentUnit > base.totalIdr;
-
-  const [draft, setDraft] = useState(String(currentUnit));
-  useEffect(() => setDraft(String(currentUnit)), [currentUnit]);
-
-  function commitMarkUp(raw: string) {
-    const parsed = parseFloat(raw.replace(/[^\d.]/g, ""));
-    const next = clampMarkUp(parsed, base.totalIdr);
-    // Snap the field to what is actually stored, so a rejected lower figure is
-    // visibly corrected rather than silently ignored.
-    setDraft(String(next));
-    onChangeMarkUp(next > base.totalIdr ? next : undefined);
-  }
+  const priced = base.complete && base.totalIdr > 0;
 
   return (
     <Modal
@@ -133,62 +111,19 @@ export default function MealDetailDialog({
               </span>
             </div>
 
-            {canMarkUp ? (
-              <>
-                <div className="mt-2 flex items-center justify-between gap-2 border-t border-cream-deep pt-2">
-                  <span className="text-xs font-600 text-charcoal-soft">
-                    Per serving
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-charcoal-soft">Rp</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onBlur={(e) => commitMarkUp(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          (e.target as HTMLInputElement).blur();
-                        }
-                      }}
-                      className="w-28 rounded-lg border border-cream-deep px-2 py-1 text-right text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
-                      aria-label="Price per serving"
-                    />
-                    {markedUp && (
-                      <button
-                        type="button"
-                        onClick={() => onChangeMarkUp(undefined)}
-                        className="rounded-lg p-1.5 text-charcoal-soft hover:text-tomato-dark"
-                        title="Reset to menu price"
-                        aria-label="Reset to menu price"
-                      >
-                        <RotateCcw size={14} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <p className="mt-1 text-[11px] text-charcoal-soft">
-                  {assignment.servings !== 1 && (
-                    <>
-                      {formatIdr(currentUnit)} × {assignment.servings} servings.{" "}
-                    </>
-                  )}
-                  {markedUp ? (
-                    <>
-                      Marked up from the menu price of{" "}
-                      <b className="text-charcoal">{formatIdr(base.totalIdr)}</b>.
-                    </>
-                  ) : (
-                    <>Menu price. It can be raised, but not lowered.</>
-                  )}
-                </p>
-              </>
+            {priced ? (
+              <p className="mt-1 text-[11px] text-charcoal-soft">
+                {assignment.servings !== 1 && (
+                  <>
+                    {formatIdr(base.totalIdr)} × {assignment.servings} servings.{" "}
+                  </>
+                )}
+                Negrita menu price.
+              </p>
             ) : (
               <p className="mt-1 text-[11px] text-charcoal-soft">
-                Some ingredients are not sold as DIY components, so there is no
-                menu price to mark up.
+                Some ingredients are not sold as DIY components, so this is a
+                minimum rather than the full price.
               </p>
             )}
           </div>

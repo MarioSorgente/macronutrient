@@ -54,7 +54,7 @@ export default function ReportPage() {
           This dish may have been saved on a different device or deleted.
         </p>
         <Link
-          href="/dishes"
+          href="/plan/dishes"
           className="mt-4 inline-flex rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
         >
           Back to saved dishes
@@ -67,7 +67,7 @@ export default function ReportPage() {
 
   return (
     <ReportShell
-      backHref="/dishes"
+      backHref="/plan/dishes"
       backLabel="Back"
       kind="Nutrition report"
       dateIso={dish.updatedAt}

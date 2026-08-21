@@ -4,7 +4,7 @@ import HouseItemList from "@/components/HouseItemList";
 export default function HouseItemsPage() {
   return (
     <div className="min-h-screen">
-      <BrandHeader active="house" />
+      <BrandHeader />
       <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
         <div className="mb-5">
           <h1 className="font-display text-2xl font-700 text-charcoal sm:text-3xl">
