@@ -98,8 +98,20 @@ export const DEFAULT_PREFERENCES: ClientPreferences = {
   avoidIngredientIds: [],
 };
 
-export interface Client extends Entity {
-  name: string;
+export type PlanStatus = "draft" | "submitted" | "locked";
+
+/**
+ * One person's eating plan.
+ *
+ * This was `Client` — a record a coach kept about someone else. A person now
+ * plans their own week, so the entity belongs to them: it is stored under
+ * `users/{uid}/plans` and `ownerUid` records whose it is even after export.
+ */
+export interface Plan extends Entity {
+  /** Firebase uid of the owner. Empty string for a guest plan on this device. */
+  ownerUid: string;
+  /** What the person calls this plan, e.g. "My week". */
+  title: string;
   notes?: string;
   /** Optional daily goals; adherence UI only appears when this is set. */
   targets: MacroTargets | null;
@@ -111,7 +123,11 @@ export interface Client extends Entity {
   programStartDate: string;
   /** Program length in weeks, 1..6. */
   weekCount: number;
-  plan: Assignment[];
+  /** Every planned meal, flat. Filtered by week/day/slot when rendering. */
+  assignments: Assignment[];
+  status: PlanStatus;
+  /** Weeks already sent to the kitchen, so they can be shown as locked. */
+  submittedWeeks: number[];
 }
 
 export const MAX_PROGRAM_WEEKS = 6;
@@ -184,5 +200,5 @@ export interface Repository<T extends Entity> {
 }
 
 export type DishRepository = Repository<Dish>;
-export type ClientRepository = Repository<Client>;
+export type PlanRepository = Repository<Plan>;
 export type HouseRecipeRepository = Repository<HouseRecipe>;

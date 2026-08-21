@@ -1,6 +1,8 @@
-import { getClientRepository } from "@/lib/storage";
-import { DEFAULT_MEAL_SLOTS, type Client } from "@/lib/storage/types";
-import { newEntity } from "@/lib/storage/entity";
+import {
+  DEFAULT_MEAL_SLOTS,
+  type Plan,
+  type PlanRepository,
+} from "@/lib/storage/types";
 import { baliWeekStart } from "@/lib/format";
 
 /**
@@ -15,30 +17,66 @@ import { baliWeekStart } from "@/lib/format";
 export const DEFAULT_PLAN_TITLE = "My week";
 const DEFAULT_WEEK_COUNT = 4;
 
-export function newPlan(title = DEFAULT_PLAN_TITLE): Client {
-  return newEntity({
-    name: title,
+/**
+ * The id a person's first plan always gets.
+ *
+ * Deliberately fixed rather than random: the plan lives under
+ * `users/{uid}/plans`, so one constant id is already unique per person, and
+ * writing a known id makes creation idempotent. Two tabs — or React's
+ * double-invoked effects in development — then converge on the same document
+ * instead of each leaving behind an empty plan.
+ */
+export const PRIMARY_PLAN_ID = "primary";
+
+export function newPlan(ownerUid: string | null, title = DEFAULT_PLAN_TITLE): Plan {
+  const now = new Date().toISOString();
+  return {
+    id: PRIMARY_PLAN_ID,
+    createdAt: now,
+    updatedAt: now,
+    ownerUid: ownerUid ?? "",
+    title,
     targets: null,
     mealSlots: [...DEFAULT_MEAL_SLOTS],
     // Programs run Monday to Sunday, and "this week" means Bali's week.
     programStartDate: baliWeekStart(),
     weekCount: DEFAULT_WEEK_COUNT,
-    plan: [],
-  });
+    assignments: [],
+    status: "draft",
+    submittedWeeks: [],
+  };
 }
+
+/**
+ * In-flight loads, keyed by owner. Without this, two components mounting
+ * together (the planner and its report) would each miss the other's create and
+ * race to write one.
+ */
+const inFlight = new Map<string, Promise<Plan>>();
 
 /**
  * The plan to show at /plan: the most recently touched one, or a fresh one.
  *
- * Anyone who used the old roster may have several saved clients; the newest
+ * Anyone who used the old roster may have several saved records; the newest
  * wins so their most recent work is what opens. Nothing is deleted.
  */
-export async function loadCurrentPlan(): Promise<Client> {
-  const repo = getClientRepository();
-  const existing = await repo.list(); // already sorted by updatedAt, newest first
-  if (existing.length > 0) return existing[0];
+export function loadCurrentPlan(
+  repo: PlanRepository,
+  ownerUid: string | null
+): Promise<Plan> {
+  const key = ownerUid ?? "@guest";
+  const existing = inFlight.get(key);
+  if (existing) return existing;
 
-  const created = newPlan();
-  await repo.save(created);
-  return created;
+  const pending = (async () => {
+    const saved = await repo.list(); // sorted by updatedAt, newest first
+    if (saved.length > 0) return saved[0];
+
+    const created = newPlan(ownerUid);
+    await repo.save(created);
+    return created;
+  })().finally(() => inFlight.delete(key));
+
+  inFlight.set(key, pending);
+  return pending;
 }

@@ -6,7 +6,7 @@ import { BookOpen, FileText, RotateCcw, Save } from "lucide-react";
 import { useDishBuilder } from "@/store/dishBuilder";
 import { sumDishMacros, totalGrams } from "@/lib/calc";
 import { formatPrice, priceItems } from "@/lib/pricing";
-import { getDishRepository } from "@/lib/storage";
+import { useRepos } from "@/lib/storage/repos";
 import type { Dish } from "@/lib/storage/types";
 import DishItemRow from "@/components/DishItemRow";
 import MacroSummary from "@/components/MacroSummary";
@@ -15,6 +15,7 @@ import TemplatePicker from "@/components/TemplatePicker";
 type Status = "idle" | "saving" | "saved";
 
 export default function DishBuilder() {
+  const repos = useRepos();
   const router = useRouter();
   const { editingId, name, items, setName, setQuantity, setUnit, removeItem, reset } =
     useDishBuilder();
@@ -37,7 +38,7 @@ export default function DishBuilder() {
       return null;
     }
     setStatus("saving");
-    const repo = getDishRepository();
+    const repo = repos.dishes;
     const now = new Date().toISOString();
     const id = editingId ?? lastSavedId ?? crypto.randomUUID();
     const existing = editingId ? await repo.get(editingId) : null;

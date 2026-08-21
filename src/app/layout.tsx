@@ -4,6 +4,7 @@ import "./globals.css";
 import HouseRecipeLoader from "@/components/HouseRecipeLoader";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { ToastProvider } from "@/components/ui/Toast";
+import GuestDataClaim from "@/components/GuestDataClaim";
 
 const display = Fraunces({
   subsets: ["latin"],
@@ -35,6 +36,7 @@ export default function RootLayout({
         <AuthProvider>
           <ToastProvider>
             <HouseRecipeLoader />
+            <GuestDataClaim />
             {children}
           </ToastProvider>
         </AuthProvider>

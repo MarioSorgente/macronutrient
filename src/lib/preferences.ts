@@ -2,7 +2,7 @@ import type { Ingredient } from "@/types/nutrition";
 import type { MacroStyle, MacroTargets, ProteinSource } from "@/lib/storage/types";
 
 /**
- * Client tastes, expressed the way a coach thinks about them.
+ * What someone likes, expressed the way they would say it themselves.
  *
  * Two very different kinds of preference live here, and the difference matters:
  * a **macro style** and a **protein lean** shape what tends to get chosen, while
@@ -50,7 +50,7 @@ export function macroStyleSpec(style: MacroStyle): MacroStyleSpec {
 }
 
 /**
- * Turn a calorie figure plus a style into gram targets, so a coach can choose
+ * Turn a calorie figure plus a style into gram targets, so someone can choose
  * "low carb" instead of typing four numbers. The numbers stay editable after.
  */
 export function targetsFromStyle(

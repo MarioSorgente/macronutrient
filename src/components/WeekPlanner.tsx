@@ -12,11 +12,11 @@ import {
   Sparkles,
   Wallet,
 } from "lucide-react";
-import { getClientRepository, getDishRepository } from "@/lib/storage";
+import { useRepos } from "@/lib/storage/repos";
 import {
   MAX_PROGRAM_WEEKS,
   type Assignment,
-  type Client,
+  type Plan,
   type ClientPreferences,
   type Dish,
   type DishItem,
@@ -40,7 +40,7 @@ import type { GeneratedDay } from "@/lib/mealPlanner";
 import { round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import AssignDishDialog from "@/components/AssignDishDialog";
-import ClientSettings from "@/components/ClientSettings";
+import PlanSettings from "@/components/PlanSettings";
 import TargetAdherence from "@/components/TargetAdherence";
 import SegmentedToggle from "@/components/SegmentedToggle";
 import GeneratePlanDialog from "@/components/GeneratePlanDialog";
@@ -49,8 +49,9 @@ import PlanWeekGrid from "@/components/PlanWeekGrid";
 import PlanDayView from "@/components/PlanDayView";
 import EmptyState from "@/components/ui/EmptyState";
 
-export default function ClientPlanner() {
-  const [client, setClient] = useState<Client | null>(null);
+export default function WeekPlanner() {
+  const repos = useRepos();
+  const [plan, setClient] = useState<Plan | null>(null);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -66,9 +67,18 @@ export default function ClientPlanner() {
   );
 
   useEffect(() => {
-    Promise.all([loadCurrentPlan(), getDishRepository().list()])
-      .then(([plan, d]) => {
-        setClient(plan);
+    // Wait for auth: reading first would open the guest store and then swap it
+    // underneath the person once their account resolved.
+    if (repos.loading) return;
+    let cancelled = false;
+
+    Promise.all([
+      loadCurrentPlan(repos.plans, repos.uid),
+      repos.dishes.list(),
+    ])
+      .then(([loaded, d]) => {
+        if (cancelled) return;
+        setClient(loaded);
         setDishes(d);
       })
       .catch((cause) => {
@@ -76,23 +86,31 @@ export default function ClientPlanner() {
         // leaves the planner on its loading line indefinitely, which reads as
         // a hang rather than as something the reader can act on.
         console.error("Could not load the planner:", cause);
-        setLoadError(
-          "We could not load your plan. Check your connection and reload."
-        );
+        if (!cancelled) {
+          setLoadError(
+            "We could not load your plan. Check your connection and reload."
+          );
+        }
       })
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [repos]);
 
   const dishMap = useMemo(() => byId(dishes), [dishes]);
 
-  const persist = useCallback(async (next: Client) => {
+  const persist = useCallback(async (next: Plan) => {
     const updated = { ...next, updatedAt: new Date().toISOString() };
     setClient(updated);
-    await getClientRepository().save(updated);
+    await repos.plans.save(updated);
   }, []);
 
   function assign(dish: Dish, servings: number) {
-    if (!client || !assigning) return;
+    if (!plan || !assigning) return;
     const assignment: Assignment = {
       id: newAssignmentId(),
       week,
@@ -103,7 +121,7 @@ export default function ClientPlanner() {
       // Snapshot keeps the plan readable if this dish is later deleted.
       snapshot: { name: dish.name, totals: sumDishMacros(dish.items) },
     };
-    persist({ ...client, plan: [...client.plan, assignment] });
+    persist({ ...plan, assignments: [...plan.assignments, assignment] });
     setAssigning(null);
   }
 
@@ -118,7 +136,7 @@ export default function ClientPlanner() {
     servings: number,
     alsoSave: boolean
   ) {
-    if (!client || !assigning) return;
+    if (!plan || !assigning) return;
     const totals = sumDishMacros(items);
     const price = priceItems(items);
 
@@ -133,8 +151,8 @@ export default function ClientPlanner() {
         createdAt: now,
         updatedAt: now,
       };
-      await getDishRepository().save(dish);
-      setDishes(await getDishRepository().list());
+      await repos.dishes.save(dish);
+      setDishes(await repos.dishes.list());
       dishId = dish.id;
     }
 
@@ -149,25 +167,25 @@ export default function ClientPlanner() {
       snapshot: { name, totals },
       ...(dishId ? { dishId } : {}),
     };
-    persist({ ...client, plan: [...client.plan, assignment] });
+    persist({ ...plan, assignments: [...plan.assignments, assignment] });
     setAssigning(null);
   }
 
   function unassign(assignmentId: string) {
-    if (!client) return;
+    if (!plan) return;
     persist({
-      ...client,
-      plan: client.plan.filter((a) => a.id !== assignmentId),
+      ...plan,
+      assignments: plan.assignments.filter((a) => a.id !== assignmentId),
     });
     setOpenMealId(null);
   }
 
   /** Applies a patch to one assignment and saves. */
   function updateAssignment(assignmentId: string, patch: Partial<Assignment>) {
-    if (!client) return;
+    if (!plan) return;
     persist({
-      ...client,
-      plan: client.plan.map((a) =>
+      ...plan,
+      assignments: plan.assignments.map((a) =>
         a.id === assignmentId ? { ...a, ...patch } : a
       ),
     });
@@ -179,10 +197,10 @@ export default function ClientPlanner() {
     replace: boolean,
     preferences: ClientPreferences
   ) {
-    if (!client) return;
+    if (!plan) return;
     const kept = replace
-      ? client.plan.filter((a) => a.week !== currentWeek)
-      : [...client.plan];
+      ? plan.assignments.filter((a) => a.week !== currentWeek)
+      : [...plan.assignments];
 
     const additions: Assignment[] = [];
     for (const gDay of generated) {
@@ -203,7 +221,7 @@ export default function ClientPlanner() {
 
     // Tastes are remembered with the plan, so the next generation starts from
     // what you already told the generator.
-    persist({ ...client, preferences, plan: [...kept, ...additions] });
+    persist({ ...plan, preferences, assignments: [...kept, ...additions] });
     setGenerateOpen(false);
   }
 
@@ -215,7 +233,7 @@ export default function ClientPlanner() {
     );
   }
 
-  if (loadError || !client) {
+  if (loadError || !plan) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16">
         <EmptyState
@@ -236,14 +254,14 @@ export default function ClientPlanner() {
     );
   }
 
-  const currentWeek = Math.min(week, client.weekCount);
-  const totals = weekTotals(client, currentWeek, dishMap);
-  const average = weekDailyAverage(client, currentWeek, dishMap);
-  const cost = weekPrice(client, currentWeek, dishMap);
+  const currentWeek = Math.min(week, plan.weekCount);
+  const totals = weekTotals(plan, currentWeek, dishMap);
+  const average = weekDailyAverage(plan, currentWeek, dishMap);
+  const cost = weekPrice(plan, currentWeek, dishMap);
 
   // Re-read from the plan so the dialog reflects edits made inside it.
   const openMeal = openMealId
-    ? client.plan.find((a) => a.id === openMealId) ?? null
+    ? plan.assignments.find((a) => a.id === openMealId) ?? null
     : null;
 
   return (
@@ -252,11 +270,11 @@ export default function ClientPlanner() {
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-700 text-charcoal sm:text-3xl">
-            {client.name}
+            {plan.title}
           </h1>
           <p className="mt-1 text-sm text-charcoal-soft">
-            {client.weekCount}-week program · starts{" "}
-            {formatShortDate(dateFor(client, 1, 0))}
+            {plan.weekCount}-week program · starts{" "}
+            {formatShortDate(dateFor(plan, 1, 0))}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -288,9 +306,9 @@ export default function ClientPlanner() {
         <span className="text-charcoal-soft">
           Target{" "}
           <b className="tabular-nums text-charcoal">
-            {client.targets
-              ? `${round0(client.targets.energy_kcal)} kcal · P ${round0(
-                  client.targets.protein_g
+            {plan.targets
+              ? `${round0(plan.targets.energy_kcal)} kcal · P ${round0(
+                  plan.targets.protein_g
                 )}`
               : "not set"}
           </b>
@@ -318,8 +336,8 @@ export default function ClientPlanner() {
       {/* Week switcher + view toggle */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          {Array.from({ length: client.weekCount }, (_, i) => i + 1).map((w) => {
-            const count = assignmentsFor(client, w).length;
+          {Array.from({ length: plan.weekCount }, (_, i) => i + 1).map((w) => {
+            const count = assignmentsFor(plan, w).length;
             return (
               <button
                 key={w}
@@ -348,11 +366,11 @@ export default function ClientPlanner() {
               </button>
             );
           })}
-          {client.weekCount < MAX_PROGRAM_WEEKS && (
+          {plan.weekCount < MAX_PROGRAM_WEEKS && (
             <button
               type="button"
               onClick={() =>
-                persist({ ...client, weekCount: client.weekCount + 1 })
+                persist({ ...plan, weekCount: plan.weekCount + 1 })
               }
               className="flex items-center gap-1 rounded-xl border border-dashed border-cream-deep px-2.5 py-2 text-sm font-600 text-charcoal-soft hover:border-tomato-soft hover:text-charcoal"
               aria-label="Add week"
@@ -378,7 +396,7 @@ export default function ClientPlanner() {
       {/* The plan */}
       {planView === "day" ? (
         <PlanDayView
-          client={client}
+          plan={plan}
           week={currentWeek}
           day={day}
           dishes={dishMap}
@@ -390,7 +408,7 @@ export default function ClientPlanner() {
       ) : (
         <>
           <PlanWeekGrid
-            client={client}
+            plan={plan}
             week={currentWeek}
             dishes={dishMap}
             showPrices={showPrices}
@@ -407,12 +425,12 @@ export default function ClientPlanner() {
               Daily average:{" "}
               <b className="text-charcoal">{round0(average.energy_kcal)} kcal</b>
             </p>
-            {client.targets && (
+            {plan.targets && (
               <div className="mt-4 border-t border-cream-deep pt-4">
                 <h3 className="mb-2 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
                   Daily average vs target
                 </h3>
-                <TargetAdherence actual={average} targets={client.targets} />
+                <TargetAdherence actual={average} targets={plan.targets} />
               </div>
             )}
           </section>
@@ -425,7 +443,7 @@ export default function ClientPlanner() {
           assignment={openMeal}
           dishes={dishMap}
           contextLabel={`${openMeal.slot} · ${DAY_NAMES[openMeal.day]}, ${formatShortDate(
-            dateFor(client, openMeal.week, openMeal.day)
+            dateFor(plan, openMeal.week, openMeal.day)
           )}`}
           onChangeServings={(servings) =>
             updateAssignment(openMeal.id, { servings })
@@ -440,7 +458,7 @@ export default function ClientPlanner() {
           dishes={dishes}
           slot={assigning.slot}
           dayLabel={`Week ${currentWeek} · ${DAY_NAMES[assigning.day]} ${formatShortDate(
-            dateFor(client, currentWeek, assigning.day)
+            dateFor(plan, currentWeek, assigning.day)
           )}`}
           onAssign={assign}
           onAssignCustom={assignCustom}
@@ -450,7 +468,7 @@ export default function ClientPlanner() {
 
       {generateOpen && (
         <GeneratePlanDialog
-          client={client}
+          plan={plan}
           week={currentWeek}
           savedDishes={dishes}
           onApply={applyGenerated}
@@ -459,8 +477,8 @@ export default function ClientPlanner() {
       )}
 
       {settingsOpen && (
-        <ClientSettings
-          client={client}
+        <PlanSettings
+          plan={plan}
           onSave={async (next) => {
             await persist(next);
             setSettingsOpen(false);

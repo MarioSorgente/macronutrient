@@ -15,7 +15,7 @@ import {
 } from "@/lib/storage/types";
 
 /**
- * Auto-planner: given a coach's daily macro targets, assemble meals that hit
+ * Auto-planner: given daily macro targets, assemble meals that hit
  * them from what Negrita actually sells.
  *
  * Two candidate sources, as required:
@@ -45,7 +45,7 @@ export interface GeneratedDay {
   price: PriceResult;
   /**
    * Slots the planner could not fill within the constraints. Surfaced rather
-   * than silently padded, so the coach knows the budget (not the menu) is what
+   * than silently padded, so you know the budget (not the menu) is what
    * kept the day short.
    */
   unfilledSlots: string[];
@@ -60,7 +60,7 @@ export interface GenerateOptions {
   includeSavedDishes: boolean;
   /** Saved dishes available as ready meals. */
   savedDishes: Dish[];
-  /** Client tastes. Leans bias the mix; the avoid list is absolute. */
+  /** Tastes. Leans bias the mix; the avoid list is absolute. */
   preferences?: ClientPreferences;
   /** Optional ceiling on a single day's food cost, in rupiah. */
   dailyBudgetIdr?: number | null;
@@ -84,7 +84,7 @@ interface Component {
 
 /**
  * Distance from a macro target. Protein carries double weight because it is the
- * macro a coach actually holds a client to; calories next; carbs and fat last,
+ * macro people actually hold themselves to; calories next; carbs and fat last,
  * since they are the ones that absorb the slack.
  */
 const WEIGHTS = { protein: 2.0, energy: 1.2, carbs: 0.7, fat: 0.7 };
@@ -92,7 +92,7 @@ const WEIGHTS = { protein: 2.0, energy: 1.2, carbs: 0.7, fat: 0.7 };
 /**
  * Mild preference for cheaper ways to hit the same macros. Deliberately small:
  * it breaks ties toward affordable combinations without letting cost override
- * the coach's actual targets. A Rp 200k meal carries a 0.3 penalty, which is
+ * the actual targets. A Rp 200k meal carries a 0.3 penalty, which is
  * roughly the cost of being 15% off on protein.
  */
 const PRICE_WEIGHT = 0.3;
@@ -248,7 +248,7 @@ interface Candidate {
   proteinKey: string;
   /** Tracked so the same carbohydrate doesn't run all week unnoticed. */
   carbKey: string;
-  /** Whether this meal's protein is one the client leans toward. */
+  /** Whether this meal's protein is one the plan leans toward. */
   leaned: boolean;
   kind: "composed" | "ready";
   sourceDishId?: string;
@@ -525,7 +525,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
         .slice(0, TOP_K);
 
       // Nothing sensible fits this slot — leave it empty rather than assign
-      // something the coach would have to undo.
+      // something you would have to undo.
       if (!ranked.length) {
         unfilledSlots.push(slot);
         continue;

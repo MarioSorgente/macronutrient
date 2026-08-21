@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getDishRepository } from "@/lib/storage";
+import { useRepos } from "@/lib/storage/repos";
 import { loadCurrentPlan } from "@/lib/currentPlan";
-import type { Client, Dish } from "@/lib/storage/types";
+import type { Plan, Dish } from "@/lib/storage/types";
 import {
   byId,
   DAY_NAMES,
@@ -25,21 +25,26 @@ import MacroSummary from "@/components/MacroSummary";
 import TargetAdherence from "@/components/TargetAdherence";
 import ReportShell, { ReportMessage } from "@/components/ReportShell";
 
-export default function ClientReport() {
-  const [client, setClient] = useState<Client | null>(null);
+export default function PlanReport() {
+  const repos = useRepos();
+  const [plan, setClient] = useState<Plan | null>(null);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<"all" | number>("all");
 
   useEffect(() => {
-    Promise.all([loadCurrentPlan(), getDishRepository().list()]).then(
-      ([plan, d]) => {
-        setClient(plan);
+    if (repos.loading) return;
+    Promise.all([
+      loadCurrentPlan(repos.plans, repos.uid),
+      repos.dishes.list(),
+    ])
+      .then(([loaded, d]) => {
+        setClient(loaded);
         setDishes(d);
-        setLoading(false);
-      }
-    );
-  }, []);
+      })
+      .catch((cause) => console.error("Could not load the report:", cause))
+      .finally(() => setLoading(false));
+  }, [repos]);
 
   const dishMap = useMemo(() => byId(dishes), [dishes]);
 
@@ -47,11 +52,11 @@ export default function ClientReport() {
     return <ReportMessage>Loading report…</ReportMessage>;
   }
 
-  if (!client) return null;
+  if (!plan) return null;
 
   const weeks =
     scope === "all"
-      ? Array.from({ length: client.weekCount }, (_, i) => i + 1)
+      ? Array.from({ length: plan.weekCount }, (_, i) => i + 1)
       : [scope];
 
   return (
@@ -59,7 +64,7 @@ export default function ClientReport() {
       backHref="/plan"
       backLabel="Back to planner"
       kind="Meal plan"
-      dateIso={client.updatedAt}
+      dateIso={plan.updatedAt}
       footnote="Some restaurant values are estimates; define house recipes to make them exact."
       toolbar={
         <select
@@ -71,7 +76,7 @@ export default function ClientReport() {
           aria-label="Report scope"
         >
           <option value="all">Whole program</option>
-          {Array.from({ length: client.weekCount }, (_, i) => i + 1).map((w) => (
+          {Array.from({ length: plan.weekCount }, (_, i) => i + 1).map((w) => (
             <option key={w} value={w}>
               Week {w} only
             </option>
@@ -79,28 +84,28 @@ export default function ClientReport() {
         </select>
       }
     >
-          {/* Client */}
+          {/* Plan */}
           <div className="py-5">
             <h1 className="font-display text-3xl font-700 text-charcoal">
-              {client.name}
+              {plan.title}
             </h1>
             <p className="mt-1 text-sm text-charcoal-soft">
               {scope === "all"
-                ? `${client.weekCount}-week program`
+                ? `${plan.weekCount}-week program`
                 : `Week ${scope}`}{" "}
-              · starts {formatShortDate(dateFor(client, 1, 0))}
+              · starts {formatShortDate(dateFor(plan, 1, 0))}
             </p>
-            {client.notes && (
+            {plan.notes && (
               <p className="mt-2 rounded-lg bg-cream px-3 py-2 text-sm text-charcoal-soft">
-                {client.notes}
+                {plan.notes}
               </p>
             )}
           </div>
 
           {weeks.map((week) => {
-            const totals = weekTotals(client, week, dishMap);
-            const average = weekDailyAverage(client, week, dishMap);
-            const hasAny = assignmentsFor(client, week).length > 0;
+            const totals = weekTotals(plan, week, dishMap);
+            const average = weekDailyAverage(plan, week, dishMap);
+            const hasAny = assignmentsFor(plan, week).length > 0;
 
             return (
               <section
@@ -111,8 +116,8 @@ export default function ClientReport() {
                   Week {week}
                 </h2>
                 <p className="mb-3 text-xs text-charcoal-soft">
-                  {formatShortDate(dateFor(client, week, 0))} –{" "}
-                  {formatShortDate(dateFor(client, week, 6))}
+                  {formatShortDate(dateFor(plan, week, 0))} –{" "}
+                  {formatShortDate(dateFor(plan, week, 6))}
                 </p>
 
                 {!hasAny ? (
@@ -136,18 +141,18 @@ export default function ClientReport() {
                       <span className="text-charcoal-soft">
                         Week cost{" "}
                         <b className="tabular-nums text-charcoal">
-                          {formatPrice(weekPrice(client, week, dishMap))}
+                          {formatPrice(weekPrice(plan, week, dishMap))}
                         </b>
                       </span>
                       <span className="text-charcoal-soft">
                         Average per day{" "}
                         <b className="tabular-nums text-charcoal">
                           {formatIdr(
-                            weekPrice(client, week, dishMap).totalIdr / 7
+                            weekPrice(plan, week, dishMap).totalIdr / 7
                           )}
                         </b>
                       </span>
-                      {!weekPrice(client, week, dishMap).complete && (
+                      {!weekPrice(plan, week, dishMap).complete && (
                         <span className="text-gold">
                           Some items are not sold as DIY components, so the total
                           is a minimum.
@@ -155,14 +160,14 @@ export default function ClientReport() {
                       )}
                     </div>
 
-                    {client.targets && (
+                    {plan.targets && (
                       <div className="mt-4">
                         <h3 className="mb-2 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
                           Daily average vs target
                         </h3>
                         <TargetAdherence
                           actual={average}
-                          targets={client.targets}
+                          targets={plan.targets}
                         />
                       </div>
                     )}
@@ -171,12 +176,12 @@ export default function ClientReport() {
                     <div className="mt-5 space-y-3">
                       {DAY_NAMES.map((dayName, dayIndex) => {
                         const dayAssignments = assignmentsFor(
-                          client,
+                          plan,
                           week,
                           dayIndex
                         );
                         if (!dayAssignments.length) return null;
-                        const dTotals = dayTotals(client, week, dayIndex, dishMap);
+                        const dTotals = dayTotals(plan, week, dayIndex, dishMap);
 
                         return (
                           <div
@@ -187,7 +192,7 @@ export default function ClientReport() {
                               <span className="text-sm font-700 text-charcoal">
                                 {dayName}
                                 <span className="ml-2 text-[11px] font-500 text-charcoal-soft">
-                                  {formatShortDate(dateFor(client, week, dayIndex))}
+                                  {formatShortDate(dateFor(plan, week, dayIndex))}
                                 </span>
                               </span>
                               <span className="text-xs font-600 tabular-nums text-charcoal-soft">
@@ -198,12 +203,12 @@ export default function ClientReport() {
                                 {round1(dTotals.carbs_g)} · F{" "}
                                 {round1(dTotals.fat_g)} ·{" "}
                                 {formatPrice(
-                                  dayPrice(client, week, dayIndex, dishMap)
+                                  dayPrice(plan, week, dayIndex, dishMap)
                                 )}
                               </span>
                             </div>
                             <ul className="divide-y divide-cream-deep/60">
-                              {client.mealSlots.flatMap((slot) => {
+                              {plan.mealSlots.flatMap((slot) => {
                                 const slotItems = dayAssignments.filter(
                                   (a) => a.slot === slot
                                 );

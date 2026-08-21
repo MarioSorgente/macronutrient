@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { getDishRepository } from "@/lib/storage";
+import { useRepos } from "@/lib/storage/repos";
 import type { Dish } from "@/lib/storage/types";
 import { getIngredient } from "@/lib/database";
 import { perItemMacros, sumDishMacros, totalGrams } from "@/lib/calc";
@@ -15,6 +15,7 @@ import ReportShell, { ReportMessage } from "@/components/ReportShell";
 type LoadState = "loading" | "ready" | "missing";
 
 export default function ReportPage() {
+  const repos = useRepos();
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const [dish, setDish] = useState<Dish | null>(null);
@@ -22,14 +23,14 @@ export default function ReportPage() {
 
   useEffect(() => {
     if (!id) return;
-    getDishRepository()
+    repos.dishes
       .get(id)
       .then((d) => {
         setDish(d);
         setState(d ? "ready" : "missing");
       })
       .catch(() => setState("missing"));
-  }, [id]);
+  }, [id, repos]);
 
   const totals = useMemo(
     () => (dish ? sumDishMacros(dish.items) : null),

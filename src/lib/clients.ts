@@ -3,7 +3,7 @@ import { EMPTY_MACROS, addMacros, scaleMacros, sumDishMacros } from "@/lib/calc"
 import { ZERO_PRICE, addPrices, priceItems, type PriceResult } from "@/lib/pricing";
 import type {
   Assignment,
-  Client,
+  Plan,
   Dish,
   DishItem,
   MacroTargets,
@@ -142,29 +142,29 @@ export function sumAssignmentPrices(
 }
 
 export function dayPrice(
-  client: Client,
+  plan: Plan,
   week: number,
   day: number,
   dishes: Map<string, Dish>
 ): PriceResult {
-  return sumAssignmentPrices(assignmentsFor(client, week, day), dishes);
+  return sumAssignmentPrices(assignmentsFor(plan, week, day), dishes);
 }
 
 export function weekPrice(
-  client: Client,
+  plan: Plan,
   week: number,
   dishes: Map<string, Dish>
 ): PriceResult {
-  return sumAssignmentPrices(assignmentsFor(client, week), dishes);
+  return sumAssignmentPrices(assignmentsFor(plan, week), dishes);
 }
 
 export function assignmentsFor(
-  client: Client,
+  plan: Plan,
   week: number,
   day?: number,
   slot?: string
 ): Assignment[] {
-  return client.plan.filter(
+  return plan.assignments.filter(
     (a) =>
       a.week === week &&
       (day === undefined || a.day === day) &&
@@ -183,34 +183,34 @@ export function sumAssignments(
 }
 
 export function dayTotals(
-  client: Client,
+  plan: Plan,
   week: number,
   day: number,
   dishes: Map<string, Dish>
 ): Macros {
-  return sumAssignments(assignmentsFor(client, week, day), dishes);
+  return sumAssignments(assignmentsFor(plan, week, day), dishes);
 }
 
 export function weekTotals(
-  client: Client,
+  plan: Plan,
   week: number,
   dishes: Map<string, Dish>
 ): Macros {
-  return sumAssignments(assignmentsFor(client, week), dishes);
+  return sumAssignments(assignmentsFor(plan, week), dishes);
 }
 
 /** Average per day across the 7 days of a week (including empty days). */
 export function weekDailyAverage(
-  client: Client,
+  plan: Plan,
   week: number,
   dishes: Map<string, Dish>
 ): Macros {
-  return scaleMacros(weekTotals(client, week, dishes), 1 / 7);
+  return scaleMacros(weekTotals(plan, week, dishes), 1 / 7);
 }
 
 /** Number of days in the week that have at least one assignment. */
-export function plannedDayCount(client: Client, week: number): number {
-  const days = new Set(assignmentsFor(client, week).map((a) => a.day));
+export function plannedDayCount(plan: Plan, week: number): number {
+  const days = new Set(assignmentsFor(plan, week).map((a) => a.day));
   return days.size;
 }
 
@@ -255,8 +255,8 @@ export const TARGET_FIELDS: {
  * Calendar date for a given week/day of the program. Parsed as a local date so
  * the displayed day never shifts across timezones.
  */
-export function dateFor(client: Client, week: number, day: number): Date | null {
-  const parts = client.programStartDate?.split("-").map(Number);
+export function dateFor(plan: Plan, week: number, day: number): Date | null {
+  const parts = plan.programStartDate?.split("-").map(Number);
   if (!parts || parts.length !== 3 || parts.some(Number.isNaN)) return null;
   const [year, month, dayOfMonth] = parts;
   const date = new Date(year, month - 1, dayOfMonth);
