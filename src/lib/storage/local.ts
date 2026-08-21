@@ -37,6 +37,16 @@ export function createLocalRepository<T extends Entity>(
       return read().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     },
 
+    async latest() {
+      return (
+        read().reduce<T | null>(
+          (newest, item) =>
+            !newest || item.updatedAt > newest.updatedAt ? item : newest,
+          null
+        )
+      );
+    },
+
     async get(id) {
       return read().find((item) => item.id === id) ?? null;
     },

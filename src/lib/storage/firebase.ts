@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
   setDoc,
@@ -31,6 +32,18 @@ export function createFirestoreRepository<T extends Entity>(
       );
       const snap = await getDocs(q);
       return snap.docs.map((d) => d.data() as T);
+    },
+
+    async latest() {
+      const db = getDb();
+      const q = query(
+        collection(db, collectionName),
+        orderBy("updatedAt", "desc"),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      const latest = snap.docs[0];
+      return latest ? (latest.data() as T) : null;
     },
 
     async get(id) {
