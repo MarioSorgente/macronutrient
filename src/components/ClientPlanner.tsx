@@ -48,8 +48,13 @@ import MealDetailDialog from "@/components/MealDetailDialog";
 import PlanWeekGrid from "@/components/PlanWeekGrid";
 import PlanDayView from "@/components/PlanDayView";
 import EmptyState from "@/components/ui/EmptyState";
+import HouseRecipeLoader from "@/components/HouseRecipeLoader";
+import { getIngredient, isEstimated } from "@/lib/database";
+import { useHouseRecipes } from "@/store/houseRecipes";
 
 export default function ClientPlanner() {
+  // Re-render totals after a conditionally requested override set arrives.
+  useHouseRecipes((state) => state.version);
   const [client, setClient] = useState<Client | null>(null);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +118,18 @@ export default function ClientPlanner() {
   }, []);
 
   const dishMap = useMemo(() => byId(dishes), [dishes]);
+  const visibleWeekNeedsHouseRecipes = useMemo(() => {
+    if (!client) return false;
+    return client.plan.some((assignment) => {
+      if (assignment.week !== week) return false;
+      const items = assignment.items ??
+        (assignment.dishId ? dishMap.get(assignment.dishId)?.items : undefined);
+      return items?.some((item) => {
+        const ingredient = getIngredient(item.ingredientId);
+        return ingredient ? isEstimated(ingredient) : false;
+      }) ?? false;
+    });
+  }, [client, dishMap, week]);
 
   const persist = useCallback(async (next: Client) => {
     const updated = { ...next, updatedAt: new Date().toISOString() };
@@ -277,6 +294,7 @@ export default function ClientPlanner() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+      <HouseRecipeLoader enabled={visibleWeekNeedsHouseRecipes} />
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>

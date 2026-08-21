@@ -14,6 +14,10 @@ import { DEFAULT_MEAL_SLOTS } from "@/lib/storage/types";
 import { createLocalRepository } from "@/lib/storage/local";
 import { createFirestoreRepository } from "@/lib/storage/firebase";
 import { isFirebaseConfigured } from "@/lib/firebaseEnv";
+import {
+  instrumentRepository,
+  type StorageRequestKind,
+} from "@/lib/storage/instrumentation";
 
 export type {
   Assignment,
@@ -46,11 +50,13 @@ export function isCloudBackend(): boolean {
  */
 function createRepository<T extends Entity>(
   key: keyof typeof KEYS,
+  requestKind: StorageRequestKind,
   migrate?: (raw: unknown) => T | null
 ): Repository<T> {
-  return isCloudBackend()
+  const repository = isCloudBackend()
     ? createFirestoreRepository<T>(key)
     : createLocalRepository<T>(KEYS[key], migrate);
+  return instrumentRepository(requestKind, repository);
 }
 
 // --- Dishes -----------------------------------------------------------------
@@ -82,7 +88,9 @@ function migrateDish(raw: unknown): Dish | null {
 let dishRepo: DishRepository | null = null;
 
 export function getDishRepository(): DishRepository {
-  if (!dishRepo) dishRepo = createRepository<Dish>("dishes", migrateDish);
+  if (!dishRepo) {
+    dishRepo = createRepository<Dish>("dishes", "dish", migrateDish);
+  }
   return dishRepo;
 }
 
@@ -108,7 +116,9 @@ function migrateClient(raw: unknown): Client | null {
 let clientRepo: ClientRepository | null = null;
 
 export function getClientRepository(): ClientRepository {
-  if (!clientRepo) clientRepo = createRepository<Client>("clients", migrateClient);
+  if (!clientRepo) {
+    clientRepo = createRepository<Client>("clients", "plan", migrateClient);
+  }
   return clientRepo;
 }
 
@@ -118,7 +128,7 @@ let houseRecipeRepo: HouseRecipeRepository | null = null;
 
 export function getHouseRecipeRepository(): HouseRecipeRepository {
   if (!houseRecipeRepo) {
-    houseRecipeRepo = createRepository<HouseRecipe>("houseRecipes");
+    houseRecipeRepo = createRepository<HouseRecipe>("houseRecipes", "house-recipe");
   }
   return houseRecipeRepo;
 }

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
-import HouseRecipeLoader from "@/components/HouseRecipeLoader";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 
@@ -34,7 +33,6 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <AuthProvider>
           <ToastProvider>
-            <HouseRecipeLoader />
             {children}
           </ToastProvider>
         </AuthProvider>

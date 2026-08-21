@@ -5,16 +5,21 @@ import { useHouseRecipes } from "@/store/houseRecipes";
 
 /**
  * Loads Negrita's house recipes once per session and applies them as overrides
- * over the bundled estimates. Mounted in the root layout so every route —
- * builder, clients, reports — calculates from the same corrected values.
+ * over the bundled estimates. Keep this beside the content that needs the
+ * overrides: mounting it in the app shell makes unrelated routes pay for the
+ * request.
  */
-export default function HouseRecipeLoader() {
+export default function HouseRecipeLoader({
+  enabled = true,
+}: {
+  enabled?: boolean;
+}) {
   const load = useHouseRecipes((s) => s.load);
   const loaded = useHouseRecipes((s) => s.loaded);
 
   useEffect(() => {
-    if (!loaded) load();
-  }, [loaded, load]);
+    if (enabled && !loaded) void load();
+  }, [enabled, loaded, load]);
 
   return null;
 }

@@ -1,10 +1,12 @@
 import HouseItemList from "@/components/HouseItemList";
+import HouseRecipeLoader from "@/components/HouseRecipeLoader";
 
 export const metadata = { title: "House items — Mamma Calories" };
 
 export default function HouseItemsPage() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
+      <HouseRecipeLoader />
       <div className="mb-5">
         <h1 className="font-display text-2xl font-700 text-charcoal sm:text-3xl">
           House items

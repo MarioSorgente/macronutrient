@@ -36,15 +36,29 @@ function applyOverrides(recipes: HouseRecipe[]): void {
   setHouseOverrides(overrides);
 }
 
+// A route transition can briefly mount two consumers. Share the in-flight read
+// as well as the resolved Zustand state so it still produces one request.
+let loadPromise: Promise<void> | null = null;
+
 export const useHouseRecipes = create<HouseRecipeState>((set, get) => ({
   recipes: [],
   loaded: false,
   version: 0,
 
   load: async () => {
-    const recipes = await getHouseRecipeRepository().list();
-    applyOverrides(recipes);
-    set({ recipes, loaded: true, version: get().version + 1 });
+    if (get().loaded) return;
+    if (!loadPromise) {
+      loadPromise = getHouseRecipeRepository()
+        .list()
+        .then((recipes) => {
+          applyOverrides(recipes);
+          set({ recipes, loaded: true, version: get().version + 1 });
+        })
+        .finally(() => {
+          loadPromise = null;
+        });
+    }
+    await loadPromise;
   },
 
   save: async (recipe) => {
