@@ -93,11 +93,7 @@ export function isOrphaned(
   return !dishes.has(assignment.dishId) && !assignment.items;
 }
 
-/** Cost of an assignment, scaled by servings. Null when nothing is priced. */
-/**
- * The calculated price of one serving, before any coach mark-up. This is the
- * floor an override may never go below.
- */
+/** The menu price of one serving. */
 export function assignmentBasePrice(
   assignment: Assignment,
   dishes: Map<string, Dish>
@@ -116,32 +112,20 @@ export function assignmentBasePrice(
   return priceItems(items);
 }
 
-/** True when the coach has marked this meal up above the menu price. */
-export function isMarkedUp(assignment: Assignment): boolean {
-  return typeof assignment.priceOverrideIdr === "number";
-}
-
 /**
- * Clamp a proposed mark-up to the menu price floor. Returns the value that will
- * actually be stored, so the UI can show the correction rather than silently
- * discarding what was typed.
+ * Cost of an assignment, scaled by servings.
+ *
+ * There is no per-meal override any more: a diner is quoted Negrita's price,
+ * and the restaurant sets its margin once in its own settings rather than
+ * meal by meal.
  */
-export function clampMarkUp(proposed: number, floorIdr: number): number {
-  if (!Number.isFinite(proposed)) return floorIdr;
-  return Math.max(floorIdr, Math.round(proposed));
-}
-
 export function assignmentPrice(
   assignment: Assignment,
   dishes: Map<string, Dish>
 ): PriceResult {
   const base = assignmentBasePrice(assignment, dishes);
-  const unit =
-    typeof assignment.priceOverrideIdr === "number"
-      ? Math.max(assignment.priceOverrideIdr, base.totalIdr)
-      : base.totalIdr;
   return {
-    totalIdr: unit * assignment.servings,
+    totalIdr: base.totalIdr * assignment.servings,
     unpricedCount: base.unpricedCount,
     complete: base.complete,
   };

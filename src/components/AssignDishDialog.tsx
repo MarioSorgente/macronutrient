@@ -176,7 +176,7 @@ export default function AssignDishDialog({
                     Switch to <b>Build</b> to put one together right here.
                   </p>
                   <Link
-                    href="/"
+                    href="/plan/build"
                     className="mt-4 inline-flex rounded-xl border border-cream-deep bg-white px-4 py-2 text-sm font-600 text-charcoal"
                   >
                     Or open the builder

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowUpRight, Plus } from "lucide-react";
+import { AlertTriangle, Plus } from "lucide-react";
 import type { Assignment, Client, Dish } from "@/lib/storage/types";
 import {
   DAY_SHORT,
@@ -11,7 +11,6 @@ import {
   dayPrice,
   dayTotals,
   formatShortDate,
-  isMarkedUp,
   isOrphaned,
 } from "@/lib/clients";
 import { formatPrice } from "@/lib/pricing";
@@ -87,13 +86,6 @@ export default function PlanWeekGrid({
                                   {round0(assignmentMacros(a, dishes).energy_kcal)}
                                 </b>
                                 {a.servings !== 1 && <span>×{a.servings}</span>}
-                                {isMarkedUp(a) && (
-                                  <ArrowUpRight
-                                    size={10}
-                                    className="text-basil"
-                                    aria-label="Price marked up"
-                                  />
-                                )}
                                 {isOrphaned(a, dishes) && (
                                   <AlertTriangle
                                     size={10}

@@ -28,7 +28,7 @@ export default function SavedDishList() {
 
   function openInBuilder(dish: Dish) {
     loadDish(dish);
-    router.push("/");
+    router.push("/plan/build");
   }
 
   async function remove(id: string) {
@@ -54,7 +54,7 @@ export default function SavedDishList() {
           Build a dish and save it — it will show up here.
         </p>
         <Link
-          href="/"
+          href="/plan/build"
           className="mt-4 inline-flex rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
         >
           Go to builder

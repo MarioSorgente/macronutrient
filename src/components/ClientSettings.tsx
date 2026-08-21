@@ -61,7 +61,7 @@ export default function ClientSettings({
 
   return (
     <Modal
-      title="Client settings"
+      title="Plan settings"
       onClose={onClose}
       bodyClassName="space-y-4"
       footer={
@@ -83,7 +83,7 @@ export default function ClientSettings({
         </>
       }
     >
-        <Field label="Name">
+        <Field label="Plan name">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}

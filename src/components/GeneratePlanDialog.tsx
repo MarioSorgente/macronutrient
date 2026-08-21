@@ -33,7 +33,7 @@ import IngredientTypeahead from "@/components/IngredientTypeahead";
 import Modal from "@/components/ui/Modal";
 
 /**
- * Coach workflow in two steps: say what the client likes, then produce and
+ * Two steps: say what you like, then produce and
  * review a week. Split so neither screen becomes a wall of controls.
  */
 export default function GeneratePlanDialog({
@@ -121,7 +121,7 @@ export default function GeneratePlanDialog({
       title={
         <>
           <Sparkles size={18} className="text-tomato" />
-          {step === 1 ? `What does ${client.name} like?` : `Week ${week} plan`}
+          {step === 1 ? "What do you like?" : `Week ${week} plan`}
         </>
       }
       subtitle={`Step ${step} of 2 · ${

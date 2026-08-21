@@ -1,25 +1,38 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { UtensilsCrossed } from "lucide-react";
-
-export type NavKey = "builder" | "dishes" | "clients" | "coaches" | "house";
-
-/**
- * "Clients" and "For coaches" are the same screen in two modes, not two data
- * silos — the coach link just lands in coach mode.
- */
-const LINKS: { key: NavKey; href: string; label: string }[] = [
-  { key: "builder", href: "/", label: "Builder" },
-  { key: "dishes", href: "/dishes", label: "Dishes" },
-  { key: "clients", href: "/clients", label: "Clients" },
-  { key: "coaches", href: "/clients?mode=coach", label: "For coaches" },
-  { key: "house", href: "/house-items", label: "House items" },
-];
+import { cn } from "@/components/ui/cn";
 
 /**
  * App shell header. "Mamma Calories" is the product brand; "For Negrita" is the
- * customer skin. Nav is hidden in print output.
+ * customer skin.
+ *
+ * There used to be five tabs, two of which ("Clients" and "For coaches") were
+ * the same screen in different modes. Everything a diner does now lives under
+ * one destination; staff-only areas appear only for the people who have them.
  */
-export default function BrandHeader({ active }: { active?: NavKey }) {
+type NavLink = { href: string; label: string; match: (path: string) => boolean };
+
+const LINKS: NavLink[] = [
+  { href: "/", label: "Home", match: (p) => p === "/" },
+  {
+    href: "/plan",
+    label: "Plan & Build",
+    match: (p) => p === "/plan" || p.startsWith("/plan/") || p.startsWith("/report/"),
+  },
+];
+
+/** Shown once the signed-in user has the role for them (wired up in Phase 2). */
+const STAFF_LINKS: NavLink[] = [
+  { href: "/admin/house-items", label: "House items", match: (p) => p.startsWith("/admin") },
+];
+
+export default function BrandHeader() {
+  const pathname = usePathname() ?? "/";
+  const links = [...LINKS, ...STAFF_LINKS];
+
   return (
     <header className="no-print sticky top-0 z-20 border-b border-cream-deep bg-cream/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
@@ -38,16 +51,17 @@ export default function BrandHeader({ active }: { active?: NavKey }) {
         </Link>
 
         <nav className="scroll-slim -mx-1 flex items-center gap-1 overflow-x-auto px-1 text-sm font-600">
-          {LINKS.map((link) => (
+          {links.map((link) => (
             <Link
-              key={link.key}
+              key={link.href}
               href={link.href}
-              className={
-                "shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 transition-colors " +
-                (active === link.key
+              aria-current={link.match(pathname) ? "page" : undefined}
+              className={cn(
+                "shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 transition-colors",
+                link.match(pathname)
                   ? "bg-tomato text-cream"
-                  : "text-charcoal-soft hover:bg-cream-deep hover:text-charcoal")
-              }
+                  : "text-charcoal-soft hover:bg-cream-deep hover:text-charcoal"
+              )}
             >
               {link.label}
             </Link>

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowUpRight, Plus } from "lucide-react";
+import { AlertTriangle, Plus } from "lucide-react";
 import type { Assignment, Client, Dish } from "@/lib/storage/types";
 import {
   DAY_NAMES,
@@ -13,7 +13,6 @@ import {
   dayPrice,
   dayTotals,
   formatShortDate,
-  isMarkedUp,
   isOrphaned,
 } from "@/lib/clients";
 import { formatPrice } from "@/lib/pricing";
@@ -144,13 +143,6 @@ export default function PlanDayView({
                                 <span className="ml-1.5 text-xs font-500 text-charcoal-soft">
                                   ×{a.servings}
                                 </span>
-                              )}
-                              {isMarkedUp(a) && (
-                                <ArrowUpRight
-                                  size={13}
-                                  className="ml-1 inline text-basil"
-                                  aria-label="Price marked up"
-                                />
                               )}
                               {isOrphaned(a, dishes) && (
                                 <AlertTriangle
