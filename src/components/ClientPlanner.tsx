@@ -4,27 +4,27 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  AlertTriangle,
   ArrowLeft,
+  CalendarDays,
+  CalendarRange,
   FileText,
   Plus,
   Settings2,
   Sparkles,
-  X,
+  Wallet,
 } from "lucide-react";
 import { getClientRepository, getDishRepository } from "@/lib/storage";
-import { MAX_PROGRAM_WEEKS, type Assignment, type Client, type Dish } from "@/lib/storage/types";
 import {
-  DAY_SHORT,
-  assignmentMacros,
-  assignmentName,
-  assignmentPrice,
+  MAX_PROGRAM_WEEKS,
+  type Assignment,
+  type Client,
+  type Dish,
+} from "@/lib/storage/types";
+import {
+  DAY_NAMES,
   assignmentsFor,
   dateFor,
-  dayPrice,
-  dayTotals,
   formatShortDate,
-  isOrphaned,
   newAssignmentId,
   weekDailyAverage,
   weekPrice,
@@ -33,6 +33,7 @@ import {
 import { sumDishMacros } from "@/lib/calc";
 import { formatIdr, formatPrice } from "@/lib/pricing";
 import { usePlannerMode } from "@/lib/coachMode";
+import { usePlanView, useShowPrices } from "@/lib/planView";
 import type { GeneratedDay } from "@/lib/mealPlanner";
 import { round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
@@ -40,7 +41,11 @@ import AssignDishDialog from "@/components/AssignDishDialog";
 import ClientSettings from "@/components/ClientSettings";
 import TargetAdherence from "@/components/TargetAdherence";
 import PlannerModeToggle from "@/components/PlannerModeToggle";
+import SegmentedToggle from "@/components/SegmentedToggle";
 import GeneratePlanDialog from "@/components/GeneratePlanDialog";
+import MealDetailDialog from "@/components/MealDetailDialog";
+import PlanWeekGrid from "@/components/PlanWeekGrid";
+import PlanDayView from "@/components/PlanDayView";
 
 export default function ClientPlanner() {
   const params = useParams<{ id: string }>();
@@ -50,9 +55,13 @@ export default function ClientPlanner() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [week, setWeek] = useState(1);
+  const [day, setDay] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [openMealId, setOpenMealId] = useState<string | null>(null);
   const [mode, setMode] = usePlannerMode();
+  const [planView, setPlanView] = usePlanView();
+  const [showPrices, setShowPrices] = useShowPrices();
   const [assigning, setAssigning] = useState<{ day: number; slot: string } | null>(
     null
   );
@@ -69,10 +78,7 @@ export default function ClientPlanner() {
     });
   }, [id]);
 
-  const dishMap = useMemo(
-    () => new Map(dishes.map((d) => [d.id, d])),
-    [dishes]
-  );
+  const dishMap = useMemo(() => new Map(dishes.map((d) => [d.id, d])), [dishes]);
 
   const persist = useCallback(async (next: Client) => {
     const updated = { ...next, updatedAt: new Date().toISOString() };
@@ -102,6 +108,18 @@ export default function ClientPlanner() {
       ...client,
       plan: client.plan.filter((a) => a.id !== assignmentId),
     });
+    setOpenMealId(null);
+  }
+
+  /** Applies a patch to one assignment and saves. */
+  function updateAssignment(assignmentId: string, patch: Partial<Assignment>) {
+    if (!client) return;
+    persist({
+      ...client,
+      plan: client.plan.map((a) =>
+        a.id === assignmentId ? { ...a, ...patch } : a
+      ),
+    });
   }
 
   /** Writes a generated week into the plan as inline meals. */
@@ -112,12 +130,12 @@ export default function ClientPlanner() {
       : [...client.plan];
 
     const additions: Assignment[] = [];
-    for (const day of generated) {
-      for (const meal of day.meals) {
+    for (const gDay of generated) {
+      for (const meal of gDay.meals) {
         additions.push({
           id: newAssignmentId(),
           week: currentWeek,
-          day: day.day,
+          day: gDay.day,
           slot: meal.slot,
           items: meal.items,
           servings: 1,
@@ -162,11 +180,17 @@ export default function ClientPlanner() {
   const currentWeek = Math.min(week, client.weekCount);
   const totals = weekTotals(client, currentWeek, dishMap);
   const average = weekDailyAverage(client, currentWeek, dishMap);
+  const cost = weekPrice(client, currentWeek, dishMap);
+
+  // Re-read from the plan so the dialog reflects edits made inside it.
+  const openMeal = openMealId
+    ? client.plan.find((a) => a.id === openMealId) ?? null
+    : null;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
       {/* Header */}
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link
             href="/clients"
@@ -190,7 +214,7 @@ export default function ClientPlanner() {
               onClick={() => setGenerateOpen(true)}
               className="flex items-center gap-1.5 rounded-xl bg-basil px-3 py-2 text-sm font-700 text-cream hover:opacity-90"
             >
-              <Sparkles size={15} /> Generate plan
+              <Sparkles size={15} /> Generate
             </button>
           )}
           <button
@@ -209,238 +233,168 @@ export default function ClientPlanner() {
         </div>
       </div>
 
-      {/* Coach summary: targets and what the week costs */}
+      {/* Coach summary — one line, not three stacked blocks */}
       {mode === "coach" && (
-        <section className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl2 border border-basil/30 bg-basil/5 px-4 py-3">
-          <div>
-            <div className="text-[11px] font-700 uppercase tracking-wide text-basil">
-              Daily target
-            </div>
-            <div className="text-sm font-600 tabular-nums text-charcoal">
+        <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-basil/30 bg-basil/5 px-3 py-2 text-sm">
+          <span className="text-charcoal-soft">
+            Target{" "}
+            <b className="tabular-nums text-charcoal">
               {client.targets
                 ? `${round0(client.targets.energy_kcal)} kcal · P ${round0(
                     client.targets.protein_g
-                  )} · C ${round0(client.targets.carbs_g)} · F ${round0(
-                    client.targets.fat_g
                   )}`
-                : "Not set — open Settings or set them when generating"}
-            </div>
-          </div>
-          <div>
-            <div className="text-[11px] font-700 uppercase tracking-wide text-basil">
-              Week {currentWeek} cost
-            </div>
-            <div className="text-sm font-700 tabular-nums text-charcoal">
-              {formatPrice(weekPrice(client, currentWeek, dishMap))}
-            </div>
-          </div>
-          <div>
-            <div className="text-[11px] font-700 uppercase tracking-wide text-basil">
-              Avg / day
-            </div>
-            <div className="text-sm font-600 tabular-nums text-charcoal">
-              {formatIdr(weekPrice(client, currentWeek, dishMap).totalIdr / 7)}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Week switcher */}
-      <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        {Array.from({ length: client.weekCount }, (_, i) => i + 1).map((w) => {
-          const count = assignmentsFor(client, w).length;
-          return (
-            <button
-              key={w}
-              type="button"
-              onClick={() => setWeek(w)}
-              className={
-                "flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-600 transition-colors " +
-                (w === currentWeek
-                  ? "bg-charcoal text-cream"
-                  : "bg-cream-deep text-charcoal-soft hover:text-charcoal")
-              }
-            >
-              Week {w}
-              {count > 0 && (
-                <span
-                  className={
-                    "rounded-full px-1.5 text-[10px] font-700 " +
-                    (w === currentWeek
-                      ? "bg-cream/20 text-cream"
-                      : "bg-white text-charcoal-soft")
-                  }
-                >
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-        {client.weekCount < MAX_PROGRAM_WEEKS && (
+                : "not set"}
+            </b>
+          </span>
+          <span className="text-charcoal-soft">
+            Week {currentWeek}{" "}
+            <b className="tabular-nums text-charcoal">{formatPrice(cost)}</b>
+          </span>
+          <span className="text-charcoal-soft">
+            Avg/day{" "}
+            <b className="tabular-nums text-charcoal">
+              {formatIdr(cost.totalIdr / 7)}
+            </b>
+          </span>
           <button
             type="button"
-            onClick={() =>
-              persist({ ...client, weekCount: client.weekCount + 1 })
-            }
-            className="flex items-center gap-1 rounded-xl border border-dashed border-cream-deep px-3 py-2 text-sm font-600 text-charcoal-soft hover:border-tomato-soft hover:text-charcoal"
+            onClick={() => setShowPrices(!showPrices)}
+            className="ml-auto flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-600 text-charcoal-soft hover:text-charcoal"
+            aria-pressed={showPrices}
           >
-            <Plus size={14} /> Add week
+            <Wallet size={13} /> {showPrices ? "Hide prices" : "Show prices"}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Day grid */}
-      <div className="scroll-slim -mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
-        <div className="grid min-w-[64rem] grid-cols-7 gap-2">
-          {DAY_SHORT.map((dayName, dayIndex) => {
-            const totalsForDay = dayTotals(client, currentWeek, dayIndex, dishMap);
-            const date = dateFor(client, currentWeek, dayIndex);
+      {/* Week switcher + view toggle */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {Array.from({ length: client.weekCount }, (_, i) => i + 1).map((w) => {
+            const count = assignmentsFor(client, w).length;
             return (
-              <div
-                key={dayIndex}
-                className="flex flex-col rounded-xl2 border border-cream-deep bg-white/60 p-2"
+              <button
+                key={w}
+                type="button"
+                onClick={() => setWeek(w)}
+                className={
+                  "flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-600 transition-colors " +
+                  (w === currentWeek
+                    ? "bg-charcoal text-cream"
+                    : "bg-cream-deep text-charcoal-soft hover:text-charcoal")
+                }
               >
-                <div className="mb-2 flex items-baseline justify-between px-1">
-                  <span className="font-display text-sm font-700 text-charcoal">
-                    {dayName}
+                Week {w}
+                {count > 0 && (
+                  <span
+                    className={
+                      "rounded-full px-1.5 text-[10px] font-700 " +
+                      (w === currentWeek
+                        ? "bg-cream/20 text-cream"
+                        : "bg-white text-charcoal-soft")
+                    }
+                  >
+                    {count}
                   </span>
-                  <span className="text-[10px] text-charcoal-soft">
-                    {formatShortDate(date)}
-                  </span>
-                </div>
-
-                <div className="flex flex-1 flex-col gap-2">
-                  {client.mealSlots.map((slot) => {
-                    const slotAssignments = assignmentsFor(
-                      client,
-                      currentWeek,
-                      dayIndex,
-                      slot
-                    );
-                    return (
-                      <div key={slot}>
-                        <div className="mb-1 px-1 text-[10px] font-700 uppercase tracking-wide text-charcoal-soft">
-                          {slot}
-                        </div>
-                        <ul className="flex flex-col gap-1">
-                          {slotAssignments.map((a) => {
-                            const macros = assignmentMacros(a, dishMap);
-                            const orphan = isOrphaned(a, dishMap);
-                            return (
-                              <li
-                                key={a.id}
-                                className="group relative rounded-lg border border-cream-deep bg-cream px-2 py-1.5"
-                              >
-                                <div className="flex items-start justify-between gap-1">
-                                  <span className="line-clamp-2 text-[11px] font-600 leading-tight text-charcoal">
-                                    {assignmentName(a, dishMap)}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => unassign(a.id)}
-                                    className="shrink-0 rounded p-0.5 text-charcoal-soft opacity-0 transition-opacity hover:text-tomato-dark group-hover:opacity-100"
-                                    aria-label="Remove from plan"
-                                  >
-                                    <X size={12} />
-                                  </button>
-                                </div>
-                                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] tabular-nums text-charcoal-soft">
-                                  <span className="font-700 text-tomato">
-                                    {round0(macros.energy_kcal)}
-                                  </span>
-                                  kcal
-                                  {a.servings !== 1 && <span>×{a.servings}</span>}
-                                  {mode === "coach" && (
-                                    <span className="font-600">
-                                      {formatPrice(assignmentPrice(a, dishMap))}
-                                    </span>
-                                  )}
-                                  {orphan && (
-                                    <AlertTriangle
-                                      size={10}
-                                      className="text-gold"
-                                      aria-label="Original dish deleted; using saved snapshot"
-                                    />
-                                  )}
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                        <button
-                          type="button"
-                          onClick={() => setAssigning({ day: dayIndex, slot })}
-                          className="mt-1 flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-cream-deep py-1 text-[10px] font-600 text-charcoal-soft transition-colors hover:border-tomato-soft hover:text-tomato"
-                        >
-                          <Plus size={11} /> Add
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Day total */}
-                <div className="mt-2 border-t border-cream-deep pt-1.5 text-center">
-                  <div className="font-display text-sm font-700 text-charcoal">
-                    {round0(totalsForDay.energy_kcal)}
-                  </div>
-                  <div className="text-[9px] uppercase tracking-wide text-charcoal-soft">
-                    kcal
-                  </div>
-                  {mode === "coach" && (
-                    <div className="text-[10px] font-600 tabular-nums text-charcoal-soft">
-                      {formatPrice(dayPrice(client, currentWeek, dayIndex, dishMap))}
-                    </div>
-                  )}
-                  {client.targets && (
-                    <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-cream-deep">
-                      <span
-                        className="block h-full bg-tomato"
-                        style={{
-                          width: `${Math.min(
-                            100,
-                            (totalsForDay.energy_kcal /
-                              client.targets.energy_kcal) *
-                              100
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
+                )}
+              </button>
             );
           })}
+          {client.weekCount < MAX_PROGRAM_WEEKS && (
+            <button
+              type="button"
+              onClick={() =>
+                persist({ ...client, weekCount: client.weekCount + 1 })
+              }
+              className="flex items-center gap-1 rounded-xl border border-dashed border-cream-deep px-2.5 py-2 text-sm font-600 text-charcoal-soft hover:border-tomato-soft hover:text-charcoal"
+              aria-label="Add week"
+            >
+              <Plus size={14} />
+            </button>
+          )}
+        </div>
+
+        <div className="ml-auto">
+          <SegmentedToggle
+            ariaLabel="Plan view"
+            value={planView}
+            onChange={setPlanView}
+            options={[
+              { value: "day", label: "Day", icon: <CalendarDays size={14} /> },
+              { value: "week", label: "Week", icon: <CalendarRange size={14} /> },
+            ]}
+          />
         </div>
       </div>
 
-      {/* Week summary */}
-      <section className="mt-5 rounded-xl2 border border-cream-deep bg-white/60 p-4 shadow-card">
-        <h2 className="mb-3 font-display text-lg font-700 text-charcoal">
-          Week {currentWeek} summary
-        </h2>
-        <MacroSummary macros={totals} />
-        <p className="mt-3 text-xs text-charcoal-soft">
-          Daily average across 7 days:{" "}
-          <b className="text-charcoal">{round0(average.energy_kcal)} kcal</b>
-        </p>
+      {/* The plan */}
+      {planView === "day" ? (
+        <PlanDayView
+          client={client}
+          week={currentWeek}
+          day={day}
+          dishes={dishMap}
+          showPrices={showPrices}
+          onSelectDay={setDay}
+          onOpenMeal={(a) => setOpenMealId(a.id)}
+          onAddMeal={(d, slot) => setAssigning({ day: d, slot })}
+        />
+      ) : (
+        <>
+          <PlanWeekGrid
+            client={client}
+            week={currentWeek}
+            dishes={dishMap}
+            showPrices={showPrices}
+            onOpenMeal={(a) => setOpenMealId(a.id)}
+            onAddMeal={(d, slot) => setAssigning({ day: d, slot })}
+          />
 
-        {client.targets && (
-          <div className="mt-4 border-t border-cream-deep pt-4">
-            <h3 className="mb-2 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
-              Daily average vs target
-            </h3>
-            <TargetAdherence actual={average} targets={client.targets} />
-          </div>
-        )}
-      </section>
+          <section className="mt-5 rounded-xl2 border border-cream-deep bg-white/60 p-4">
+            <h2 className="mb-3 font-display text-lg font-700 text-charcoal">
+              Week {currentWeek} total
+            </h2>
+            <MacroSummary macros={totals} />
+            <p className="mt-3 text-xs text-charcoal-soft">
+              Daily average:{" "}
+              <b className="text-charcoal">{round0(average.energy_kcal)} kcal</b>
+            </p>
+            {client.targets && (
+              <div className="mt-4 border-t border-cream-deep pt-4">
+                <h3 className="mb-2 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
+                  Daily average vs target
+                </h3>
+                <TargetAdherence actual={average} targets={client.targets} />
+              </div>
+            )}
+          </section>
+        </>
+      )}
+
+      {/* Dialogs */}
+      {openMeal && (
+        <MealDetailDialog
+          assignment={openMeal}
+          dishes={dishMap}
+          contextLabel={`${openMeal.slot} · ${DAY_NAMES[openMeal.day]}, ${formatShortDate(
+            dateFor(client, openMeal.week, openMeal.day)
+          )}`}
+          onChangeServings={(servings) =>
+            updateAssignment(openMeal.id, { servings })
+          }
+          onChangeMarkUp={(priceIdr) =>
+            updateAssignment(openMeal.id, { priceOverrideIdr: priceIdr })
+          }
+          onRemove={() => unassign(openMeal.id)}
+          onClose={() => setOpenMealId(null)}
+        />
+      )}
 
       {assigning && (
         <AssignDishDialog
           dishes={dishes}
           slot={assigning.slot}
-          dayLabel={`Week ${currentWeek} · ${DAY_SHORT[assigning.day]} ${formatShortDate(
+          dayLabel={`Week ${currentWeek} · ${DAY_NAMES[assigning.day]} ${formatShortDate(
             dateFor(client, currentWeek, assigning.day)
           )}`}
           onAssign={assign}

@@ -73,7 +73,11 @@ export function isOrphaned(
 }
 
 /** Cost of an assignment, scaled by servings. Null when nothing is priced. */
-export function assignmentPrice(
+/**
+ * The calculated price of one serving, before any coach mark-up. This is the
+ * floor an override may never go below.
+ */
+export function assignmentBasePrice(
   assignment: Assignment,
   dishes: Map<string, Dish>
 ): PriceResult {
@@ -81,16 +85,42 @@ export function assignmentPrice(
   // components, which would otherwise produce a different, partial figure.
   if (assignment.price) {
     return {
-      totalIdr: assignment.price.totalIdr * assignment.servings,
+      totalIdr: assignment.price.totalIdr,
       unpricedCount: assignment.price.complete ? 0 : 1,
       complete: assignment.price.complete,
     };
   }
   const items = assignmentItems(assignment, dishes);
   if (!items) return { ...ZERO_PRICE, unpricedCount: 1, complete: false };
-  const base = priceItems(items);
+  return priceItems(items);
+}
+
+/** True when the coach has marked this meal up above the menu price. */
+export function isMarkedUp(assignment: Assignment): boolean {
+  return typeof assignment.priceOverrideIdr === "number";
+}
+
+/**
+ * Clamp a proposed mark-up to the menu price floor. Returns the value that will
+ * actually be stored, so the UI can show the correction rather than silently
+ * discarding what was typed.
+ */
+export function clampMarkUp(proposed: number, floorIdr: number): number {
+  if (!Number.isFinite(proposed)) return floorIdr;
+  return Math.max(floorIdr, Math.round(proposed));
+}
+
+export function assignmentPrice(
+  assignment: Assignment,
+  dishes: Map<string, Dish>
+): PriceResult {
+  const base = assignmentBasePrice(assignment, dishes);
+  const unit =
+    typeof assignment.priceOverrideIdr === "number"
+      ? Math.max(assignment.priceOverrideIdr, base.totalIdr)
+      : base.totalIdr;
   return {
-    totalIdr: base.totalIdr * assignment.servings,
+    totalIdr: unit * assignment.servings,
     unpricedCount: base.unpricedCount,
     complete: base.complete,
   };

@@ -106,6 +106,24 @@ anchor a meal (tobiko and a single ham slice are garnishes, not dinner), and if
 no sensible meal fits the constraints the slot is **left empty and reported**
 rather than padded with something wildly off target.
 
+## Plan views
+
+The planner has a **Day / Week** switch. Week is the seven-column overview; Day
+shows one day full width, where meal names have room to be read rather than
+truncated. It opens on Week for desktop and Day on mobile, and remembers an
+explicit choice.
+
+Any meal is **clickable**: the dialog shows its macros, price and the full
+ingredient breakdown with each ingredient's contribution, and is where servings,
+price and removal are edited.
+
+**Prices can be raised, never lowered.** The calculated menu price is a hard
+floor; typing a lower figure snaps the field back to it rather than silently
+discarding it. Mark-ups are stored per serving, so they stay correct when
+servings change, and marked-up meals carry an arrow so a raised price is never
+invisible in the totals it feeds. A `Hide prices` control clears cost out of the
+planner when you are just arranging meals.
+
 ---
 
 ## Run locally
@@ -194,6 +212,7 @@ src/lib/pricing.ts                   Whole-portion costing in IDR
 src/lib/mealPlanner.ts               Coach auto-planner
 src/lib/clients.ts                   Plan totals, averages, adherence, cost
 src/lib/coachMode.ts                 Manual/Coach mode state
+src/lib/planView.ts                  Day/Week view + show-prices state
 src/lib/storage/                     Repository: local (now) + firebase (prepared)
 src/store/                           Dish-builder + house-recipe state (Zustand)
 src/components/                      UI (picker, builder, planner, reports, …)

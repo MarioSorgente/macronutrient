@@ -25,6 +25,22 @@ body {
   border-radius: 9999px;
 }
 
+/**
+ * Reveal-on-hover, but only where hovering exists. On touch screens there is no
+ * hover, so the control stays visible instead of becoming unreachable.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .hover-reveal {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .hover-reveal-parent:hover .hover-reveal,
+  .hover-reveal:focus-visible,
+  .hover-reveal-parent:focus-within .hover-reveal {
+    opacity: 1;
+  }
+}
+
 /* Remove number-input spinners for the grams fields. */
 input[type="number"].no-spin::-webkit-outer-spin-button,
 input[type="number"].no-spin::-webkit-inner-spin-button {

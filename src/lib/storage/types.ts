@@ -61,6 +61,12 @@ export interface Assignment {
    */
   price?: { totalIdr: number; complete: boolean };
   /**
+   * Coach mark-up for this meal, **per serving**, in full rupiah. Same basis as
+   * `price`, so it stays correct when servings change. May only ever be above
+   * the calculated price — the menu figure is a floor, never undercut.
+   */
+  priceOverrideIdr?: number;
+  /**
    * Copy of the meal at assignment time. Keeps a plan readable even if the
    * dish is later deleted; the live dish wins whenever it still exists.
    */
