@@ -22,7 +22,9 @@ export default function HouseItemList() {
       ingredients
         .filter(isEstimated)
         .map((i) => getIngredient(i.ingredient_id) ?? i),
-
+    // `version` is a cache-buster: getIngredient() resolves house overrides at
+    // call time, so this must recompute when one is saved.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [version]
   );
 

@@ -66,8 +66,9 @@ export default function IngredientPicker() {
       default:
         return rankIngredients(found, query);
     }
-    // houseVersion participates so overridden values re-sort correctly.
-
+    // houseVersion is a cache-buster, not a value this callback reads: it
+    // changes when a house recipe is saved, and re-running is the whole point.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, category, sort, houseVersion]);
 
   // Recently used ingredients, shown only on the unfiltered default view.
@@ -77,7 +78,8 @@ export default function IngredientPicker() {
       .map((id) => getIngredient(id))
       .filter((x): x is Ingredient => Boolean(x))
       .slice(0, 5);
-
+    // Same cache-buster: getIngredient() resolves overrides at call time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recentIds, query, category, houseVersion]);
 
   useEffect(() => {

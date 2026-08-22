@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import type { Ingredient } from "@/types/nutrition";
-import { getIngredient, searchIngredients } from "@/lib/database";
+import { getIngredient } from "@/lib/database";
 import { houseRecipeMacrosPer100g } from "@/lib/calc";
 import { useHouseRecipes } from "@/store/houseRecipes";
 import type { HouseRecipe, HouseRecipeComponent } from "@/lib/storage/types";

@@ -33,7 +33,7 @@ import type {
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
-import Input, { Select } from "@/components/ui/Input";
+import Input from "@/components/ui/Input";
 import MacroChips from "@/components/MacroChips";
 import SegmentedToggle from "@/components/SegmentedToggle";
 import { useToast } from "@/components/ui/Toast";
