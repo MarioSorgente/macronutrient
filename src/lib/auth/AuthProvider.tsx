@@ -73,6 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Guards the login stamp so a token refresh does not count as a new sign-in.
   const stampedFor = useRef<string | null>(null);
+  // Guards the owner bootstrap so it is attempted once per account, not per render.
+  const bootstrappedFor = useRef<string | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -154,6 +156,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // A failed metrics write must never block signing in.
     });
   }, [user]);
+
+  /**
+   * Takes owner access automatically when the account is entitled to it.
+   *
+   * The role claim is only ever stamped by `onUserCreate`, which runs at
+   * sign-up and never backfills. That left the owner of an account created
+   * before the functions were deployed — or before ADMIN_EMAILS held their
+   * address — permanently a customer, with no route to admin from inside the
+   * app. Being on the allowlist has to be enough on its own, so this asks on
+   * every sign-in rather than waiting for someone to find a button.
+   *
+   * `claimAdminAccess` decides entirely from the server-side allowlist and the
+   * caller's own verified token, so calling it for everyone is safe: a
+   * customer gets permission-denied, which is the expected answer and not an
+   * error worth surfacing. Attempted once per account so it costs one call per
+   * page load at most, and never for someone who is already an admin.
+   */
+  useEffect(() => {
+    if (!user || actualRole === "admin") return;
+    if (bootstrappedFor.current === user.uid) return;
+    bootstrappedFor.current = user.uid;
+
+    void (async () => {
+      const [{ getFunctionsClient }, { httpsCallable }] = await Promise.all([
+        import("@/lib/storage/firebaseFunctions"),
+        import("firebase/functions"),
+      ]);
+      await httpsCallable(getFunctionsClient(), "claimAdminAccess")({});
+      // Granted: the claim is on the account but not yet on this token.
+      const fresh = await user.getIdTokenResult(true);
+      setActualRole((fresh.claims.role as Role | undefined) ?? null);
+    })().catch(() => {
+      // Not on the allowlist, not verified, or the functions are not deployed.
+      // All three are ordinary states, and none of them is the user's problem
+      // to see. /account explains it for someone who is expecting otherwise.
+      bootstrappedFor.current = null;
+    });
+  }, [user, actualRole]);
 
   /**
    * Picks up a role granted since this token was issued.

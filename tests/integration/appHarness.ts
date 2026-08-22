@@ -3,6 +3,7 @@ import {
   connectAuthEmulator,
   createUserWithEmailAndPassword,
   getAuth,
+  signInWithEmailAndPassword,
   signOut,
   type Auth,
   type User,
@@ -44,6 +45,7 @@ export interface Harness {
   functions: Functions;
   call: <Req, Res>(name: string, data: Req) => Promise<Res>;
   signUp: (email: string, password?: string) => Promise<User>;
+  signIn: (email: string, password?: string) => Promise<User>;
   dispose: () => Promise<void>;
 }
 
@@ -75,6 +77,10 @@ export function createHarness(): Harness {
     },
     signUp: async (email, password = "password123") => {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
+      return credential.user;
+    },
+    signIn: async (email, password = "password123") => {
+      const credential = await signInWithEmailAndPassword(auth, email, password);
       return credential.user;
     },
     dispose: async () => {

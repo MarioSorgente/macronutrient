@@ -219,10 +219,13 @@ your address. The sign-up trigger runs once and never backfills, so the role
 has to be claimed:
 
 1. Make sure `ADMIN_EMAILS` contains your address and the functions are
-   deployed, then press **Refresh my access** on `/account`. That calls
-   `claimAdminAccess`, which grants admin to any allowlisted, **verified**
-   address — so confirm your email first if you signed up with a password.
-   (Google sign-in is already verified.)
+   deployed, then **sign in again**. The app claims the role for you on every
+   sign-in, so being on the allowlist is enough — there is nothing to press.
+
+   The address has to be **confirmed**, so that nobody who merely knows an
+   owner's email can register it and take the restaurant. Google sign-in is
+   already verified; with a password, `/account` will say so and offer to send
+   the confirmation.
 2. If the functions are not deployed yet, grant it directly from a machine with
    project access:
 

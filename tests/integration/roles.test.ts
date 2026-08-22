@@ -300,3 +300,48 @@ describe("claimAdminAccess — recovering from the bootstrap deadlock", () => {
     expect((await adminGet(`users/${user.uid}`))?.role).toBe("admin");
   });
 });
+
+describe("being on the allowlist is enough on its own", () => {
+  /**
+   * The expectation this has to meet, in the owner's words: "when I log in and
+   * I am the ADMIN_EMAIL, I need to be admin automatically."
+   *
+   * The client calls claimAdminAccess on every sign-in for anyone who is not
+   * already an admin, so no button has to be found and pressed. These assert
+   * the server half of that: the same call, made twice across two separate
+   * sign-ins, with no other action in between.
+   */
+  it("promotes an existing customer account on a later sign-in", async () => {
+    // Sign up while nothing can grant admin — the account starts as a customer.
+    const user = await h.signUp(BOOTSTRAP_ADMIN);
+    expect(await roleClaimOf()).toBe("client");
+    await setEmailVerified(user.uid);
+
+    // Sign out, and back in, as a person would the next day.
+    await h.auth.signOut();
+    await h.signIn(BOOTSTRAP_ADMIN);
+
+    // What the provider does automatically on that sign-in:
+    await expect(h.call("claimAdminAccess", {})).resolves.toMatchObject({
+      role: "admin",
+    });
+    const token = await h.auth.currentUser!.getIdTokenResult(true);
+    expect(token.claims.role).toBe("admin");
+  });
+
+  it("costs an ordinary customer nothing but a refusal", async () => {
+    // The same unconditional call every signed-in account makes. It must not
+    // change anything for someone who is not an owner.
+    const user = await h.signUp(uniqueEmail());
+    expect(await roleClaimOf()).toBe("client");
+    await setEmailVerified(user.uid);
+    await h.auth.currentUser!.getIdToken(true);
+
+    await expect(h.call("claimAdminAccess", {})).rejects.toThrow(
+      /permission-denied|owner allowlist/i
+    );
+    const token = await h.auth.currentUser!.getIdTokenResult(true);
+    expect(token.claims.role).toBe("client");
+    expect((await adminGet(`users/${user.uid}`))?.role).toBe("client");
+  });
+});
