@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { listAllOrders, listUsers } from "@/lib/storage/orders";
+import { getUser, listOrdersByUser } from "@/lib/storage/orders";
 import { favouriteMeals, revenueTotals } from "@/lib/admin/analytics";
 import { authErrorMessage } from "@/lib/auth/errors";
 import { formatBaliDay, formatBaliDateTime } from "@/lib/format";
@@ -32,11 +32,13 @@ export default function CustomerDetail() {
     if (!uid) return;
     let active = true;
 
-    Promise.all([listUsers(), listAllOrders(500)])
-      .then(([people, allOrders]) => {
+    // One document and one indexed query, rather than every user and 500
+    // orders fetched only to throw nearly all of them away.
+    Promise.all([getUser(uid), listOrdersByUser(uid)])
+      .then(([found, theirOrders]) => {
         if (!active) return;
-        setPerson(people.find((p) => p.uid === uid) ?? null);
-        setOrders(allOrders.filter((o) => o.userId === uid));
+        setPerson(found);
+        setOrders(theirOrders);
       })
       .catch((cause) => active && setError(authErrorMessage(cause)))
       .finally(() => active && setLoading(false));

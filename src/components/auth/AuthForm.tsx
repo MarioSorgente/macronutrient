@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -13,6 +13,7 @@ import {
 } from "firebase/auth";
 import { UtensilsCrossed } from "lucide-react";
 import { getAuthClient } from "@/lib/storage/firebaseAuth";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import { isFirebaseConfigured } from "@/lib/firebaseEnv";
 import { authErrorMessage } from "@/lib/auth/errors";
 import Button from "@/components/ui/Button";
@@ -83,6 +84,18 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
   const params = useSearchParams();
   const next = params?.get("next") || "/plan";
+  const { user, loading: authLoading } = useAuth();
+
+  /**
+   * Someone already signed in has nothing to do on this screen. Showing them
+   * the sign-in form again is a dead end: the form succeeds, and they are left
+   * looking at it. Password reset is exempt — that is still a sensible thing
+   * to ask for while signed in.
+   */
+  useEffect(() => {
+    if (mode === "reset" || authLoading || !user) return;
+    router.replace(next);
+  }, [mode, authLoading, user, router, next]);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");

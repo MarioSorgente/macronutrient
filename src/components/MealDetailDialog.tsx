@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { AlertTriangle, Minus, Plus, Trash2 } from "lucide-react";
 import type { Assignment, Dish } from "@/lib/storage/types";
 import {

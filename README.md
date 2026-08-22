@@ -165,7 +165,33 @@ Other scripts:
 ```bash
 npm run build      # production build
 npm run typecheck  # TypeScript check, no emit
+npm run lint       # ESLint
 ```
+
+---
+
+## Tests
+
+```bash
+npm test               # unit — pure logic, no services, a few seconds
+npm run test:emulated  # rules, indexes and Cloud Functions, on the emulators
+npm run e2e            # end-to-end in a real browser, desktop + phone
+npm run bench          # hot-path timings (not part of CI — machine dependent)
+```
+
+`test:emulated` and `e2e` start the Firebase emulator suite themselves and shut
+it down afterwards; both need Java on the PATH. Before the first run, give the
+emulator the bootstrap admin allowlist the roles tests expect:
+
+```bash
+cp functions/.secret.example functions/.secret.local
+```
+
+The end-to-end suite runs against a production build rather than `next dev`,
+because the dev server compiles routes on first request and that made the long
+journeys flaky. It also means the tests exercise the bundle that ships.
+
+Everything above runs on every push via `.github/workflows/ci.yml`.
 
 ---
 

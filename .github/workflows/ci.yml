@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The Firestore emulator is a Java process.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install
+        run: |
+          npm ci
+          npm --prefix functions ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      # The functions bundle is what the emulator loads, so it has to exist
+      # before the integration suite runs.
+      - name: Build Cloud Functions
+        run: npm --prefix functions run build
+
+      # The emulator reads ADMIN_EMAILS from this file; production reads the
+      # real one from Secret Manager. The value is a test allowlist, not a
+      # secret, which is why the example is committed and this is not.
+      - name: Provide the emulator's ADMIN_EMAILS
+        run: cp functions/.secret.example functions/.secret.local
+
+      - name: Rules, index and Cloud Function tests
+        run: npm run test:emulated
+
+      - name: Install Playwright's browser
+        run: npx playwright install --with-deps chromium
+
+      # Builds the app itself as part of the Playwright webServer.
+      - name: End-to-end tests
+        run: npm run e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

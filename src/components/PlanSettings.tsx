@@ -84,33 +84,44 @@ export default function PlanSettings({
       }
     >
         <Field label="Plan name">
+          {(id) => (
           <input
+            id={id}
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm outline-none focus:border-tomato-soft"
           />
+          )}
         </Field>
 
         <Field label="Notes" hint="Allergies, preferences, goals">
+          {(id) => (
           <textarea
+            id={id}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             className="w-full resize-none rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm outline-none focus:border-tomato-soft"
           />
+          )}
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Program starts">
+            {(id) => (
             <input
+              id={id}
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               className="w-full rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm outline-none focus:border-tomato-soft"
             />
+            )}
           </Field>
           <Field label="Weeks" hint={`Up to ${MAX_PROGRAM_WEEKS}`}>
+            {(id) => (
             <select
+              id={id}
               value={weekCount}
               onChange={(e) => setWeekCount(Number(e.target.value))}
               className="w-full rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm outline-none focus:border-tomato-soft"
@@ -123,17 +134,27 @@ export default function PlanSettings({
                 )
               )}
             </select>
+            )}
           </Field>
         </div>
 
         {/* Meal slots */}
-        <Field label="Meal slots" hint="Rename or add your own">
+        {/* Not a Field: this labels a list of controls, not one control, so a
+            <label for> would have nothing to point at. */}
+        <div>
+          <div className="mb-1 flex items-baseline justify-between gap-2">
+            <span className="text-sm font-600 text-charcoal">Meal slots</span>
+            <span className="text-[11px] text-charcoal-soft">
+              Rename or add your own
+            </span>
+          </div>
           <ul className="flex flex-col gap-1.5">
             {slots.map((slot, index) => (
               <li key={index} className="flex items-center gap-2">
                 <GripVertical size={14} className="shrink-0 text-charcoal-soft" />
                 <input
                   value={slot}
+                  aria-label={`Meal slot ${index + 1}`}
                   onChange={(e) => renameSlot(index, e.target.value)}
                   className="flex-1 rounded-lg border border-cream-deep bg-white px-2.5 py-1.5 text-sm outline-none focus:border-tomato-soft"
                 />
@@ -160,6 +181,7 @@ export default function PlanSettings({
                 }
               }}
               placeholder="e.g. Pre-workout"
+              aria-label="New meal slot"
               className="flex-1 rounded-lg border border-cream-deep bg-white px-2.5 py-1.5 text-sm outline-none focus:border-tomato-soft"
             />
             <button
@@ -170,7 +192,7 @@ export default function PlanSettings({
               <Plus size={14} /> Add
             </button>
           </div>
-        </Field>
+        </div>
 
         {/* Targets */}
         <div className="rounded-xl border border-cream-deep bg-white p-3">

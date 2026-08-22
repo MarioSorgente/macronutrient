@@ -19,7 +19,7 @@ import type {
   Plan,
   RestaurantConfig,
 } from "@/lib/storage/types";
-import { DEFAULT_RESTAURANT_CONFIG } from "@/lib/storage/types";
+import { DEFAULT_RESTAURANT_CONFIG, LIVE_ORDER_STATUSES } from "@/lib/storage/types";
 
 /**
  * Turns a planned week into a prep order the kitchen is committed to.
@@ -132,15 +132,21 @@ export const submitOrder = onCall({ region: REGION }, async (request) => {
   }
 
   // A repeated submit within a minute is a double click, not a second order.
+  //
+  // Only a *live* order blocks a resend. A cancelled or rejected one has
+  // already had its prep tasks cleared and its week freed on the plan by
+  // onOrderStatusChanged, so counting it here would leave the customer with a
+  // week the UI says is editable but that can never be sent again.
   const existing = await db
     .collection(`restaurants/${RESTAURANT_ID}/orders`)
     .where("userId", "==", uid)
     .where("planId", "==", planId)
     .where("weekNumber", "==", week)
-    .limit(1)
     .get();
 
-  const previous = existing.docs[0];
+  const previous = existing.docs.find((doc) =>
+    LIVE_ORDER_STATUSES.includes((doc.data() as Order).status)
+  );
   if (previous) {
     const submittedAt = Date.parse(
       (previous.data() as Order).submittedAt ?? ""
