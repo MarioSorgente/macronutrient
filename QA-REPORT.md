@@ -16,11 +16,11 @@ Branch: `claude/production-readiness-qa-ru4hln`.
 | `npm run lint` | Could not pass — `next lint` with no ESLint config and neither `eslint` nor `eslint-config-next` installed | Passes; flat config, `eslint` called directly |
 | Unit tests | 29, in 7 files | **212**, in 17 files |
 | `firestore.rules` | Untested | **58 tests**, one per rule branch |
-| Cloud Functions | Untested | **72 tests** against the emulator |
-| Browser tests | None | **43**, desktop + 375 px phone |
+| Cloud Functions | Untested | **74 tests** against the emulator |
+| Browser tests | None | **47**, desktop + 375 px phone |
 | CI | None | Lint → typecheck → unit → functions build → emulators → build → E2E |
 
-Total: **212 unit + 130 emulated + 43 end-to-end.**
+Total: **212 unit + 132 emulated + 47 end-to-end.**
 
 ---
 
@@ -133,14 +133,19 @@ Fixed three ways:
 - **`claimAdminAccess`**, a callable that grants admin to any signed-in caller
   whose address is on the Secret Manager allowlist. Idempotent, takes no
   arguments worth tampering with, and denies with a message that says nothing
-  about *why*, so it cannot be used to probe who is an owner. `/account`'s
-  "Refresh my access" now calls it first, so the button does what its label
-  promises.
+  about *why*, so it cannot be used to probe who is an owner.
+  **`AuthProvider` calls it automatically on every sign-in** for anyone not
+  already an admin, so being on the allowlist is enough on its own — no button
+  to find, no page to visit. A customer simply gets `permission-denied`, which
+  is the expected answer and never surfaced.
 - **`functions/scripts/grant-role.mjs`** for the one case the callable cannot
   cover — functions not deployed yet. Verified against the emulator and covered
   by its own tests, because nobody runs it on a normal day and it would
   otherwise rot unnoticed until someone was already locked out.
-- **A verified-email requirement** on every admin grant. Firebase does not
+- **A verified-email requirement** on every admin grant. When that is the
+  reason someone is still a customer, `/account` says so and offers to resend
+  the confirmation — the client already knows its own verification state, so
+  saying it reveals nothing about who is on the allowlist. Firebase does not
   verify an address on password sign-up, so without it anyone who knew an
   allowlisted address could register it first and take the restaurant — a hole
   the original trigger had. Only the admin path is gated; ordinary sign-up is
@@ -242,9 +247,9 @@ npm ci && npm --prefix functions ci
 cp functions/.secret.example functions/.secret.local   # emulator ADMIN_EMAILS
 npm run lint && npm run typecheck
 npm test                  # 212 unit
-npm run test:emulated     # 130 rules + Cloud Functions
+npm run test:emulated     # 132 rules + Cloud Functions
 npm run build
-npm run e2e               # 43 browser tests, desktop + 375 px
+npm run e2e               # 47 browser tests, desktop + 375 px
 ```
 
 To take owner access on a project whose functions are deployed, press

@@ -182,6 +182,6 @@ test.describe("what a customer is shown about the deployment", () => {
   test("view-as is not offered to someone who is not an admin", async ({ page }) => {
     await signUp(page);
     await page.goto("/account");
-    await expect(page.getByText(/^view as$/i)).toHaveCount(0);
+    await expect(page.getByText("View as")).toHaveCount(0);
   });
 });

@@ -141,3 +141,48 @@ export function mondayAhead(weeks: number): string {
     .toISOString()
     .slice(0, 10);
 }
+
+const AUTH_EMULATOR = "http://127.0.0.1:9099";
+
+/** The address on the emulator's ADMIN_EMAILS allowlist (functions/.secret.example). */
+export const OWNER_EMAIL = "owner@example.com";
+
+/** Marks an address confirmed, the way clicking the emailed link would. */
+export async function verifyEmail(email: string): Promise<void> {
+  const lookup = await fetch(
+    `${AUTH_EMULATOR}/identitytoolkit.googleapis.com/v1/accounts:lookup`,
+    {
+      method: "POST",
+      headers: { authorization: "Bearer owner", "content-type": "application/json" },
+      body: JSON.stringify({ email: [email] }),
+    }
+  );
+  const { users } = (await lookup.json()) as { users?: { localId: string }[] };
+  const uid = users?.[0]?.localId;
+  if (!uid) throw new Error(`verifyEmail: no account for ${email}`);
+
+  const res = await fetch(
+    `${AUTH_EMULATOR}/identitytoolkit.googleapis.com/v1/accounts:update`,
+    {
+      method: "POST",
+      headers: { authorization: "Bearer owner", "content-type": "application/json" },
+      body: JSON.stringify({ localId: uid, emailVerified: true }),
+    }
+  );
+  if (!res.ok) throw new Error(`verifyEmail failed: ${res.status}`);
+}
+
+/**
+ * Deletes every emulator account.
+ *
+ * The owner tests need the allowlisted address to be fresh each time, and that
+ * address is fixed by the allowlist rather than generated. Specs run serially
+ * (workers: 1), so this only ever clears accounts the current spec made.
+ */
+export async function clearAuthAccounts(): Promise<void> {
+  const res = await fetch(
+    `${AUTH_EMULATOR}/emulator/v1/projects/demo-mamma/accounts`,
+    { method: "DELETE" }
+  );
+  if (!res.ok) throw new Error(`clearAuthAccounts failed: ${res.status}`);
+}

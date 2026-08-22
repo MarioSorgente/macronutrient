@@ -66,6 +66,29 @@ export default function AccountAccess() {
   const [busy, setBusy] = useState(false);
   /** Set once the viewer has asked for a refresh and still come back empty. */
   const [triedRefresh, setTriedRefresh] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+
+  /**
+   * Owner access requires a confirmed address, so an unverified one is the
+   * quiet reason a person on the allowlist is still a customer. The client
+   * already knows its own verification state, so saying this reveals nothing
+   * the server would not: it is not a hint about who is on the allowlist.
+   */
+  const unverified = Boolean(user) && user?.emailVerified === false;
+
+  async function sendVerification() {
+    if (!user) return;
+    setVerifying(true);
+    try {
+      const { sendEmailVerification } = await import("firebase/auth");
+      await sendEmailVerification(user);
+      show("Verification email sent. Open the link, then sign in again.");
+    } catch (cause) {
+      show(authErrorMessage(cause), "error");
+    } finally {
+      setVerifying(false);
+    }
+  }
 
   /**
    * Refreshes the token, and first gives the owner bootstrap a chance to run.
@@ -228,6 +251,14 @@ export default function AccountAccess() {
               value={isStaff(role) ? "unlocked" : "locked"}
               hint="Kitchen board and, for admins, the dashboard"
             />
+            {unverified && (
+              <Row
+                label="Email confirmed"
+                ok={false}
+                value="no"
+                hint="Owner access is only granted to a confirmed address"
+              />
+            )}
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <Button
@@ -239,7 +270,20 @@ export default function AccountAccess() {
                 {busy ? "Refreshing…" : "Refresh my access"}
               </Button>
               <RoleBadge role={actualRole} />
+              {unverified && (
+                <Button onClick={sendVerification} disabled={verifying}>
+                  {verifying ? "Sending…" : "Confirm my email"}
+                </Button>
+              )}
             </div>
+            {unverified && actualRole !== "admin" && (
+              <p className="mt-2 text-xs text-charcoal-soft">
+                If you are the owner, confirm your email first — owner access is
+                only granted to a confirmed address, so that nobody who merely
+                knows it can claim the restaurant. It is applied automatically
+                the next time you sign in.
+              </p>
+            )}
 
             {/* Previewing another role, next to the real one it is previewing
                 instead of only inside the avatar menu, which is where people
