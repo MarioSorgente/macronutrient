@@ -17,7 +17,8 @@
     "test:emulated": "npm run emulators:exec -- \"vitest run --project integration\"",
     "e2e": "npm run emulators:exec -- \"playwright test\"",
     "e2e:ui": "playwright test --ui",
-    "e2e:headed": "npm run emulators:exec -- \"playwright test --headed\""
+    "e2e:headed": "npm run emulators:exec -- \"playwright test --headed\"",
+    "bench": "vitest bench --run --project bench"
   },
   "dependencies": {
     "firebase": "^11.3.1",

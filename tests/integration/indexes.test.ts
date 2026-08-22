@@ -39,7 +39,7 @@ const config = JSON.parse(
  */
 const QUERIES = [
   {
-    where: "src/lib/storage/orders.ts listMyOrders — a customer's own orders",
+    where: "src/lib/storage/orders.ts listOrdersByUser — one person's orders (customer's own, and the admin customer page)",
     collectionGroup: "orders",
     equality: ["userId"],
     orderBy: [{ fieldPath: "submittedAt", order: "DESCENDING" }],

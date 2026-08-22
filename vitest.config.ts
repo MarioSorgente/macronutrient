@@ -43,6 +43,16 @@ export default defineConfig({
         resolve: { alias },
         esbuild: { jsx: "automatic" },
         test: {
+          name: "bench",
+          environment: "node",
+          include: ["tests/bench/**/*.bench.ts"],
+          globals: false,
+        },
+      },
+      {
+        resolve: { alias },
+        esbuild: { jsx: "automatic" },
+        test: {
           name: "integration",
           environment: "node",
           include: ["tests/integration/**/*.test.ts"],

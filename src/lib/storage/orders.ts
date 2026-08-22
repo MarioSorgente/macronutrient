@@ -42,12 +42,17 @@ function requireCloud(action: string): void {
 
 // --- Orders -----------------------------------------------------------------
 
-/** A person's own orders, newest first. */
-export async function listMyOrders(uid: string): Promise<Order[]> {
-  requireCloud("Reading your orders");
+/**
+ * One person's orders, newest first.
+ *
+ * The `userId` filter is not just an optimisation: the security rules only
+ * permit a list that is provably restricted to a single person, so a customer
+ * reading their own orders needs it, and staff reading one customer's orders
+ * get to use the same index instead of scanning the whole order book.
+ */
+export async function listOrdersByUser(uid: string): Promise<Order[]> {
+  requireCloud("Reading orders");
   const { db, collection, getDocs, orderBy, query, where } = await firestore();
-  // The `userId` filter is not just an optimisation: the security rules only
-  // permit a list that is provably restricted to the caller's own orders.
   const snap = await getDocs(
     query(
       collection(db, ORDERS),
@@ -57,6 +62,9 @@ export async function listMyOrders(uid: string): Promise<Order[]> {
   );
   return snap.docs.map((d) => d.data() as Order);
 }
+
+/** A person's own orders. Kept as the name the customer-facing screens use. */
+export const listMyOrders = listOrdersByUser;
 
 export async function getOrder(orderId: string): Promise<Order | null> {
   requireCloud("Reading an order");
@@ -223,11 +231,32 @@ export async function saveRestaurantConfig(
 
 // --- People (admin) ---------------------------------------------------------
 
-export async function listUsers(): Promise<UserProfile[]> {
+/**
+ * The customer list.
+ *
+ * Bounded, like every other collection read here. An unbounded read grows with
+ * signups forever and is billed per document, and nothing on screen uses more
+ * than a page of it. Raise the cap rather than removing it.
+ */
+export async function listUsers(max = 1000): Promise<UserProfile[]> {
   requireCloud("Reading the customer list");
-  const { db, collection, getDocs } = await firestore();
-  const snap = await getDocs(collection(db, "users"));
+  const { db, collection, getDocs, limit, query } = await firestore();
+  const snap = await getDocs(query(collection(db, "users"), limit(max)));
   return snap.docs.map((d) => d.data() as UserProfile);
+}
+
+/**
+ * One customer.
+ *
+ * The customer page used to read the entire users collection and find its one
+ * person in the result — a per-document charge for every account in the
+ * restaurant, on every page view.
+ */
+export async function getUser(uid: string): Promise<UserProfile | null> {
+  requireCloud("Reading a customer");
+  const { db, doc, getDoc } = await firestore();
+  const snap = await getDoc(doc(db, "users", uid));
+  return snap.exists() ? (snap.data() as UserProfile) : null;
 }
 
 // --- Submitting -------------------------------------------------------------
