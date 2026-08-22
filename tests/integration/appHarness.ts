@@ -240,3 +240,27 @@ export async function waitFor<T>(
     `Timed out after ${timeoutMs}ms waiting for ${label}. Last value: ${String(last)}`
   );
 }
+
+/**
+ * Marks an account's email verified, the way clicking the link would.
+ *
+ * The Auth emulator accepts admin-style updates with `Bearer owner`, which is
+ * the only way to reach this state from a test: the client SDK cannot set it,
+ * and the admin bootstrap deliberately refuses an unverified address.
+ */
+export async function setEmailVerified(uid: string): Promise<void> {
+  const res = await fetch(
+    `http://${AUTH_HOST}/identitytoolkit.googleapis.com/v1/accounts:update`,
+    {
+      method: "POST",
+      headers: {
+        authorization: "Bearer owner",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ localId: uid, emailVerified: true }),
+    }
+  );
+  if (!res.ok) {
+    throw new Error(`setEmailVerified failed: ${res.status} ${await res.text()}`);
+  }
+}

@@ -213,6 +213,33 @@ because a document is something a user could try to write:
 The first admin is bootstrapped from an `ADMIN_EMAILS` allowlist held in Secret
 Manager; after that, roles are granted from **Admin → Settings**.
 
+**If you are the owner and the app says your role is `none`**, your account was
+created before the functions were deployed, or before the allowlist contained
+your address. The sign-up trigger runs once and never backfills, so the role
+has to be claimed:
+
+1. Make sure `ADMIN_EMAILS` contains your address and the functions are
+   deployed, then press **Refresh my access** on `/account`. That calls
+   `claimAdminAccess`, which grants admin to any allowlisted, **verified**
+   address — so confirm your email first if you signed up with a password.
+   (Google sign-in is already verified.)
+2. If the functions are not deployed yet, grant it directly from a machine with
+   project access:
+
+   ```bash
+   gcloud auth application-default login
+   GOOGLE_CLOUD_PROJECT=<project-id> \
+     node functions/scripts/grant-role.mjs you@example.com admin
+   ```
+
+   The same script grants `restaurant`. The Firebase console has no editor for
+   custom claims, so there is no way to do this by hand in a browser.
+
+An admin can preview the app as another role — **View as**, on `/account` and in
+the account menu. It changes what you see, not what you can read: an admin
+already passes the staff checks in `firestore.rules`, so the kitchen genuinely
+works while previewing.
+
 ---
 
 ## Orders and the kitchen
