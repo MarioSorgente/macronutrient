@@ -23,7 +23,14 @@ export default function ConfirmButton({
   className,
 }: {
   onConfirm: () => void;
-  /** Accessible name for the armed state, e.g. "Delete Chicken bowl". */
+  /**
+   * Accessible name for the icon-only form, e.g. "Delete Chicken bowl".
+   *
+   * Ignored when `text` is given: overriding a visible label with a different
+   * accessible name breaks WCAG 2.5.3 (Label in Name) — someone using voice
+   * control says what they can see, and "Cancel this week" would not match an
+   * aria-label reading "Cancel this order".
+   */
   label: string;
   confirmLabel?: string;
   /** Render a labelled button instead of the bare icon. */
@@ -65,7 +72,6 @@ export default function ConfirmButton({
       <button
         type="button"
         disabled={disabled}
-        aria-label={label}
         onClick={() => setArmed(true)}
         className={cn(
           "inline-flex items-center gap-1.5 rounded-xl border border-cream-deep bg-white px-3 py-2 text-sm font-600 text-charcoal-soft transition-colors",

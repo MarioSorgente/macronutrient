@@ -60,11 +60,20 @@ export default defineConfig({
     },
   ],
 
+  /**
+   * A production build, not `next dev`.
+   *
+   * The dev server compiles each route lazily on its first request, which added
+   * whole seconds at unpredictable points and made the long journeys flaky at
+   * roughly one run in two. Building once removes that variance — and means
+   * these tests exercise the bundle that actually ships, including the
+   * build-time inlining of every NEXT_PUBLIC_* value.
+   */
   webServer: {
-    command: `npx next dev --port ${PORT}`,
+    command: `npx next build && npx next start --port ${PORT}`,
     url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
+    timeout: 300_000,
     env: EMULATOR_ENV,
   },
 });
