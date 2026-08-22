@@ -8,6 +8,6 @@ initializeApp();
 // A hard ceiling on instances, so a runaway loop cannot turn into a bill.
 setGlobalOptions({ region: REGION, maxInstances: 10 });
 
-export { onUserCreate, setUserRole } from "./roles";
+export { claimAdminAccess, onUserCreate, setUserRole } from "./roles";
 export { submitOrder } from "./submitOrder";
 export { onOrderStatusChanged } from "./orderLifecycle";

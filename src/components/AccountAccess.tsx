@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
 import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
 import { isFirebaseConfigured } from "@/lib/firebaseEnv";
 import { isCloudBackend } from "@/lib/storage";
+import type { Role } from "@/lib/storage/types";
 import { authErrorMessage } from "@/lib/auth/errors";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -55,6 +56,7 @@ export default function AccountAccess() {
     role,
     actualRole,
     viewAs,
+    setViewAs,
     restaurantId,
     enabled,
     loading,
@@ -62,10 +64,35 @@ export default function AccountAccess() {
   } = useAuth();
   const { show } = useToast();
   const [busy, setBusy] = useState(false);
+  /** Set once the viewer has asked for a refresh and still come back empty. */
+  const [triedRefresh, setTriedRefresh] = useState(false);
 
+  /**
+   * Refreshes the token, and first gives the owner bootstrap a chance to run.
+   *
+   * claimAdminAccess grants admin only to an address on the server-side
+   * ADMIN_EMAILS allowlist, so calling it for everyone is safe — a customer
+   * simply gets permission-denied, which is the expected answer and not worth
+   * showing them. Without this the button could only ever report the deadlock:
+   * onUserCreate never backfills, and setUserRole needs an admin to already
+   * exist.
+   */
   async function refresh() {
     setBusy(true);
+    setTriedRefresh(true);
     try {
+      if (isCloudBackend()) {
+        try {
+          const [{ getFunctionsClient }, { httpsCallable }] = await Promise.all([
+            import("@/lib/storage/firebaseFunctions"),
+            import("firebase/functions"),
+          ]);
+          await httpsCallable(getFunctionsClient(), "claimAdminAccess")({});
+        } catch {
+          // Not on the allowlist, or the functions are not deployed. Either
+          // way the refresh below still reports the truth.
+        }
+      }
       const next = await refreshRole();
       show(
         next
@@ -87,16 +114,34 @@ export default function AccountAccess() {
     );
   }
 
+  /**
+   * Deployment internals are for whoever can act on them.
+   *
+   * A diner has no use for environment variable names, Secret Manager or a
+   * deploy command, and showing them is needless detail about how access is
+   * gated.
+   *
+   * "No role yet" is deliberately not enough to qualify. A brand-new account's
+   * ID token is minted before onUserCreate stamps the claim, so every customer
+   * is briefly roleless and would otherwise be shown the developer panel for
+   * the few seconds until their token refreshes. Asking for a refresh and
+   * still coming back with nothing is the real signal that someone is stuck.
+   */
+  const stuck = Boolean(user) && actualRole === null && triedRefresh;
+  const showDiagnostics = isStaff(actualRole) || stuck;
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
       <h1 className="font-display text-2xl font-700 text-charcoal sm:text-3xl">
         Account &amp; access
       </h1>
       <p className="mt-1 text-sm text-charcoal-soft">
-        What this deployment thinks you can do, and where to look if it is wrong.
+        {showDiagnostics
+          ? "What this deployment thinks you can do, and where to look if it is wrong."
+          : "Your details, what this account can do, and how to sign out."}
       </p>
 
-      {!enabled && (
+      {!enabled && showDiagnostics && (
         <Card className="mt-5 border-gold/40 bg-gold/10 p-4">
           <h2 className="flex items-center gap-2 font-600 text-charcoal">
             <ShieldAlert size={16} className="text-gold" /> Accounts are switched
@@ -111,6 +156,7 @@ export default function AccountAccess() {
         </Card>
       )}
 
+      {showDiagnostics && (
       <Card className="mt-5 p-4">
         <h2 className="mb-1 font-display text-lg font-700 text-charcoal">
           This deployment
@@ -134,6 +180,7 @@ export default function AccountAccess() {
           hint="NEXT_PUBLIC_RESTAURANT_ID"
         />
       </Card>
+      )}
 
       <Card className="mt-5 p-4">
         <h2 className="mb-1 font-display text-lg font-700 text-charcoal">
@@ -193,6 +240,42 @@ export default function AccountAccess() {
               </Button>
               <RoleBadge role={actualRole} />
             </div>
+
+            {/* Previewing another role, next to the real one it is previewing
+                instead of only inside the avatar menu, which is where people
+                looked for it and did not find it. */}
+            {actualRole === "admin" && (
+              <div className="mt-4 rounded-xl border border-cream-deep bg-white p-3">
+                <p className="flex items-center gap-1.5 text-sm font-600 text-charcoal">
+                  <Eye size={15} className="text-charcoal-soft" /> View as
+                </p>
+                <p className="mt-0.5 text-xs text-charcoal-soft">
+                  See the app as another role. This changes what you see, not
+                  what you can read — your own access is unchanged.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {(["client", "restaurant", "admin"] as Role[]).map((option) => {
+                    const active =
+                      option === "admin" ? viewAs === null : viewAs === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setViewAs(option === "admin" ? null : option)}
+                        className={
+                          "rounded-lg px-3 py-1.5 text-xs font-600 capitalize transition-colors " +
+                          (active
+                            ? "bg-tomato text-cream"
+                            : "border border-cream-deep bg-white text-charcoal-soft hover:text-charcoal")
+                        }
+                      >
+                        {option}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <p className="mt-2 text-xs text-charcoal-soft">
               Forces a new ID token. Use this if someone has just granted you a
               role — a token issued before the grant does not carry it.
@@ -204,7 +287,7 @@ export default function AccountAccess() {
       {/* Editing your own details, and the way out. */}
       <AccountProfile />
 
-      {user && actualRole === null && (
+      {stuck && user && (
         <Card className="mt-5 p-4">
           <h2 className="font-display text-lg font-700 text-charcoal">
             No role? Check these, in order
@@ -220,10 +303,16 @@ export default function AccountAccess() {
               <b className="text-charcoal">{user.email}</b> exactly.
             </li>
             <li>
-              Your account was created <i>after</i> both of those. The trigger
-              runs on sign-up only and never backfills — if this account is
-              older, delete it and sign up again, or set the claim directly in
-              the Firebase console.
+              Then press <b className="text-charcoal">Refresh my access</b>{" "}
+              above. The sign-up trigger never backfills, so an account older
+              than the deploy needs this to claim the role.
+            </li>
+            <li>
+              Still nothing? Grant it directly, from a machine with project
+              access:{" "}
+              <code>node functions/scripts/grant-role.mjs {user.email} admin</code>
+              . The Firebase console has no editor for custom claims, so this
+              cannot be done by hand in a browser.
             </li>
           </ol>
         </Card>

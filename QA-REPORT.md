@@ -16,11 +16,11 @@ Branch: `claude/production-readiness-qa-ru4hln`.
 | `npm run lint` | Could not pass — `next lint` with no ESLint config and neither `eslint` nor `eslint-config-next` installed | Passes; flat config, `eslint` called directly |
 | Unit tests | 29, in 7 files | **212**, in 17 files |
 | `firestore.rules` | Untested | **58 tests**, one per rule branch |
-| Cloud Functions | Untested | **60 tests** against the emulator |
-| Browser tests | None | **37**, desktop + 375 px phone |
+| Cloud Functions | Untested | **72 tests** against the emulator |
+| Browser tests | None | **43**, desktop + 375 px phone |
 | CI | None | Lint → typecheck → unit → functions build → emulators → build → E2E |
 
-Total: **212 unit + 118 emulated + 37 end-to-end.**
+Total: **212 unit + 130 emulated + 43 end-to-end.**
 
 ---
 
@@ -112,7 +112,55 @@ accessible name.
 - `listUsers()` was unbounded while every other collection read is capped. Now
   takes a limit, defaulting to 1000.
 
-### 8. Four dead imports
+### 8. The first admin could never be recovered — *deadlock*
+
+Reported as "I signed in and I am still not the admin", with the account's
+token reading `none`.
+
+`onUserCreate` is the only thing that stamps the first admin, and it runs **at
+sign-up and never backfills** (its own comment says so). `setUserRole` refuses
+anyone who is not already an admin. So an account created before the functions
+were deployed — or before `ADMIN_EMAILS` held its address — could **never**
+become admin from inside the app, and the app's only advice was to delete it
+and sign up again, discarding that person's plans and orders. A corroborating
+smell: `setUserRole` declared `secrets: [ADMIN_EMAILS]` and never read it.
+
+Every other symptom followed from this one: no role → no Admin link → no
+dashboard → no "View as" switcher, which renders only for a real admin.
+
+Fixed three ways:
+
+- **`claimAdminAccess`**, a callable that grants admin to any signed-in caller
+  whose address is on the Secret Manager allowlist. Idempotent, takes no
+  arguments worth tampering with, and denies with a message that says nothing
+  about *why*, so it cannot be used to probe who is an owner. `/account`'s
+  "Refresh my access" now calls it first, so the button does what its label
+  promises.
+- **`functions/scripts/grant-role.mjs`** for the one case the callable cannot
+  cover — functions not deployed yet. Verified against the emulator and covered
+  by its own tests, because nobody runs it on a normal day and it would
+  otherwise rot unnoticed until someone was already locked out.
+- **A verified-email requirement** on every admin grant. Firebase does not
+  verify an address on password sign-up, so without it anyone who knew an
+  allowlisted address could register it first and take the restaurant — a hole
+  the original trigger had. Only the admin path is gated; ordinary sign-up is
+  unchanged.
+
+### 9. Deployment internals shown to customers
+
+No secret was leaking — only variable *names* and non-secret values, and the
+Firebase web config is public by design. But `ADMIN_EMAILS`, `firebase deploy`
+and `NEXT_PUBLIC_*` are developer content, and they sat on a diner's account
+page. They now render only for staff, or for someone who pressed "Refresh my
+access" and still has no role — deliberately not for merely *having* no role
+yet, since a new account's token is briefly roleless before the claim lands and
+every customer would have seen the panel for those few seconds.
+
+The card also told users to "set the claim directly in the Firebase console".
+The Firebase console has no custom-claims editor, so that instruction could not
+be followed; it now points at the script.
+
+### 10. Four dead imports
 
 Found by the ESLint config on its first run; each confirmed to appear only in
 its own import statement.
@@ -194,9 +242,18 @@ npm ci && npm --prefix functions ci
 cp functions/.secret.example functions/.secret.local   # emulator ADMIN_EMAILS
 npm run lint && npm run typecheck
 npm test                  # 212 unit
-npm run test:emulated     # 118 rules + Cloud Functions
+npm run test:emulated     # 130 rules + Cloud Functions
 npm run build
-npm run e2e               # 37 browser tests, desktop + 375 px
+npm run e2e               # 43 browser tests, desktop + 375 px
+```
+
+To take owner access on a project whose functions are deployed, press
+**Refresh my access** on `/account` with your address in `ADMIN_EMAILS` and
+your email verified. Otherwise:
+
+```bash
+GOOGLE_CLOUD_PROJECT=<project-id> \
+  node functions/scripts/grant-role.mjs you@example.com admin
 ```
 
 All of it runs on every push via `.github/workflows/ci.yml`.

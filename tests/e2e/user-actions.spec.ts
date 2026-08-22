@@ -150,3 +150,38 @@ test.describe("guests", () => {
     await expect(page.getByText(/sign in to see your orders/i)).toBeVisible();
   });
 });
+
+test.describe("what a customer is shown about the deployment", () => {
+  /**
+   * Nothing here is a secret — the Firebase web config is public by design and
+   * only variable NAMES were ever rendered. But environment variables, Secret
+   * Manager and a deploy command are developer content, and a diner has no use
+   * for them or for knowing how owner access is gated.
+   */
+  test("an ordinary account sees no deployment internals", async ({ page }) => {
+    await signUp(page);
+    await page.goto("/account");
+    await expect(page.getByRole("heading", { name: /account & access/i })).toBeVisible();
+
+    const body = await page.locator("main").innerText();
+    expect(body).not.toContain("ADMIN_EMAILS");
+    expect(body).not.toContain("NEXT_PUBLIC_");
+    expect(body).not.toContain("firebase deploy");
+    expect(body).not.toContain("Secret Manager");
+    expect(body).not.toMatch(/this deployment/i);
+  });
+
+  test("but still sees their own details and the way out", async ({ page }) => {
+    await signUp(page);
+    await page.goto("/account");
+    await expect(page.getByLabel("Phone")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+    await expect(page.getByText(/role on your token/i)).toBeVisible();
+  });
+
+  test("view-as is not offered to someone who is not an admin", async ({ page }) => {
+    await signUp(page);
+    await page.goto("/account");
+    await expect(page.getByText(/^view as$/i)).toHaveCount(0);
+  });
+});
