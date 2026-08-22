@@ -3,6 +3,7 @@ import portionData from "@data/enrichment/portions.json";
 import addedData from "@data/enrichment/added-ingredients.json";
 import diyData from "@data/enrichment/diy-menu.json";
 import menuDescriptionData from "@data/enrichment/menu-descriptions.json";
+import menuQuantityData from "@data/enrichment/menu-quantities.json";
 import {
   GRAM_UNIT,
   GRAM_UNIT_ID,
@@ -95,10 +96,52 @@ export const menuNotes = {
     menuText.section_notes[section],
 };
 
-export const menuRecipes: MenuRecipe[] = database.menu_recipes.map((recipe) => ({
-  ...recipe,
-  description: menuText.descriptions[recipe.recipe_id],
-}));
+/**
+ * Gram quantities the printed menu leaves out, derived by fitting each recipe
+ * to the macros the menu itself publishes (scripts/fit-menu-quantities.mjs).
+ *
+ * Without these, 24 of the 25 menu dishes compute from only their stated
+ * components — understating their macros by 30-90%, and leaving five so far
+ * below any plausible target that the planner discarded them outright. An
+ * Oatmeal Bowl came to 108 kcal, which is why oats, pancakes and waffles never
+ * appeared in a generated week.
+ */
+const fittedQuantities = (
+  menuQuantityData as {
+    recipes: Record<
+      string,
+      {
+        quantities: Record<string, number>;
+        fit: { worst_macro: string; worst_pct: number };
+      }
+    >;
+  }
+).recipes;
+
+export const menuRecipes: MenuRecipe[] = database.menu_recipes.map((recipe) => {
+  const fitted = fittedQuantities[recipe.recipe_id];
+  if (!fitted) {
+    return { ...recipe, description: menuText.descriptions[recipe.recipe_id] };
+  }
+
+  const components = recipe.components.map((component) =>
+    component.quantity_g == null &&
+    typeof fitted.quantities[component.ingredient_id] === "number"
+      ? { ...component, quantity_g: fitted.quantities[component.ingredient_id] }
+      : component
+  );
+
+  return {
+    ...recipe,
+    components,
+    description: menuText.descriptions[recipe.recipe_id],
+    quantity_complete: components.every((c) => c.quantity_g != null),
+    derived_quantities: {
+      worstPct: fitted.fit.worst_pct,
+      worstMacro: fitted.fit.worst_macro,
+    },
+  };
+});
 export const databaseMeta = {
   name: database.database_name,
   version: database.schema_version,

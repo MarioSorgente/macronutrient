@@ -3,8 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Receipt, User as UserIcon } from "lucide-react";
-import { useAuth } from "@/lib/auth/AuthProvider";
+import {
+  ChefHat,
+  Eye,
+  LogOut,
+  Receipt,
+  ShieldCheck,
+  User as UserIcon,
+} from "lucide-react";
+import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
+import type { Role } from "@/lib/storage/types";
 import { cn } from "@/components/ui/cn";
 
 /** Initials for the avatar, falling back to the email's first character. */
@@ -19,7 +27,8 @@ function initials(name: string, email: string): string {
  * including the staff destinations the account's role unlocks.
  */
 export default function AccountMenu() {
-  const { user, role, loading, enabled, signOut } = useAuth();
+  const { user, role, actualRole, viewAs, setViewAs, loading, enabled, signOut } =
+    useAuth();
   const router = useRouter();
   const pathname = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
@@ -44,8 +53,19 @@ export default function AccountMenu() {
   // Close on navigation, so the menu never survives a route change.
   useEffect(() => setOpen(false), [pathname]);
 
-  // Nothing to offer when accounts are not configured for this deployment.
-  if (!enabled) return null;
+  // Rendering nothing here made an unconfigured deployment indistinguishable
+  // from a working signed-out one — there was no Sign in button and no
+  // explanation, which is exactly how "I cannot find the admin page" starts.
+  if (!enabled) {
+    return (
+      <span
+        title="The NEXT_PUBLIC_FIREBASE_* variables are missing from this build. They are inlined at build time, so adding them needs a redeploy."
+        className="shrink-0 whitespace-nowrap rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1 text-[11px] font-600 text-charcoal"
+      >
+        Accounts off
+      </span>
+    );
+  }
 
   if (loading) {
     return <span className="h-8 w-8 shrink-0 rounded-full bg-cream-deep" aria-hidden />;
@@ -108,6 +128,69 @@ export default function AccountMenu() {
           >
             <Receipt size={15} className="text-charcoal-soft" /> My orders
           </Link>
+
+          {isStaff(role) && (
+            <Link
+              href="/kitchen"
+              role="menuitem"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream"
+            >
+              <ChefHat size={15} className="text-charcoal-soft" /> Kitchen
+            </Link>
+          )}
+
+          {role === "admin" && (
+            <Link
+              href="/admin"
+              role="menuitem"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream"
+            >
+              <ShieldCheck size={15} className="text-charcoal-soft" /> Admin
+            </Link>
+          )}
+
+          <Link
+            href="/account"
+            role="menuitem"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream"
+          >
+            <UserIcon size={15} className="text-charcoal-soft" /> Account & access
+          </Link>
+
+          {/* Only an admin can preview, and only their real role unlocks it. */}
+          {actualRole === "admin" && (
+            <div className="border-t border-cream-deep px-3 py-2">
+              <p className="flex items-center gap-1.5 text-[11px] font-600 uppercase tracking-wide text-charcoal-soft">
+                <Eye size={12} /> View as
+              </p>
+              <div className="mt-1.5 flex gap-1">
+                {(["client", "restaurant", "admin"] as Role[]).map((option) => {
+                  const active =
+                    option === "admin" ? viewAs === null : viewAs === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() =>
+                        setViewAs(option === "admin" ? null : option)
+                      }
+                      className={cn(
+                        "flex-1 rounded-lg px-2 py-1 text-[11px] font-600 capitalize transition-colors",
+                        active
+                          ? "bg-tomato text-cream"
+                          : "border border-cream-deep bg-white text-charcoal-soft hover:text-charcoal"
+                      )}
+                    >
+                      {option}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[10px] leading-snug text-charcoal-soft">
+                Changes what you see, not what you can read.
+              </p>
+            </div>
+          )}
 
           <button
             type="button"

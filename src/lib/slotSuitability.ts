@@ -163,13 +163,49 @@ export function mealSlotPenalty(
 }
 
 /**
- * Menu dishes and saved dishes are matched by name, since they are not built
- * from a component list the planner controls.
+ * Negrita's own menu sections, which are a far better signal than the name.
+ *
+ * Guessing from words missed "Thai Boy - Beefy" and "Unagi Shogun" at
+ * breakfast, because no regex is going to know those are dinner. The menu
+ * already groups every dish, so use that and keep the word list only for saved
+ * dishes people name themselves.
+ */
+const SECTION_KIND: Record<string, SlotKind> = {
+  breakfast_and_sweets: "breakfast",
+  fitness_meals: "main",
+  kebab_combo: "main",
+};
+
+/**
+ * Suitability of a menu dish, from the section the restaurant filed it under.
+ * Returns null when the section is unknown, so the caller can fall back.
+ */
+export function sectionSlotPenalty(
+  section: string | undefined,
+  slot: string
+): number | null {
+  const belongsTo = section ? SECTION_KIND[section] : undefined;
+  if (!belongsTo) return null;
+
+  const kind = slotKindOf(slot);
+  if (kind === belongsTo) return RIGHT_TIME_BONUS;
+
+  // A dinner plate at breakfast is the jarring case; the reverse is milder,
+  // since a breakfast dish is usually just light for an evening meal.
+  if (kind === "breakfast" && belongsTo === "main") return WRONG_TIME_PENALTY;
+  if (kind === "main" && belongsTo === "breakfast") return MILDLY_WRONG_PENALTY;
+  if (kind === "snack") return MILDLY_WRONG_PENALTY;
+  return 0;
+}
+
+/**
+ * Saved dishes are matched by name, since a dish someone built themselves has
+ * no section to consult.
  */
 const DINNERY_WORDS =
   /steak|kebab|kofta|peri.?peri|teriyaki|mushroom sauce|wagyu|curry|rendang|satay|burger|bowl of rice/i;
 const BREAKFASTY_WORDS =
-  /breakfast|omelet|omelette|scrambl|benedict|pancake|granola|porridge|oat|toast|croissant|smoothie|yogurt|acai/i;
+  /breakfast|omelet|omelette|scrambl|benedict|pancake|waffle|granola|porridge|oat|toast|croissant|smoothie|yogurt|acai|banana bread/i;
 
 export function namedDishSlotPenalty(name: string, slot: string): number {
   const kind = slotKindOf(slot);

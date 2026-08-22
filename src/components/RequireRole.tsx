@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -44,12 +45,32 @@ export default function RequireRole({
   if (!user) return null; // redirecting
 
   if (!allowed) {
+    // A missing claim and a wrong claim used to show the same message, which
+    // blamed the account when the real cause was often that the role had never
+    // been stamped at all. They need different advice.
+    const noClaim = role === null;
     return (
       <main className="mx-auto max-w-3xl px-4 py-16">
         <EmptyState
           icon={<ShieldAlert size={22} />}
-          title="This area is for Negrita staff"
-          hint="Your account does not have access. If that looks wrong, ask the restaurant to update your role."
+          title={
+            noClaim
+              ? "Your account has no role yet"
+              : "This area is for Negrita staff"
+          }
+          hint={
+            noClaim
+              ? "Nothing has granted this account a role. If you are the owner, check that the Cloud Functions are deployed and that ADMIN_EMAILS matches your email — then sign out and back in."
+              : "Your account is signed in as a client. Ask the restaurant to update your role."
+          }
+          action={
+            <Link
+              href="/account"
+              className="inline-flex rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
+            >
+              Check my access
+            </Link>
+          }
         />
       </main>
     );

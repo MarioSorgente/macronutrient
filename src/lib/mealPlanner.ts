@@ -5,7 +5,11 @@ import { EMPTY_MACROS, addMacros, perItemMacros, sumDishMacros } from "@/lib/cal
 import { ZERO_PRICE, addPrices, priceItems, type PriceResult } from "@/lib/pricing";
 import { TARGET_FIELDS, adherencePct } from "@/lib/clients";
 import { proteinSourceOf } from "@/lib/preferences";
-import { mealSlotPenalty, namedDishSlotPenalty } from "@/lib/slotSuitability";
+import {
+  mealSlotPenalty,
+  namedDishSlotPenalty,
+  sectionSlotPenalty,
+} from "@/lib/slotSuitability";
 import {
   DEFAULT_PREFERENCES,
   type ClientPreferences,
@@ -413,7 +417,9 @@ function readyCandidates(
       priceIdr,
       score:
         scoreAgainst(macros, target) +
-        namedDishSlotPenalty(recipe.name, slot),
+        // The menu section is authoritative; the name is only a fallback.
+        (sectionSlotPenalty(recipe.section, slot) ??
+          namedDishSlotPenalty(recipe.name, slot)),
       mealKey: `recipe:${recipe.recipe_id}`,
       proteinKey: `recipe:${recipe.recipe_id}`,
       carbKey: `recipe:${recipe.recipe_id}`,

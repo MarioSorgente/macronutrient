@@ -121,6 +121,12 @@ export interface MenuRecipe {
   quantity_complete: boolean;
   /** What the dish actually contains, as printed on the menu. */
   description?: string;
+  /**
+   * Set when the missing gram quantities were derived by fitting the recipe to
+   * the macros the menu publishes, rather than printed on the menu itself.
+   * `worstPct` is the largest miss across calories, protein, carbs and fat.
+   */
+  derived_quantities?: { worstPct: number; worstMacro: string };
 }
 
 export interface NutritionDatabase {
