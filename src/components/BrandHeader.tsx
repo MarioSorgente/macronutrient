@@ -6,6 +6,7 @@ import { UtensilsCrossed } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
 import AccountMenu from "@/components/AccountMenu";
+import RoleBadge from "@/components/RoleBadge";
 
 /**
  * App shell header. "Mamma Calories" is the product brand; "For Negrita" is the
@@ -31,10 +32,28 @@ const ACCOUNT_LINKS: NavLink[] = [
   { href: "/orders", label: "My orders", match: (p) => p.startsWith("/orders") },
 ];
 
-/** Only rendered for accounts whose role actually grants them. */
-const STAFF_LINKS: NavLink[] = [
+/**
+ * Staff destinations, split by what the role can actually use.
+ *
+ * `restaurant` used to be offered an Admin link that led straight to "Owner
+ * access only" — a dead end that also made the two staff roles look identical
+ * until one of them failed.
+ */
+const KITCHEN_LINKS: NavLink[] = [
   { href: "/kitchen", label: "Kitchen", match: (p) => p.startsWith("/kitchen") },
-  { href: "/admin", label: "Admin", match: (p) => p.startsWith("/admin") },
+  {
+    href: "/admin/house-items",
+    label: "House items",
+    match: (p) => p.startsWith("/admin/house-items"),
+  },
+];
+
+const ADMIN_LINKS: NavLink[] = [
+  {
+    href: "/admin",
+    label: "Admin",
+    match: (p) => p.startsWith("/admin") && !p.startsWith("/admin/house-items"),
+  },
 ];
 
 export default function BrandHeader() {
@@ -43,7 +62,8 @@ export default function BrandHeader() {
   const links = [
     ...LINKS,
     ...(user ? ACCOUNT_LINKS : []),
-    ...(isStaff(role) ? STAFF_LINKS : []),
+    ...(isStaff(role) ? KITCHEN_LINKS : []),
+    ...(role === "admin" ? ADMIN_LINKS : []),
   ];
 
   return (
@@ -64,6 +84,7 @@ export default function BrandHeader() {
         </Link>
 
         <nav className="scroll-slim -mx-1 flex items-center gap-1 overflow-x-auto px-1 text-sm font-600">
+          {isStaff(role) && <RoleBadge role={role} />}
           {links.map((link) => (
             <Link
               key={link.href}
