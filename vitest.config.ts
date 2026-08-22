@@ -52,8 +52,10 @@ export default defineConfig({
           testTimeout: 30_000,
           hookTimeout: 60_000,
           // Rules tests share one emulator project namespace, so parallel
-          // files would clear each other's seed data mid-assertion.
-          fileParallelism: false,
+          // files would clear each other's seed data mid-assertion. One fork
+          // serialises them without slowing the unit project down.
+          pool: "forks",
+          poolOptions: { forks: { singleFork: true } },
         },
       },
     ],
