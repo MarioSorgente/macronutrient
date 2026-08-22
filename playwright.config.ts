@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
 
 /**
@@ -32,6 +33,7 @@ const EMULATOR_ENV = {
 };
 
 const PORT = 3100;
+const PINNED_CHROMIUM = "/opt/pw-browsers/chromium";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -47,9 +49,12 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${PORT}`,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    // Chromium ships with this image at a fixed path; never run
-    // `playwright install` here.
-    launchOptions: { executablePath: "/opt/pw-browsers/chromium" },
+    // Some sandboxes ship Chromium at a fixed path and forbid downloading one.
+    // Elsewhere (CI, a laptop) Playwright's own managed browser is correct, so
+    // only pin the path when it is actually there.
+    launchOptions: existsSync(PINNED_CHROMIUM)
+      ? { executablePath: PINNED_CHROMIUM }
+      : {},
   },
 
   projects: [
