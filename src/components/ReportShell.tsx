@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Printer, UtensilsCrossed } from "lucide-react";
 import { databaseMeta } from "@/lib/database";
 import { formatDate } from "@/lib/format";
+import AccountMenu from "@/components/AccountMenu";
 
 /**
  * Chrome shared by every printable report: the screen-only action bar, the
@@ -13,6 +14,10 @@ import { formatDate } from "@/lib/format";
  * The dish report and the plan report had each written all of this out, which
  * meant the brand block and the "how macros are calculated" note existed twice
  * and could disagree about what the app actually does.
+ *
+ * The action bar carries the account menu because these pages render without
+ * BrandHeader — a customer who landed on their receipt had no nav, no account
+ * menu and so no way to sign out from the page they were actually on.
  */
 export default function ReportShell({
   backHref,
@@ -54,6 +59,7 @@ export default function ReportShell({
             >
               <Printer size={16} /> Print / Save as PDF
             </button>
+            <AccountMenu />
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Bike, Clock, Send, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { readStoredProfile } from "@/lib/auth/profile";
 import { useRepos } from "@/lib/storage/repos";
 import { loadCurrentPlan } from "@/lib/currentPlan";
 import { byId, DAY_NAMES } from "@/lib/clients";
@@ -57,6 +58,8 @@ export default function SubmitWeek() {
   const [config, setConfig] = useState<RestaurantConfig | null>(null);
   const [week, setWeek] = useState(1);
   const [fulfilment, setFulfilment] = useState<FulfilmentByDay>({});
+  /** The customer's saved delivery address, used to pre-fill a delivery day. */
+  const [defaultAddress, setDefaultAddress] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,17 +109,44 @@ export default function SubmitWeek() {
   );
   const problems = useMemo(() => fulfilmentProblems(days), [days]);
 
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    void (async () => {
+      const profile = await readStoredProfile(user.uid);
+      if (active && profile?.defaultAddress) setDefaultAddress(profile.defaultAddress);
+    })().catch(() => {
+      // A missing default address is not worth blocking the submit screen.
+    });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
   const cutoff = useMemo(() => {
     if (!plan || !config) return null;
     return cutoffState(weekStartDate(plan, week), cutoffConfigOf(config));
   }, [plan, config, week]);
 
-  const setDay = useCallback((day: number, patch: Partial<Fulfilment>) => {
-    setFulfilment((current) => ({
-      ...current,
-      [day]: { ...DEFAULT_FULFILMENT, ...current[day], ...patch },
-    }));
-  }, []);
+  const setDay = useCallback(
+    (day: number, patch: Partial<Fulfilment>) => {
+      setFulfilment((current) => {
+        const next: Fulfilment = {
+          ...DEFAULT_FULFILMENT,
+          ...current[day],
+          ...patch,
+        };
+        // Switching a day to delivery pre-fills the address saved on the
+        // profile, so it is typed once rather than every week. A manual edit
+        // always wins: this only fills a blank.
+        if (next.mode === "delivery" && !next.address?.trim() && defaultAddress) {
+          next.address = defaultAddress;
+        }
+        return { ...current, [day]: next };
+      });
+    },
+    [defaultAddress]
+  );
 
   /** Most people want the same arrangement every day; make that one click. */
   const applyToAll = useCallback(() => {

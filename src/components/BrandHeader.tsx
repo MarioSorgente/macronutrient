@@ -83,25 +83,35 @@ export default function BrandHeader() {
           </span>
         </Link>
 
-        <nav className="scroll-slim -mx-1 flex items-center gap-1 overflow-x-auto px-1 text-sm font-600">
-          {isStaff(role) && <RoleBadge role={role} />}
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              aria-current={link.match(pathname) ? "page" : undefined}
-              className={cn(
-                "shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 transition-colors",
-                link.match(pathname)
-                  ? "bg-tomato text-cream"
-                  : "text-charcoal-soft hover:bg-cream-deep hover:text-charcoal"
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
+        {/*
+          The account menu is a sibling of the scrolling nav, not a child of it.
+          `overflow-x: auto` forces the computed `overflow-y` to `auto` too, so
+          the nav is a scroll container in both axes: an account dropdown inside
+          it was clipped — document.elementFromPoint over the "Sign out" row
+          returned the page behind it — and on a phone the avatar itself was
+          laid out past the right edge of the viewport. Only the links scroll now.
+        */}
+        <div className="flex min-w-0 items-center gap-2">
+          <nav className="scroll-slim -mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 text-sm font-600">
+            {isStaff(role) && <RoleBadge role={role} />}
+            {links.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={link.match(pathname) ? "page" : undefined}
+                className={cn(
+                  "shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 transition-colors",
+                  link.match(pathname)
+                    ? "bg-tomato text-cream"
+                    : "text-charcoal-soft hover:bg-cream-deep hover:text-charcoal"
+                )}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
           <AccountMenu />
-        </nav>
+        </div>
       </div>
     </header>
   );

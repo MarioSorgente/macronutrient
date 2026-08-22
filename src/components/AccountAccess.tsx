@@ -11,6 +11,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import RoleBadge from "@/components/RoleBadge";
+import AccountProfile from "@/components/AccountProfile";
 import { useToast } from "@/components/ui/Toast";
 
 /**
@@ -199,6 +200,9 @@ export default function AccountAccess() {
           </>
         )}
       </Card>
+
+      {/* Editing your own details, and the way out. */}
+      <AccountProfile />
 
       {user && actualRole === null && (
         <Card className="mt-5 p-4">
