@@ -1,3 +1,5 @@
+export { mondayAhead } from "../shared";
+
 import type { Page } from "@playwright/test";
 
 /** Unique address per test, so the emulator's account list never collides. */
@@ -133,14 +135,6 @@ export async function until<T>(
 }
 
 /** A Monday `weeks` weeks from the current one, as yyyy-mm-dd. */
-export function mondayAhead(weeks: number): string {
-  const now = new Date();
-  const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const dow = (new Date(midnight).getUTCDay() + 6) % 7; // 0 = Monday
-  return new Date(midnight - dow * 86_400_000 + weeks * 7 * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-}
 
 const AUTH_EMULATOR = "http://127.0.0.1:9099";
 

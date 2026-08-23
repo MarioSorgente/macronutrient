@@ -1,3 +1,7 @@
+import { mondayAhead } from "../shared";
+
+export { mondayAhead };
+
 import { adminAuth, adminDb } from "@/lib/server/firebaseAdmin";
 
 /**
@@ -67,15 +71,6 @@ export async function resetEmulators(): Promise<void> {
   ]);
 }
 
-/** A Monday `weeks` weeks out, so a week's cutoff is still open. */
-export function mondayAhead(weeks: number): string {
-  const now = new Date();
-  const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const dow = (new Date(midnight).getUTCDay() + 6) % 7;
-  return new Date(midnight - dow * 86_400_000 + weeks * 7 * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-}
 
 export async function seedRestaurant(over: Record<string, unknown> = {}) {
   await adminDb().doc(`restaurants/${RID}`).set({

@@ -34,6 +34,7 @@ import type {
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
+import SignInPrompt from "@/components/SignInPrompt";
 import Input from "@/components/ui/Input";
 import MacroChips from "@/components/MacroChips";
 import SegmentedToggle from "@/components/SegmentedToggle";
@@ -199,18 +200,11 @@ export default function SubmitWeek() {
   if (!user) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16">
-        <EmptyState
+        <SignInPrompt
           icon={<Send size={22} />}
           title="Sign in to send this week to the kitchen"
           hint="Your plan stays on this device until you do, and moves to your account when you sign in."
-          action={
-            <Link
-              href="/login?next=/plan/submit"
-              className="inline-flex rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
-            >
-              Sign in
-            </Link>
-          }
+          next="/plan/submit"
         />
       </main>
     );

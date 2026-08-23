@@ -23,9 +23,14 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
  * NEXT_PUBLIC_FIREBASE_* values, which are public by design.
  */
 
-/** The tenant this deployment serves. Mirrors NEXT_PUBLIC_RESTAURANT_ID. */
-export const RESTAURANT_ID =
-  process.env.NEXT_PUBLIC_RESTAURANT_ID || "negrita";
+/**
+ * The tenant this deployment serves.
+ *
+ * Re-exported from the shared module rather than read again here: two copies
+ * of this could drift, and a server writing to a different restaurant id than
+ * the browser reads from would split the data in a way nothing would flag.
+ */
+export { RESTAURANT_ID } from "@/lib/firebaseEnv";
 
 /**
  * Owner allowlist, comma-separated. A plain server env var rather than

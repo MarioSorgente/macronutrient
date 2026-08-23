@@ -1,18 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { CheckCircle2, Eye, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
+import { CheckCircle2, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
 import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
 import { isFirebaseConfigured } from "@/lib/firebaseEnv";
 import { isCloudBackend } from "@/lib/storage";
-import type { Role } from "@/lib/storage/types";
 import { authErrorMessage } from "@/lib/auth/errors";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import EmptyState from "@/components/ui/EmptyState";
+import SignInPrompt from "@/components/SignInPrompt";
 import RoleBadge from "@/components/RoleBadge";
 import AccountProfile from "@/components/AccountProfile";
+import ViewAsSwitch from "@/components/ViewAsSwitch";
 import { useToast } from "@/components/ui/Toast";
 
 /**
@@ -56,7 +55,6 @@ export default function AccountAccess() {
     role,
     actualRole,
     viewAs,
-    setViewAs,
     restaurantId,
     enabled,
     loading,
@@ -211,18 +209,11 @@ export default function AccountAccess() {
         </h2>
 
         {!user ? (
-          <EmptyState
+          <SignInPrompt
             className="mt-3"
             title="Not signed in"
             hint="Sign in to see what your account can do."
-            action={
-              <Link
-                href="/login?next=/account"
-                className="inline-flex rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
-              >
-                Sign in
-              </Link>
-            }
+            next="/account"
           />
         ) : (
           <>
@@ -285,41 +276,9 @@ export default function AccountAccess() {
               </p>
             )}
 
-            {/* Previewing another role, next to the real one it is previewing
-                instead of only inside the avatar menu, which is where people
-                looked for it and did not find it. */}
-            {actualRole === "admin" && (
-              <div className="mt-4 rounded-xl border border-cream-deep bg-white p-3">
-                <p className="flex items-center gap-1.5 text-sm font-600 text-charcoal">
-                  <Eye size={15} className="text-charcoal-soft" /> View as
-                </p>
-                <p className="mt-0.5 text-xs text-charcoal-soft">
-                  See the app as another role. This changes what you see, not
-                  what you can read — your own access is unchanged.
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {(["client", "restaurant", "admin"] as Role[]).map((option) => {
-                    const active =
-                      option === "admin" ? viewAs === null : viewAs === option;
-                    return (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => setViewAs(option === "admin" ? null : option)}
-                        className={
-                          "rounded-lg px-3 py-1.5 text-xs font-600 capitalize transition-colors " +
-                          (active
-                            ? "bg-tomato text-cream"
-                            : "border border-cream-deep bg-white text-charcoal-soft hover:text-charcoal")
-                        }
-                      >
-                        {option}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* Next to the real role it is previewing, rather than only inside
+                the avatar menu, which is where people looked and did not find it. */}
+            <ViewAsSwitch className="mt-4 rounded-xl border border-cream-deep bg-white p-3" />
             <p className="mt-2 text-xs text-charcoal-soft">
               Forces a new ID token. Use this if someone has just granted you a
               role — a token issued before the grant does not carry it.
