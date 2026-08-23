@@ -29,6 +29,7 @@ export type ProteinFamily =
 export type CarbFamily =
   | "rice"
   | "buckwheat"
+  | "oats"
   | "potato"
   | "bread"
   | "wrap"
@@ -43,9 +44,13 @@ export interface PlannerCandidateIngredient {
 }
 
 export interface PlannerModificationOption {
-  type: "remove_ingredient" | "adjust_portion";
+  type: "remove_ingredient" | "add_ingredient";
   ingredientId?: string;
   label: string;
+  /** Fixed, operationally-approved amount. The optimizer may not choose one. */
+  grams: number;
+  /** Nutritional delta applied to the published base dish. */
+  macroDelta: Macros;
 }
 
 /** One optimizer input, irrespective of where the meal originated. */
@@ -64,6 +69,8 @@ export interface PlannerCandidate {
   mealArchetype: string;
   eligibleMealTypes: string[];
   macroConfidence: MacroConfidence;
+  /** Menu dishes receive this priority when the menu preference is enabled. */
+  readyMadePriority: "high" | "normal";
   modificationOptions: PlannerModificationOption[];
   dietaryTags: string[];
   allergenTags: string[];

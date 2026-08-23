@@ -386,6 +386,10 @@ function readyCandidates(
     items.some((i) => avoid.includes(i.ingredientId));
 
   for (const normalized of readyPlannerCatalog(savedDishes, menuDishes)) {
+    const slotMealType = slot.toLowerCase().includes("breakfast") ? "breakfast"
+      : /snack|pre-?workout|post-?workout/.test(slot.toLowerCase()) ? "snack"
+      : slot.toLowerCase().includes("lunch") ? "lunch" : "dinner";
+    if (!normalized.eligibleMealTypes.includes(slotMealType)) continue;
     const items: DishItem[] = normalized.breakdown.map((item) => ({
       ingredientId: item.ingredientId, name: item.name, grams: item.grams,
       unitId: GRAM_UNIT_ID, quantity: item.grams,
