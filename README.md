@@ -188,7 +188,15 @@ The end-to-end suite runs against a production build rather than `next dev`,
 because the dev server compiles routes on first request and that made the long
 journeys flaky. It also means the tests exercise the bundle that ships.
 
-Everything above runs on every push via `.github/workflows/ci.yml`.
+CI (`.github/workflows/ci.yml`) runs the fast half on every push: lint,
+typecheck, `npm test` and the production build — about a minute. The emulated
+and end-to-end suites are deliberately left out, because a JVM and a Chromium
+download are most of the wall clock and both suites run fine on your own
+machine.
+
+So one habit matters: **run `npm run test:emulated` whenever you change
+`firestore.rules`.** Nothing in CI covers them, and rules that are wrong deny
+every read in the app.
 
 ---
 

@@ -1,18 +1,37 @@
 name: CI
 
+# Push only, deliberately. Adding `pull_request:` as well would run the whole
+# job twice on the same commit whenever a PR is open — runs #14 and #15 both
+# fired on 908f63c, three seconds apart. A push-triggered run still reports on
+# the PR, because the check is attached to the head commit either way.
 on:
   push:
     branches: ["**"]
-  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The fast gate: lint, types, unit tests and a production build.
+#
+# The emulated suite (rules, indexes, server logic) and the Playwright journeys
+# are NOT here. They are the slow half — a JVM for the Firestore emulator and a
+# Chromium download — and they run locally instead:
+#
+#   npm run test:emulated     # run this whenever firestore.rules changes
+#   npm run e2e
+#
+# `firestore.rules` is the one to be careful about: nothing below covers it, and
+# rules that are wrong deny every read in the app.
+#
+# What does stay covered here is src/lib/server/runtime.test.ts, which is part
+# of the unit project. It guards the ERR_REQUIRE_ESM failure that took every API
+# route down in production, so removing the `jose` pin from package.json still
+# turns this red.
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -21,12 +40,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-
-      # The Firestore emulator is a Java process.
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
 
       - name: Install
         run: npm ci
@@ -40,22 +53,5 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Rules, index and server tests
-        run: npm run test:emulated
-
-      - name: Install Playwright's browser
-        run: npx playwright install --with-deps chromium
-
-      # Builds the app itself as part of the Playwright webServer.
-      - name: End-to-end tests
-        run: npm run e2e
-
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 7
+      - name: Production build
+        run: npm run build

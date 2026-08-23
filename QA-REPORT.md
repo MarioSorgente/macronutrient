@@ -433,4 +433,6 @@ GOOGLE_CLOUD_PROJECT=<project-id> \
   node scripts/grant-role.mjs you@example.com admin
 ```
 
-All of it runs on every push via `.github/workflows/ci.yml`.
+CI runs the fast half on every push — lint, typecheck, unit tests and the
+production build. `test:emulated` and `e2e` are run locally; `test:emulated` is
+the one to remember, because it is the only coverage `firestore.rules` has.
