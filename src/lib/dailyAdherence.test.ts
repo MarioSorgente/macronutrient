@@ -8,7 +8,12 @@ const targets = { energy_kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 70 };
 
 describe("daily adherence policy", () => {
   it("uses the shared percent and absolute daily tolerances", () => {
-    expect(DAILY_TOLERANCES.energy_kcal).toEqual({ kind: "percent", amount: 0.02 });
+    expect(DAILY_TOLERANCES).toEqual({
+      energy_kcal: { kind: "percent", amount: 0.03 },
+      protein_g: { kind: "absolute", amount: 5 },
+      carbs_g: { kind: "absolute", amount: 6 },
+      fat_g: { kind: "absolute", amount: 4 },
+    });
     const result = diagnoseDailyAdherence(
       { ...targets, energy_kcal: 2040, protein_g: 146, carbs_g: 205, fat_g: 73, fiber_g: 0 },
       targets
@@ -19,7 +24,7 @@ describe("daily adherence policy", () => {
 
   it("identifies best-effort failure dimensions and reason codes", () => {
     const result = diagnoseDailyAdherence(
-      { ...targets, protein_g: 145, fat_g: 74, fiber_g: 0 },
+      { ...targets, protein_g: 144, fat_g: 75, fiber_g: 0 },
       targets,
       { kitchenPortionsConstrained: true }
     );
@@ -30,8 +35,8 @@ describe("daily adherence policy", () => {
       "kitchen_portion_increments_prevent_compliance",
     ]);
     expect(result.macros.protein_g).toMatchObject({
-      target: 150, actual: 145, deviation: -5, signedDeviation: -5,
-      tolerance: 4, allowedTolerance: 4, status: "fail", compliant: false,
+      target: 150, actual: 144, deviation: -6, signedDeviation: -6,
+      tolerance: 5, allowedTolerance: 5, status: "fail", compliant: false,
     });
     expect(result.reasons).toEqual([
       { code: "protein_below_tolerance", message: "Protein cannot reach its lower bound." },

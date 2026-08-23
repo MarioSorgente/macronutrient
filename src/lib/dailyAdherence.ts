@@ -2,10 +2,10 @@ import type { Macros } from "@/types/nutrition";
 import type { MacroTargets } from "@/lib/storage/types";
 
 export const DAILY_TOLERANCES = {
-  energy_kcal: { kind: "percent", amount: 0.02 },
-  protein_g: { kind: "absolute", amount: 4 },
-  carbs_g: { kind: "absolute", amount: 5 },
-  fat_g: { kind: "absolute", amount: 3 },
+  energy_kcal: { kind: "percent", amount: 0.03 },
+  protein_g: { kind: "absolute", amount: 5 },
+  carbs_g: { kind: "absolute", amount: 6 },
+  fat_g: { kind: "absolute", amount: 4 },
 } as const;
 
 export const DAILY_MACRO_KEYS = [
