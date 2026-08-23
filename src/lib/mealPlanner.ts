@@ -1,7 +1,7 @@
-import type { DiySection, Ingredient, Macros } from "@/types/nutrition";
+import type { DiySection, Ingredient, Macros, PlannerCandidate } from "@/types/nutrition";
 import { GRAM_UNIT_ID } from "@/types/nutrition";
 import { diyMenu, getIngredient, menuRecipes } from "@/lib/database";
-import { EMPTY_MACROS, addMacros, perItemMacros, sumDishMacros } from "@/lib/calc";
+import { EMPTY_MACROS, addMacros, perItemMacros } from "@/lib/calc";
 import { ZERO_PRICE, addPrices, priceItems, type PriceResult } from "@/lib/pricing";
 import { TARGET_FIELDS, adherencePct } from "@/lib/clients";
 import {
@@ -10,6 +10,7 @@ import {
   type MacroAdherenceDiagnostic,
 } from "@/lib/dailyAdherence";
 import { proteinSourceOf } from "@/lib/preferences";
+import { generatedDiyCandidate, readyPlannerCatalog } from "@/lib/plannerCandidates";
 import {
   mealSlotPenalty,
   namedDishSlotPenalty,
@@ -251,7 +252,8 @@ function remaining(target: MacroTargets, macros: Macros): MacroTargets {
 
 // --- meal construction -------------------------------------------------------
 
-interface Candidate {
+interface Candidate extends PlannerCandidate {
+  /** Output aliases retained at the planner boundary. */
   name: string;
   items: DishItem[];
   macros: Macros;
@@ -337,11 +339,18 @@ function composedCandidates(
         parts.map((c) => c.ingredient.ingredient_id),
         slot
       );
-      out.push({
-        name: `${protein.ingredient.diy_name ?? protein.ingredient.name} + ${
+      const name = `${protein.ingredient.diy_name ?? protein.ingredient.name} + ${
           carb.ingredient.diy_name ?? carb.ingredient.name
-        }`,
-        items: parts.map(toDishItem),
+        }`;
+      const items = parts.map(toDishItem);
+      const normalized = generatedDiyCandidate({
+        id: parts.map((part) => `${part.ingredient.ingredient_id}:${part.grams}`).join("+"),
+        name, items, macros, priceIdr,
+      });
+      out.push({
+        ...normalized,
+        name,
+        items,
         macros,
         priceIdr,
         score:
@@ -350,9 +359,9 @@ function composedCandidates(
           leanBonus(protein.ingredient, preferences.proteinLean) +
           slotPenalty,
         slotPenalty,
-        mealKey: `${protein.ingredient.ingredient_id}+${carb.ingredient.ingredient_id}`,
-        proteinKey: protein.ingredient.ingredient_id,
-        carbKey: carb.ingredient.ingredient_id,
+        mealKey: normalized.exactDishIdentity,
+        proteinKey: normalized.proteinFamily,
+        carbKey: normalized.carbFamily,
         leaned: leanBonus(protein.ingredient, preferences.proteinLean) < 0,
         kind: "composed",
       });
@@ -376,76 +385,49 @@ function readyCandidates(
   const hasAvoided = (items: DishItem[]) =>
     items.some((i) => avoid.includes(i.ingredientId));
 
-  for (const dish of savedDishes) {
-    if (hasAvoided(dish.items)) continue;
-    const macros = sumDishMacros(dish.items);
-    if (macros.energy_kcal <= 0) continue;
-    const price = priceItems(dish.items);
+  for (const normalized of readyPlannerCatalog(savedDishes, menuDishes)) {
+    const items: DishItem[] = normalized.breakdown.map((item) => ({
+      ingredientId: item.ingredientId, name: item.name, grams: item.grams,
+      unitId: GRAM_UNIT_ID, quantity: item.grams,
+    }));
+    if (hasAvoided(items)) continue;
+    const macros = normalized.optimizerMacros;
+    const price = normalized.price;
     // An incompletely priced dish has an unknown true cost, so it cannot be
     // shown to fit a budget. Treating its partial total as the real price let a
     // Rp 40,000 "minimum" smuggle a 1,218 kcal dish into a snack slot.
     if (budgetIdr !== null && (!price.complete || price.totalIdr > budgetIdr)) {
       continue;
     }
-    const slotPenalty = namedDishSlotPenalty(dish.name, slot);
+    const recipeSection = normalized.source === "negrita_menu"
+      ? menuRecipesSection(normalized.id.slice("menu:".length)) : null;
+    const slotPenalty = recipeSection
+      ? sectionSlotPenalty(recipeSection, slot) ?? namedDishSlotPenalty(normalized.displayName, slot)
+      : namedDishSlotPenalty(normalized.displayName, slot);
     out.push({
-      name: dish.name,
-      items: dish.items,
+      ...normalized,
+      name: normalized.displayName,
+      items,
       macros,
       priceIdr: price.totalIdr,
       score:
         scoreAgainst(macros, target) +
         slotPenalty,
       slotPenalty,
-      mealKey: `dish:${dish.id}`,
-      proteinKey: `dish:${dish.id}`,
-      carbKey: `dish:${dish.id}`,
+      mealKey: normalized.exactDishIdentity,
+      proteinKey: normalized.proteinFamily,
+      carbKey: normalized.carbFamily,
       leaned: false,
       kind: "ready",
-      sourceDishId: dish.id,
-    });
-  }
-
-  for (const recipe of menuDishes ? menuRecipes : []) {
-    const items: DishItem[] = [];
-    for (const component of recipe.components) {
-      const ingredient = getIngredient(component.ingredient_id);
-      if (!ingredient || !component.quantity_g) continue;
-      items.push({
-        ingredientId: component.ingredient_id,
-        name: ingredient.name,
-        grams: component.quantity_g,
-        unitId: GRAM_UNIT_ID,
-        quantity: component.quantity_g,
-      });
-    }
-    if (!items.length || hasAvoided(items)) continue;
-    const macros = sumDishMacros(items);
-    // Menu dishes carry their own price; that is the real order cost.
-    const priceIdr = recipe.price_idr ?? 0;
-    if (budgetIdr !== null && priceIdr > budgetIdr) continue;
-    const slotPenalty =
-      sectionSlotPenalty(recipe.section, slot) ??
-      namedDishSlotPenalty(recipe.name, slot);
-    out.push({
-      name: recipe.name,
-      items,
-      macros,
-      priceIdr,
-      score:
-        scoreAgainst(macros, target) +
-        // The menu section is authoritative; the name is only a fallback.
-        slotPenalty,
-      slotPenalty,
-      mealKey: `recipe:${recipe.recipe_id}`,
-      proteinKey: `recipe:${recipe.recipe_id}`,
-      carbKey: `recipe:${recipe.recipe_id}`,
-      leaned: false,
-      kind: "ready",
+      sourceDishId: normalized.source === "saved_dish" ? normalized.id.slice("saved:".length) : undefined,
     });
   }
 
   return out;
+}
+
+function menuRecipesSection(recipeId: string): string | null {
+  return menuRecipes.find((recipe) => recipe.recipe_id === recipeId)?.section ?? null;
 }
 
 // --- generation --------------------------------------------------------------
@@ -466,7 +448,10 @@ const SECONDARY_SCORE_EQUIVALENCE = 1e-9;
  * same meal is discouraged hardest, then the protein, then the carbohydrate —
  * without the carb tier a single rice or potato quietly runs the whole week.
  */
-const REPEAT_PENALTY = { meal: 1.2, protein: 0.45, carb: 0.3 };
+const REPEAT_PENALTY = {
+  meal: 1.2, consecutiveMeal: 1.5, protein: 0.45, carb: 0.3,
+  cuisine: 0.2, sauce: 0.2,
+};
 
 interface SearchState {
   candidates: Candidate[];
@@ -529,7 +514,10 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
     meal: new Map<string, number>(),
     protein: new Map<string, number>(),
     carb: new Map<string, number>(),
+    cuisine: new Map<string, number>(),
+    sauce: new Map<string, number>(),
   };
+  let previousDayMeals = new Set<string>();
   const days: GeneratedDay[] = [];
 
   for (const day of options.days) {
@@ -561,14 +549,18 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
           used.add(candidate.mealKey);
           const repeat =
             REPEAT_PENALTY.meal * (usage.meal.get(candidate.mealKey) ?? 0) +
+            REPEAT_PENALTY.consecutiveMeal * (previousDayMeals.has(candidate.mealKey) ? 1 : 0) +
             REPEAT_PENALTY.protein * (candidate.leaned ? LEAN_REPEAT_RELIEF : 1) *
               (usage.protein.get(candidate.proteinKey) ?? 0) +
-            REPEAT_PENALTY.carb * (usage.carb.get(candidate.carbKey) ?? 0);
+            REPEAT_PENALTY.carb * (usage.carb.get(candidate.carbKey) ?? 0) +
+            REPEAT_PENALTY.cuisine * (usage.cuisine.get(candidate.cuisineFamily) ?? 0) +
+            REPEAT_PENALTY.sauce * candidate.sauceFamilies.reduce(
+              (sum, sauce) => sum + (usage.sauce.get(sauce) ?? 0), 0);
           // The residual supplies the target for this tentative choice; the
           // complete-day distance keeps compensation, rather than slot fit,
           // authoritative. Beam pruning is deliberately deterministic.
           const score = scoreAgainst(macros, options.targets) +
-            scoreAgainst(candidate.macros, nextTarget) / slotsLeft + repeat +
+            scoreAgainst(candidate.macros, nextTarget) / slotsLeft +
             // `candidate.score` includes culinary slot suitability and the
             // provisional allocation. It orders the beam only; it never
             // controls eligibility or whether the finished day is compliant.
@@ -644,6 +636,11 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
         candidate.carbKey,
         (usage.carb.get(candidate.carbKey) ?? 0) + 1
       );
+      usage.cuisine.set(candidate.cuisineFamily,
+        (usage.cuisine.get(candidate.cuisineFamily) ?? 0) + 1);
+      for (const sauce of candidate.sauceFamilies) {
+        usage.sauce.set(sauce, (usage.sauce.get(sauce) ?? 0) + 1);
+      }
 
       const price =
         candidate.kind === "ready" && candidate.priceIdr > 0
@@ -669,6 +666,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
         restrictionsApplied: preferences.avoidIngredientIds.length > 0,
       }),
     });
+    previousDayMeals = new Set((complete?.candidates ?? []).map((candidate) => candidate.mealKey));
   }
 
   return days;

@@ -14,6 +14,63 @@ export interface Macros {
 
 export type MacroKey = keyof Macros;
 
+/** Source-independent vocabulary used by the weekly planner. */
+export type PlannerCandidateSource =
+  | "negrita_menu"
+  | "saved_dish"
+  | "generated_diy";
+export type ProteinFamily =
+  | "chicken"
+  | "beef"
+  | "fish"
+  | "eggs"
+  | "vegetarian"
+  | "other";
+export type CarbFamily =
+  | "rice"
+  | "buckwheat"
+  | "potato"
+  | "bread"
+  | "wrap"
+  | "other";
+export type MacroConfidence = "verified" | "estimated" | "incomplete";
+
+export interface PlannerCandidateIngredient {
+  ingredientId: string;
+  name: string;
+  grams: number;
+  preparation?: string;
+}
+
+export interface PlannerModificationOption {
+  type: "remove_ingredient" | "adjust_portion";
+  ingredientId?: string;
+  label: string;
+}
+
+/** One optimizer input, irrespective of where the meal originated. */
+export interface PlannerCandidate {
+  id: string;
+  source: PlannerCandidateSource;
+  displayName: string;
+  optimizerMacros: Macros;
+  breakdown: PlannerCandidateIngredient[];
+  price: { totalIdr: number; complete: boolean };
+  proteinFamily: ProteinFamily;
+  carbFamily: CarbFamily;
+  cuisineFamily: string;
+  mealArchetype: string;
+  eligibleMealTypes: string[];
+  macroConfidence: MacroConfidence;
+  modificationOptions: PlannerModificationOption[];
+  dietaryTags: string[];
+  allergenTags: string[];
+  /** Normalized sauce identities, kept separate from general flavor. */
+  sauceFamilies: string[];
+  /** Stable identity used for exact-dish variety accounting. */
+  exactDishIdentity: string;
+}
+
 /** The implicit unit every ingredient supports: plain grams. */
 export const GRAM_UNIT_ID = "g";
 
