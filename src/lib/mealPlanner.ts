@@ -95,6 +95,13 @@ export interface GenerateOptions {
   days: number[];
   /** Deterministic output when set, for testing. */
   seed?: number;
+  /**
+   * Small, caller-supplied catalog used by deterministic planner simulations.
+   * Candidates still pass through the normal slot, preference, budget, search,
+   * and adherence pipeline; this merely avoids coupling bounded tests to the
+   * restaurant catalog.
+   */
+  candidateFixtures?: PlannerCandidate[];
 }
 
 /** A single DIY component option, already resolved to grams and price. */
@@ -406,14 +413,15 @@ function readyCandidates(
   savedDishes: Dish[],
   menuDishes: boolean,
   budgetIdr: number | null,
-  preferences: ClientPreferences
+  preferences: ClientPreferences,
+  fixtures: PlannerCandidate[] = []
 ): Candidate[] {
   const out: Candidate[] = [];
   const avoid = preferences.avoidIngredientIds;
   const hasAvoided = (items: DishItem[]) =>
     items.some((i) => avoid.includes(i.ingredientId));
 
-  for (const normalized of readyPlannerCatalog(savedDishes, menuDishes)) {
+  for (const normalized of [...readyPlannerCatalog(savedDishes, menuDishes), ...fixtures]) {
     const eligibility = mealSlotEligibility({ slot, name: normalized.displayName,
       mealArchetype: normalized.mealArchetype,
       eligibleMealTypes: normalized.eligibleMealTypes,
@@ -589,7 +597,8 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
           options.includeSavedDishes ? options.savedDishes : [],
           options.includeMenuDishes,
           budget,
-          preferences
+          preferences,
+          options.candidateFixtures
         ),
       ],
     };
