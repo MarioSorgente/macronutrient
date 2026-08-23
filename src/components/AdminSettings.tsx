@@ -31,6 +31,8 @@ export default function AdminSettings() {
   const [config, setConfig] = useState<RestaurantConfig | null>(null);
   const [people, setPeople] = useState<UserProfile[]>([]);
   const [staffRequests, setStaffRequests] = useState<StaffAccessRequest[]>([]);
+  const [staffRequestsLoading, setStaffRequestsLoading] = useState(true);
+  const [staffRequestsError, setStaffRequestsError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,14 +48,23 @@ export default function AdminSettings() {
   }, []);
 
   const refreshRequests = useCallback(async () => {
-    const { getApi } = await import("@/lib/api");
-    const result = await getApi<{ requests: StaffAccessRequest[] }>("/api/admin/staff/requests");
-    setStaffRequests(result.requests);
+    setStaffRequestsLoading(true);
+    setStaffRequestsError(false);
+    try {
+      const { getApi } = await import("@/lib/api");
+      const result = await getApi<{ requests: StaffAccessRequest[] }>("/api/admin/staff/requests");
+      setStaffRequests(result.requests);
+    } catch {
+      setStaffRequestsError(true);
+    } finally {
+      setStaffRequestsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     let active = true;
-    Promise.all([loadRestaurantConfig(), listUsers().catch(() => []), refreshRequests().catch(() => undefined)])
+    void refreshRequests();
+    Promise.all([loadRestaurantConfig(), listUsers().catch(() => [])])
       .then(([loadedConfig, loadedPeople]) => {
         if (!active) return;
         setConfig(loadedConfig);
@@ -146,9 +157,22 @@ export default function AdminSettings() {
       <Card className="mt-5 border-gold/50 p-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-display text-lg font-700 text-charcoal">Staff requests</h2>
-          {staffRequests.length > 0 && <span className="rounded-full bg-gold/20 px-2 py-1 text-xs font-700 text-charcoal">{staffRequests.length} pending</span>}
+          {!staffRequestsLoading && !staffRequestsError && staffRequests.length > 0 && (
+            <span className="rounded-full bg-gold/20 px-2 py-1 text-xs font-700 text-charcoal">
+              {staffRequests.length} pending
+            </span>
+          )}
         </div>
-        {staffRequests.length === 0 ? (
+        {staffRequestsLoading ? (
+          <p className="mt-2 text-sm text-charcoal-soft">Loading staff requests…</p>
+        ) : staffRequestsError ? (
+          <div role="alert" className="mt-2 flex flex-wrap items-center gap-3">
+            <p className="text-sm text-tomato-dark">Could not load staff requests.</p>
+            <Button size="sm" onClick={() => void refreshRequests()}>
+              Retry
+            </Button>
+          </div>
+        ) : staffRequests.length === 0 ? (
           <p className="mt-2 text-sm text-charcoal-soft">No pending staff requests.</p>
         ) : (
           <ul className="mt-3 space-y-2">
