@@ -12,14 +12,30 @@ async function caller(uid: string) {
 }
 
 describe("staff access requests", () => {
-  it("keeps an applicant a customer and reuses one pending request", async () => {
+  it("creates a pending request for a customer with no request", async () => {
     const uid = await createUser(uniqueEmail("worker"));
     await syncAccount(await adminAuth().getUser(uid));
-    await requestStaffAccess(await caller(uid));
-    await requestStaffAccess(await caller(uid));
+    expect(await getStaffRequest(uid)).toBeNull();
+
+    await expect(requestStaffAccess(await caller(uid))).resolves.toEqual({ status: "pending" });
+
     expect(await claimsOf(uid)).toMatchObject({ role: "client" });
     expect(await getStaffRequest(uid)).toMatchObject({ uid, status: "pending" });
   });
+
+  it.each(["restaurant", "admin"] as const)(
+    "uses the current Auth role for a stale %s caller without creating a request",
+    async (role) => {
+      const uid = await createUser(uniqueEmail(role));
+      await syncAccount(await adminAuth().getUser(uid));
+      const staleCaller = await caller(uid);
+      await setRole("owner", uid, role);
+
+      await expect(requestStaffAccess(staleCaller)).resolves.toEqual({ status: role });
+
+      expect(await getStaffRequest(uid)).toBeNull();
+    }
+  );
 
   it("approves only verified accounts and updates authorization and UI data", async () => {
     const uid = await createUser(uniqueEmail("worker"));
@@ -50,14 +66,22 @@ describe("staff access requests", () => {
     });
   });
 
-  it("rejects without changing the customer and permits a new request", async () => {
+  it("replaces a rejected customer request with a new pending request", async () => {
     const uid = await createUser(uniqueEmail("worker"));
     await syncAccount(await adminAuth().getUser(uid));
     await requestStaffAccess(await caller(uid));
     await rejectStaffRequest(uid, "owner");
     expect(await claimsOf(uid)).toMatchObject({ role: "client" });
-    await requestStaffAccess(await caller(uid));
-    expect(await getStaffRequest(uid)).toMatchObject({ status: "pending" });
+    const rejected = await getStaffRequest(uid);
+    expect(rejected).toMatchObject({ status: "rejected", reviewedByUid: "owner" });
+
+    await expect(requestStaffAccess(await caller(uid))).resolves.toEqual({ status: "pending" });
+
+    expect(await getStaffRequest(uid)).toMatchObject({
+      status: "pending",
+      reviewedAt: null,
+      reviewedByUid: null,
+    });
   });
 
   it("never lets an old approval re-promote manually demoted staff", async () => {
