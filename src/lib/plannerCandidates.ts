@@ -2,7 +2,8 @@ import { sumDishMacros } from "@/lib/calc";
 import { getIngredient, menuRecipes } from "@/lib/database";
 import { priceItems } from "@/lib/pricing";
 import { GRAM_UNIT_ID, type Macros, type MenuRecipe, type PlannerCandidate,
-  type PlannerCandidateIngredient, type ProteinFamily, type CarbFamily } from "@/types/nutrition";
+  type PlannerCandidateIngredient, type ProteinFamily, type CarbFamily,
+  type MacroConfidence } from "@/types/nutrition";
 import type { Dish, DishItem } from "@/lib/storage/types";
 
 const proteinPatterns: [ProteinFamily, RegExp][] = [
@@ -75,6 +76,26 @@ function breakdown(items: DishItem[]): PlannerCandidateIngredient[] {
     grams: item.grams, preparation: getIngredient(item.ingredientId)?.notes ?? undefined }));
 }
 
+const MACRO_KEYS: (keyof Macros)[] = [
+  "energy_kcal", "protein_g", "carbs_g", "fat_g", "fiber_g",
+];
+
+function publishedMacros(recipe: MenuRecipe): Macros | null {
+  const macros = recipe.menu_macros_per_serving;
+  return MACRO_KEYS.every((key) => Number.isFinite(macros[key]))
+    ? Object.fromEntries(MACRO_KEYS.map((key) => [key, macros[key]])) as unknown as Macros
+    : null;
+}
+
+function publishedConfidence(recipe: MenuRecipe): MacroConfidence {
+  const record = recipe.menu_macros_per_serving;
+  if (record.macro_confidence) return record.macro_confidence;
+  const qualification = `${record.estimate_confidence ?? ""} ${record.source ?? ""}`.toLowerCase();
+  return /incomplete/.test(qualification) ? "incomplete"
+    : /estimat|uncertain|proxy/.test(qualification) ? "estimated"
+    : "published";
+}
+
 function finish(base: Omit<PlannerCandidate, "proteinFamily" | "carbFamily" | "cuisineFamily" |
   "mealArchetype" | "eligibleMealTypes" | "modificationOptions" | "dietaryTags" |
   "allergenTags" | "sauceFamilies">, section = ""): PlannerCandidate {
@@ -97,7 +118,8 @@ export function savedDishCandidate(dish: Dish): PlannerCandidate | null {
   if (!items.length || macros.energy_kcal <= 0) return null;
   const price = priceItems(dish.items);
   return finish({ id: `saved:${dish.id}`, source: "saved_dish", displayName: dish.name,
-    optimizerMacros: macros, breakdown: items, price, macroConfidence: "verified",
+    optimizerMacros: macros, calculatedIngredientMacros: macros, breakdown: items, price,
+    macroConfidence: "calculated",
     exactDishIdentity: `saved:${dish.id}` });
 }
 
@@ -109,10 +131,13 @@ export function negritaMenuCandidate(recipe: MenuRecipe): PlannerCandidate | nul
       quantity: component.quantity_g }] : [];
   });
   if (!dishItems.length) return null;
+  const calculatedIngredientMacros = sumDishMacros(dishItems);
+  const optimizerMacros = publishedMacros(recipe) ?? calculatedIngredientMacros;
   return finish({ id: `menu:${recipe.recipe_id}`, source: "negrita_menu",
-    displayName: recipe.name, optimizerMacros: sumDishMacros(dishItems), breakdown: breakdown(dishItems),
+    displayName: recipe.name, optimizerMacros, calculatedIngredientMacros,
+    breakdown: breakdown(dishItems),
     price: { totalIdr: recipe.price_idr ?? 0, complete: recipe.price_idr !== null },
-    macroConfidence: recipe.quantity_complete ? (recipe.derived_quantities ? "estimated" : "verified") : "incomplete",
+    macroConfidence: publishedMacros(recipe) ? publishedConfidence(recipe) : "incomplete",
     exactDishIdentity: `menu:${recipe.recipe_id}` }, recipe.section);
 }
 
@@ -120,7 +145,8 @@ export function generatedDiyCandidate(input: { id: string; name: string; items: 
   macros: Macros; priceIdr: number }): PlannerCandidate {
   return finish({ id: `diy:${input.id}`, source: "generated_diy", displayName: input.name,
     optimizerMacros: input.macros, breakdown: breakdown(input.items),
-    price: { totalIdr: input.priceIdr, complete: true }, macroConfidence: "verified",
+    calculatedIngredientMacros: input.macros,
+    price: { totalIdr: input.priceIdr, complete: true }, macroConfidence: "calculated",
     exactDishIdentity: `diy:${input.id}` });
 }
 

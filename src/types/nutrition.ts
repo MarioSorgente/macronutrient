@@ -33,7 +33,7 @@ export type CarbFamily =
   | "bread"
   | "wrap"
   | "other";
-export type MacroConfidence = "verified" | "estimated" | "incomplete";
+export type MacroConfidence = "published" | "calculated" | "estimated" | "incomplete";
 
 export interface PlannerCandidateIngredient {
   ingredientId: string;
@@ -54,6 +54,8 @@ export interface PlannerCandidate {
   source: PlannerCandidateSource;
   displayName: string;
   optimizerMacros: Macros;
+  /** Ingredient reconstruction retained for QA; never blended into optimizerMacros. */
+  calculatedIngredientMacros?: Macros;
   breakdown: PlannerCandidateIngredient[];
   price: { totalIdr: number; complete: boolean };
   proteinFamily: ProteinFamily;
@@ -163,6 +165,9 @@ export interface RecipeComponent {
 
 export interface MenuMacrosPerServing extends Partial<Macros> {
   source?: string;
+  /** Optional source-level qualification when a database record is uncertain. */
+  macro_confidence?: MacroConfidence;
+  estimate_confidence?: string;
 }
 
 export interface MenuRecipe {
