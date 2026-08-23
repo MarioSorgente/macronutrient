@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { ApiError, callApi, getApi } from "@/lib/api";
-import { roleLabel } from "@/lib/roles";
 import type { StaffAccessRequest } from "@/lib/storage/types";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -65,62 +64,55 @@ export default function StaffAccessStatus() {
     }
   }
 
-  if (!user || !actualRole) return null;
+  if (!user || actualRole !== "client") return null;
   const busy = requestState.status === "loading" || mutationState.status === "submitting";
 
   return (
-    <Card className="mt-5 p-4">
-      <h2 className="font-display text-lg font-700 text-charcoal">Account type</h2>
-      <p className="mt-1 text-sm font-700 text-charcoal">{roleLabel(actualRole)}</p>
+    <Card className="mt-5 border-gold/50 bg-gold/10 p-4">
+      <p className="text-sm font-700 text-charcoal">Restaurant access</p>
 
-      {actualRole === "client" && (
-        <div className="mt-4 rounded-xl border border-gold/50 bg-gold/10 p-3">
-          <p className="text-sm font-700 text-charcoal">Restaurant access</p>
+      {requestState.status === "loading" && (
+        <p className="mt-1 text-xs text-charcoal-soft">Checking access…</p>
+      )}
 
-          {requestState.status === "loading" && (
-            <p className="mt-1 text-xs text-charcoal-soft">Checking access…</p>
-          )}
-
-          {requestState.status === "error" && (
-            <div>
-              <p role="alert" className="mt-1 text-xs text-tomato-dark">{LOAD_ERROR}</p>
-              <Button className="mt-3" size="sm" disabled={busy} onClick={() => void loadRequest()}>
-                Retry
-              </Button>
-            </div>
-          )}
-
-          {requestState.status === "loaded" && requestState.request === null && (
-            <div>
-              <p className="mt-1 text-xs text-charcoal-soft">Not requested</p>
-              <Button className="mt-3" size="sm" disabled={busy} onClick={() => void requestAccess()}>
-                Request staff access
-              </Button>
-            </div>
-          )}
-
-          {requestState.status === "loaded" && requestState.request?.status === "pending" && (
-            <div>
-              <p className="mt-1 text-sm font-700 text-charcoal">Pending approval</p>
-              <p className="mt-1 text-xs text-charcoal-soft">
-                A restaurant owner still needs to approve your staff access. You can still use the app as a customer while you wait.
-              </p>
-            </div>
-          )}
-
-          {requestState.status === "loaded" && requestState.request?.status === "rejected" && (
-            <div>
-              <p className="mt-1 text-sm font-700 text-charcoal">Request rejected</p>
-              <Button className="mt-3" size="sm" disabled={busy} onClick={() => void requestAccess()}>
-                Request staff access again
-              </Button>
-            </div>
-          )}
-
-          {mutationState.status === "error" && (
-            <p role="alert" className="mt-3 text-xs text-tomato-dark">{mutationState.message}</p>
-          )}
+      {requestState.status === "error" && (
+        <div>
+          <p role="alert" className="mt-1 text-xs text-tomato-dark">{LOAD_ERROR}</p>
+          <Button className="mt-3" size="sm" disabled={busy} onClick={() => void loadRequest()}>
+            Retry
+          </Button>
         </div>
+      )}
+
+      {requestState.status === "loaded" && requestState.request === null && (
+        <div>
+          <p className="mt-1 text-xs text-charcoal-soft">Not requested</p>
+          <Button className="mt-3" size="sm" disabled={busy} onClick={() => void requestAccess()}>
+            Request staff access
+          </Button>
+        </div>
+      )}
+
+      {requestState.status === "loaded" && requestState.request?.status === "pending" && (
+        <div>
+          <p className="mt-1 text-sm font-700 text-charcoal">Pending approval</p>
+          <p className="mt-1 text-xs text-charcoal-soft">
+            A restaurant owner still needs to approve your staff access. You can still use the app as a customer while you wait.
+          </p>
+        </div>
+      )}
+
+      {requestState.status === "loaded" && requestState.request?.status === "rejected" && (
+        <div>
+          <p className="mt-1 text-sm font-700 text-charcoal">Request rejected</p>
+          <Button className="mt-3" size="sm" disabled={busy} onClick={() => void requestAccess()}>
+            Request staff access again
+          </Button>
+        </div>
+      )}
+
+      {mutationState.status === "error" && (
+        <p role="alert" className="mt-3 text-xs text-tomato-dark">{mutationState.message}</p>
       )}
     </Card>
   );
