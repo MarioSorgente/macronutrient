@@ -12,6 +12,10 @@ import {
 import { proteinSourceOf } from "@/lib/preferences";
 import { generatedDiyCandidate, readyPlannerCatalog } from "@/lib/plannerCandidates";
 import {
+  componentFitsTemplate,
+  templatesForSlot,
+} from "@/lib/mealTemplates";
+import {
   mealSlotPenalty,
   mealSlotEligibility,
   namedDishSlotPenalty,
@@ -293,19 +297,32 @@ function composedCandidates(
     (c) => !isAnchorProtein(c) && c.portions === 1 && usable(c)
   );
 
-  for (const protein of anchors) {
-    for (const carb of pools.carbs) {
-      if (!usable(carb)) continue;
-      let macros = addMacros(protein.macros, carb.macros);
-      let priceIdr = protein.priceIdr + carb.priceIdr;
-      const parts: Component[] = [protein, carb];
+  // Templates bound the search twice: only slot-appropriate archetypes are
+  // considered, and each archetype admits only realistic family/gram ranges.
+  // The final per-template cap prevents portion flexibility from becoming a
+  // protein × carb × vegetable × condiment Cartesian explosion.
+  const templates = templatesForSlot(slot);
+  const MAX_PER_TEMPLATE = 80;
+  for (const mealTemplate of templates) {
+    const templateStart = out.length;
+    for (const protein of anchors) {
+      if (!componentFitsTemplate(mealTemplate, protein.ingredient, protein.section, protein.grams)) continue;
+      for (const carb of pools.carbs) {
+        if (!usable(carb)) continue;
+        if (!componentFitsTemplate(mealTemplate, carb.ingredient, carb.section, carb.grams)) continue;
+        let macros = addMacros(protein.macros, carb.macros);
+        let priceIdr = protein.priceIdr + carb.priceIdr;
+        const parts: Component[] = [protein, carb];
 
       // Close the remaining gap: a vegetable, then a fat, then optionally a
       // small protein accent — each only if it genuinely improves the fit.
       const closers: Component[][] = [
-        pools.veg.filter(usable),
-        pools.fats.filter((c) => c.portions === 1 && usable(c)),
-        accents,
+        pools.veg.filter((c) => usable(c) && componentFitsTemplate(
+          mealTemplate, c.ingredient, c.section, c.grams)),
+        pools.fats.filter((c) => c.portions === 1 && usable(c) && componentFitsTemplate(
+          mealTemplate, c.ingredient, c.section, c.grams)),
+        accents.filter((c) => componentFitsTemplate(
+          mealTemplate, c.ingredient, c.section, c.grams)),
       ];
 
       for (const [index, options] of closers.entries()) {
@@ -334,20 +351,28 @@ function composedCandidates(
         }
       }
 
+      if (mealTemplate.requiredRoles.includes("vegetable") &&
+          !parts.some((part) => part.section === "veg")) continue;
+      if (macros.energy_kcal < mealTemplate.mealSize.minKcal ||
+          macros.energy_kcal > mealTemplate.mealSize.maxKcal) continue;
+
       if (budgetIdr !== null && priceIdr > budgetIdr) continue;
 
       const slotPenalty = mealSlotPenalty(
         parts.map((c) => c.ingredient.ingredient_id),
         slot
       );
-      const name = `${protein.ingredient.diy_name ?? protein.ingredient.name} + ${
+      const name = `${mealTemplate.name}: ${protein.ingredient.diy_name ?? protein.ingredient.name} + ${
           carb.ingredient.diy_name ?? carb.ingredient.name
         }`;
       const items = parts.map(toDishItem);
       const normalized = generatedDiyCandidate({
-        id: parts.map((part) => `${part.ingredient.ingredient_id}:${part.grams}`).join("+"),
+        id: `${mealTemplate.id}:` + parts.map((part) =>
+          `${part.ingredient.ingredient_id}:${part.grams}`).join("+"),
         name, items, macros, priceIdr,
       });
+      normalized.mealArchetype = mealTemplate.id;
+      normalized.eligibleMealTypes = mealTemplate.allowedSlots;
       const eligibility = mealSlotEligibility({ slot, name,
         mealArchetype: normalized.mealArchetype,
         eligibleMealTypes: normalized.eligibleMealTypes,
@@ -369,6 +394,9 @@ function composedCandidates(
         leaned: leanBonus(protein.ingredient, preferences.proteinLean) < 0,
         kind: "composed",
       });
+      if (out.length - templateStart >= MAX_PER_TEMPLATE) break;
+      }
+      if (out.length - templateStart >= MAX_PER_TEMPLATE) break;
     }
   }
 
@@ -569,10 +597,11 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
           // authoritative. Beam pruning is deliberately deterministic.
           const score = scoreAgainst(macros, options.targets) +
             scoreAgainst(candidate.macros, nextTarget) / slotsLeft +
-            // Provisional macro fit helps beam pruning, but does not impose a
-            // slot limit. Culinary suitability is considered only after daily
-            // adherence, in `softScore` below.
-            candidate.score +
+            // Custom meals are scored against the *current daily residual*, not
+            // the slot's initial allocation. A template's serving envelope is
+            // the only per-meal size constraint, allowing the optimizer to
+            // compensate with a smaller or larger appropriate meal. Culinary
+            // suitability is considered in `softScore` below.
             pricePenalty(priceIdr);
           expanded.push({
             candidates: [...state.candidates, candidate], macros, priceIdr,
