@@ -140,9 +140,20 @@ export interface Ingredient {
   diy_name?: string;
   /** Which DIY section it belongs to: carbs | protein | veg | fats. */
   diy_section?: DiySection;
+  /** Kitchen constraints used when the planner requests a custom DIY serving. */
+  diy_quantity?: DiyQuantityMetadata;
 }
 
 export type DiySection = "carbs" | "protein" | "veg" | "fats";
+
+export interface DiyQuantityMetadata {
+  minimum_g: number;
+  maximum_g: number;
+  preferred_g: number;
+  increment_g: number;
+  /** False for piece/slice items that can only be sold at the preferred size. */
+  arbitrary_quantities_supported: boolean;
+}
 
 export interface DiyMenuItem {
   id: string;
