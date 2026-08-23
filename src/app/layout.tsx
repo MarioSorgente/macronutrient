@@ -5,6 +5,7 @@ import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import GuestDataClaim from "@/components/GuestDataClaim";
 import ViewAsBanner from "@/components/ViewAsBanner";
+import { Analytics } from "@vercel/analytics/next";
 
 const display = Fraunces({
   subsets: ["latin"],
@@ -42,6 +43,7 @@ export default function RootLayout({
             {children}
           </ToastProvider>
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
