@@ -59,15 +59,25 @@ export async function approveStaffRequest(uid: unknown, adminUid: string) {
   if (!account.emailVerified) {
     throw new HttpError(409, "Email must be verified before staff access can be approved.");
   }
-  await adminAuth().setCustomUserClaims(uid, { role: "restaurant", rid: RESTAURANT_ID });
+  const currentRole = account.customClaims?.role;
+  if (currentRole !== undefined && currentRole !== "client" && currentRole !== "restaurant" && currentRole !== "admin") {
+    throw new HttpError(409, "This account has an unsupported role.");
+  }
+
+  const role = currentRole === "admin" ? "admin" : "restaurant";
+  if (currentRole === undefined || currentRole === "client") {
+    await adminAuth().setCustomUserClaims(uid, { role, rid: RESTAURANT_ID });
+  }
   const now = new Date().toISOString();
   const batch = adminDb().batch();
-  batch.set(adminDb().doc(`users/${uid}`), {
-    role: "restaurant", rid: RESTAURANT_ID, roleUpdatedAt: now, updatedAt: now,
-  }, { merge: true });
+  if (currentRole === undefined || currentRole === "client") {
+    batch.set(adminDb().doc(`users/${uid}`), {
+      role, rid: RESTAURANT_ID, roleUpdatedAt: now, updatedAt: now,
+    }, { merge: true });
+  }
   batch.update(ref, { status: "approved", reviewedAt: now, reviewedByUid: adminUid, emailVerified: true });
   await batch.commit();
-  return { uid, role: "restaurant" as const, status: "approved" as const };
+  return { uid, role, status: "approved" as const };
 }
 
 export async function rejectStaffRequest(uid: unknown, adminUid: string) {
