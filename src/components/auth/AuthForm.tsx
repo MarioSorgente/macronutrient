@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -77,8 +78,11 @@ function GoogleMark() {
  *
  * The three screens differ by a field and a verb, so they share a component
  * rather than existing as three near-identical files. Email verification is
- * sent on signup but nothing is gated on it — making someone check their inbox
- * before their first order is the surest way to lose them.
+ * sent on signup, and ordinary use is not gated on it — making someone check
+ * their inbox before their first order is the surest way to lose them. Owner
+ * access is the one exception: that requires a confirmed address, so that
+ * nobody who merely knows an owner's email can register it and claim the
+ * restaurant.
  */
 export default function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
@@ -143,6 +147,20 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
           // which is before updateProfile resolves — so without this the name
           // the person just typed is replaced by the local part of their email.
           await saveDisplayName(credential.user.uid, name.trim());
+        }
+        // This comment claimed verification was sent from the day the file was
+        // written, and nothing ever sent it. Password accounts therefore stayed
+        // unverified forever — and owner access is only granted to a confirmed
+        // address, so an owner who signed up with a password could never become
+        // admin no matter what ADMIN_EMAILS said.
+        //
+        // Not awaited into the failure path: a rate-limited or bounced
+        // verification email must not fail an account that already exists.
+        // /account offers "Confirm my email" for exactly that case.
+        try {
+          await sendEmailVerification(credential.user);
+        } catch (cause) {
+          console.error("Could not send the verification email:", cause);
         }
       } else {
         await signInWithEmailAndPassword(auth, email.trim(), password);

@@ -1,5 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { isHitTestable, isOnScreen, signIn, signUp, uniqueEmail } from "./helpers";
+import {
+  isHitTestable,
+  isOnScreen,
+  sentOobCodes,
+  signIn,
+  signUp,
+  uniqueEmail,
+} from "./helpers";
 
 /**
  * The user-action inventory: every action a person needs, checked in a real
@@ -183,5 +190,40 @@ test.describe("what a customer is shown about the deployment", () => {
     await signUp(page);
     await page.goto("/account");
     await expect(page.getByText("View as")).toHaveCount(0);
+  });
+});
+
+test.describe("the server half of the deployment", () => {
+  /**
+   * The cheapest possible detector for "the server did not load at all".
+   *
+   * It did not, for the whole of the first deploy after the Cloud Functions
+   * moved into this app: `firebase-admin` pulled in an ESM-only `jose` through
+   * `jwks-rsa`, Vercel's loader refused to require it, and all four API routes
+   * returned 500. The only symptom anyone could see was that signing in never
+   * granted a role — which looks exactly like an allowlist that does not
+   * recognise you.
+   */
+  test("answers /api/health without an account", async ({ request }) => {
+    const response = await request.get("/api/health");
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true });
+  });
+});
+
+test.describe("signing up", () => {
+  test("sends the confirmation email it says it sends", async ({ page }) => {
+    const email = uniqueEmail();
+    await signUp(page, email);
+
+    // Owner access is granted only to a confirmed address, so an unsent
+    // verification is not cosmetic: it is what keeps an allowlisted owner a
+    // customer forever, whatever ADMIN_EMAILS says.
+    await expect
+      .poll(
+        async () => (await sentOobCodes(email)).map((code) => code.requestType),
+        { timeout: 15_000 }
+      )
+      .toContain("VERIFY_EMAIL");
   });
 });

@@ -2,7 +2,7 @@
   "name": "mamma-calories",
   "version": "0.1.0",
   "private": true,
-  "description": "Mamma Calories \u2014 For Negrita. Restaurant macro/dish builder.",
+  "description": "Mamma Calories — For Negrita. Restaurant macro/dish builder.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -29,6 +29,12 @@
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1",
     "zustand": "^5.0.3"
+  },
+  "//overrides": "jwks-rsa (via firebase-admin) does require(\"jose\") from CommonJS, but jose@6 is ESM-only. Vercel deploys firebase-admin unbundled and its loader has no require(esm), so every /api route threw ERR_REQUIRE_ESM. jose@5 ships a CJS build. Do not remove without running the runtime test in src/lib/server/runtime.test.ts.",
+  "overrides": {
+    "jwks-rsa": {
+      "jose": "^5.10.0"
+    }
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.6",

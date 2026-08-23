@@ -14,13 +14,13 @@ Branch: `claude/production-readiness-qa-ru4hln`.
 | | Before | After |
 |---|---|---|
 | `npm run lint` | Could not pass — `next lint` with no ESLint config and neither `eslint` nor `eslint-config-next` installed | Passes; flat config, `eslint` called directly |
-| Unit tests | 29, in 7 files | **212**, in 17 files |
+| Unit tests | 29, in 7 files | **216**, in 17 files |
 | `firestore.rules` | Untested | **58 tests**, one per rule branch |
 | Server logic | Untested | **56 tests** against the emulator |
 | Browser tests | None | **47**, desktop + 375 px phone |
 | CI | None | Lint → typecheck → unit → functions build → emulators → build → E2E |
 
-Total: **212 unit + 122 emulated + 47 end-to-end.**
+Total: **216 unit + 122 emulated + 55 end-to-end.**
 
 ---
 
@@ -260,6 +260,133 @@ It is a real secret, it must never carry a `NEXT_PUBLIC_` prefix, and
 `src/lib/server/firebaseAdmin.ts` imports `server-only` so the build fails if
 it is ever pulled into a client bundle.
 
+### 12. Every API route was dead in production — *critical, and invisible*
+
+The migration in defect 11 shipped and did not run. Vercel's runtime log, 30
+seconds after the deploy finished:
+
+```
+Error: require() of ES Module .../jose/dist/webapi/index.js
+from .../jwks-rsa/src/utils.js not supported.
+code: 'ERR_REQUIRE_ESM'   page: '/api/auth/sync'
+```
+
+`firebase-admin` is on Next.js's **default** `serverExternalPackages` list, so
+it is never bundled: Vercel copies it into the lambda and `require`s it. Inside
+it, `jwks-rsa@4` does a CommonJS `require('jose')`, and `jose@6` is ESM-only —
+its `exports` has no `require` condition at all. Vercel's loader implements no
+`require(esm)`, and the project was *already* on Node 24, so this was not
+fixable by changing the runtime version.
+
+It threw at module load, not lazily, and `src/lib/server/auth.ts` imports
+`firebase-admin/auth` — so all four routes were down, not just the one in the
+log:
+
+| Route | Consequence |
+|---|---|
+| `/api/auth/sync` | no role ever stamped — **signing in never made the owner an admin** |
+| `/api/admin/set-role` | nobody could be promoted to `restaurant` |
+| `/api/orders/submit` | **no week could be sent to the kitchen** |
+| `/api/orders/status` | the kitchen could not advance or cancel an order |
+
+Reproduced locally by turning off the one feature that masked it:
+
+```
+$ node -e "require('firebase-admin/auth')"                                   → OK
+$ node --no-experimental-require-module -e "require('firebase-admin/auth')"  → ERR_REQUIRE_ESM
+```
+
+Fixed with a scoped override pinning `jose` to a version that ships a CommonJS
+build, for `jwks-rsa` only — `firebase-tools` keeps `jose@6` in the dev tree.
+Verified at the level that matters: after `next build`, the file trace for every
+API lambda contains 84 files from the pinned `jose` and **zero** from the
+ESM-only one.
+
+**Why none of the other tests caught it.** Every suite ran in-process
+on a Node that supports `require(esm)`, and the emulated suite never reaches
+`jwks-rsa` at all, because `verifyIdToken` skips signature verification when
+`FIREBASE_AUTH_EMULATOR_HOST` is set. `src/lib/server/runtime.test.ts`
+reproduces the deployed runtime in a subprocess instead, and also round-trips a
+generated RSA key through `importJWK` → `exportSPKI` to prove the pinned `jose`
+derives the same SPKI as `node:crypto` — loading is not enough for code that
+verifies every ID token. Confirmed to fail without the pin.
+
+`GET /api/health` was added for the same reason: it imports the server module
+graph and needs no account, so this class of failure is one request away instead
+of being indistinguishable from "the allowlist does not recognise me".
+
+### 13. Sign-up never sent the confirmation it claimed to send
+
+`AuthForm`'s docstring said "Email verification is sent on signup". It was not —
+`sendEmailVerification` appeared nowhere in the file. Firebase does not verify
+an address on password sign-up, so every password account stayed unverified
+forever.
+
+That is not cosmetic. Owner access is granted only to a **confirmed** address,
+deliberately, so nobody who merely knows an owner's email can register it and
+claim the restaurant. An owner who signed up with a password could therefore
+never become admin, whatever `ADMIN_EMAILS` said.
+
+Now sent on sign-up, and not awaited into the failure path: a rate-limited
+verification email must not fail an account that already exists. Covered by an
+end-to-end test that asks the Auth emulator what it was actually told to send —
+confirmed to fail before the fix, with an empty list.
+
+### 14. "Refresh my access" called a function that no longer exists
+
+The button still did this:
+
+```ts
+await httpsCallable(getFunctionsClient(), "claimAdminAccess")({});
+```
+
+`claimAdminAccess` was deleted in defect 11, when the server moved into the Next
+app. The call could only ever fail — and the failure was swallowed, so the
+button went on to report "no role" as though the allowlist had rejected you.
+
+It calls `/api/auth/sync` now, and shows the server's error instead of hiding
+it. `src/lib/storage/firebaseFunctions.ts` was the last user of
+`firebase/functions` and is gone.
+
+The regression test for this initially **passed against the broken button**, because
+the account was already an admin by the time it was pressed. It now signs in
+while unverified, confirms the address out of band, and navigates by clicking
+rather than reloading — a reload re-runs the automatic sync and grants the role
+without the button. Confirmed to fail without the fix.
+
+### 15. A failed sign-in sync was discarded
+
+```ts
+})().catch(() => {
+  syncedFor.current = null;   // and nothing else
+});
+```
+
+Signing in must not fail because the server is unreachable, so catching is
+right. Discarding is not: it turned "the server is returning 500" into a screen
+that simply said your role was `none` — the one thing it looked like was the one
+thing it was not, an allowlist that did not recognise you. This is why defect 12
+went undiagnosed from inside the app.
+
+The error is kept on the auth context now and shown on `/account`, which also
+stops calling the failure a missing role. The recovery card there was rewritten
+at the same time: it still told people to run `firebase deploy --only
+functions`, to set `ADMIN_EMAILS` in Secret Manager, and to run
+`node functions/scripts/grant-role.mjs` — a command, a service and a path that
+all stopped existing in defect 11.
+
+### 16. A cutoff test that was only true for part of the week
+
+`applies the cutoff per week, not per plan` anchored a plan to the current week
+and asserted week 3 was still open. Week 3's deadline *is* the current Sunday at
+18:00 Bali, so the test failed for the last six hours of every week. It failed
+for real during this pass, at 18:18 Bali on a Sunday, and reproduces on the
+merged `main`.
+
+Re-anchored to week 4, whose deadline is a further seven days out, and now
+asserts both halves — an early week closed *and* a later week open — so it
+actually demonstrates the per-week behaviour instead of implying it.
+
 ## Not covered
 
 Stated plainly, so the remaining risk is written down rather than assumed away.
@@ -271,9 +398,12 @@ Stated plainly, so the remaining risk is written down rather than assumed away.
   its own tests. Specified here, not built.
 - **App Check**, scheduled **Firestore backups**, and **payments** — all called
   out as future work in the README and untouched here.
-- **`npm audit`** reports 3 high advisories in `postcss` and `sharp`, both
-  transitive via `next`. Not actioned: upgrading Next mid-QA would invalidate
-  the baseline. Worth doing as its own change.
+- **`npm audit`** reports 12 advisories (3 high, 9 moderate), all transitive:
+  `postcss` and `sharp` via `next`, and a `@google-cloud/*` chain via
+  `firebase-admin` and `firebase-tools`. None are in `jose`. Not actioned —
+  upgrading `next` or `firebase-admin` mid-QA would invalidate the baseline, and
+  defect 12 is a caution about changing that dependency casually. Worth doing as
+  its own change, behind the runtime test.
 - **Load and cost at scale.** The analytics roll-ups run in the browser over
   every order, which the code notes is fine at Negrita's volume and should be
   revisited "if the order book reaches a few thousand". Not exercised here.
@@ -286,17 +416,17 @@ Stated plainly, so the remaining risk is written down rather than assumed away.
 ## Running it
 
 ```bash
-npm ci && npm --prefix functions ci
+npm ci
 npm run lint && npm run typecheck
-npm test                  # 212 unit
+npm test                  # 216 unit
 npm run test:emulated     # 122 rules, indexes + server logic
 npm run build
-npm run e2e               # 47 browser tests, desktop + 375 px
+npm run e2e               # 55 browser tests, desktop + 375 px
 ```
 
-To take owner access on a project whose functions are deployed, press
-**Refresh my access** on `/account` with your address in `ADMIN_EMAILS` and
-your email verified. Otherwise:
+To take owner access, put your address in `ADMIN_EMAILS`, redeploy, confirm
+your email, and sign in — there is nothing to press. `/account` has **Refresh
+my access** if you would rather not sign out. Otherwise:
 
 ```bash
 GOOGLE_CLOUD_PROJECT=<project-id> \
