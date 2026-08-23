@@ -196,3 +196,24 @@ export async function clearAuthAccounts(): Promise<void> {
   );
   if (!res.ok) throw new Error(`clearAuthAccounts failed: ${res.status}`);
 }
+
+/**
+ * The verification and reset links the Auth emulator has actually sent.
+ *
+ * Firebase does not verify an address on password sign-up, and the sign-up form
+ * claimed for months to send a confirmation while never calling
+ * `sendEmailVerification`. Nothing in the UI could show that, because the UI
+ * does not know either — so this asks the emulator what it was told to send.
+ */
+export async function sentOobCodes(
+  email: string
+): Promise<{ email: string; requestType: string }[]> {
+  const res = await fetch(
+    `${AUTH_EMULATOR}/emulator/v1/projects/demo-mamma/oobCodes`
+  );
+  if (!res.ok) throw new Error(`sentOobCodes failed: ${res.status}`);
+  const { oobCodes } = (await res.json()) as {
+    oobCodes?: { email: string; requestType: string }[];
+  };
+  return (oobCodes ?? []).filter((code) => code.email === email);
+}

@@ -187,14 +187,27 @@ describe("the cutoff is enforced", () => {
   });
 
   it("applies the cutoff per week, not per plan", async () => {
+    // One plan straddling the deadline: its opening weeks have closed while a
+    // later week is still open. A cutoff computed from the plan rather than the
+    // week would reject both.
+    //
+    // Week 4 rather than week 3, and asserted in both directions. Week 3 of a
+    // plan starting last Monday closes *this* Sunday at 18:00 Bali, so the
+    // original version of this test quietly stopped being true for the last six
+    // hours of every week — it failed for real on a Sunday evening. Week 4's
+    // deadline is a further seven days out, which no run time can reach.
     const uid = await aUser();
     await seedPlan(uid, "p1", {
       programStartDate: mondayAhead(-1),
       weekCount: 6,
-      assignments: [meal({ week: 3 })],
+      assignments: [meal({ week: 1 }), meal({ week: 4 })],
     });
+
     await expect(
-      submitOrder(uid, { planId: "p1", weekNumber: 3, fulfilment: PICKUP })
+      submitOrder(uid, { planId: "p1", weekNumber: 1, fulfilment: PICKUP })
+    ).rejects.toThrow(/closed/i);
+    await expect(
+      submitOrder(uid, { planId: "p1", weekNumber: 4, fulfilment: PICKUP })
     ).resolves.toBeDefined();
   });
 });

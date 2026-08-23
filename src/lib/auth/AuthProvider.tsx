@@ -38,6 +38,18 @@ export interface AuthState {
   enabled: boolean;
   /** Forces a token refresh, picking up a role granted since sign-in. */
   refreshRole: () => Promise<Role | null>;
+  /**
+   * Why the last sign-in reconciliation failed, or null if it did not.
+   *
+   * Signing in must not fail because the server is unreachable, so the error is
+   * caught — but it used to be discarded, and that turned "the server is
+   * returning 500" into a screen that simply said your role was `none`. The
+   * one thing it looked like was the one thing it was not: an allowlist that
+   * did not recognise you. Held here so `/account` can say what really broke.
+   */
+  syncError: string | null;
+  /** Re-runs the reconciliation `/api/auth/sync` does at sign-in. */
+  syncAccount: () => Promise<Role | null>;
   signOut: () => Promise<void>;
 }
 
@@ -70,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [actualRole, setActualRole] = useState<Role | null>(null);
   const [viewAs, setViewAsState] = useState<Role | null>(null);
   const [loading, setLoading] = useState(enabled);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   // Guards the sync so a token refresh does not count as a new sign-in.
   const syncedFor = useRef<string | null>(null);
@@ -136,26 +149,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * The trigger it replaces never backfilled, so an account created before the
    * server was deployed could never become an admin at all.
    */
+  const runSync = useCallback(async (current: User): Promise<Role | null> => {
+    const { callApi } = await import("@/lib/api");
+    const { role, changed } = await callApi<{ role: Role; changed: boolean }>(
+      "/api/auth/sync"
+    );
+    if (changed) {
+      // The claim is on the account but not yet on this token.
+      await current.getIdTokenResult(true);
+    }
+    setActualRole(role);
+    setSyncError(null);
+    return role;
+  }, []);
+
   useEffect(() => {
     if (!user || syncedFor.current === user.uid) return;
     syncedFor.current = user.uid;
 
-    void (async () => {
-      const { callApi } = await import("@/lib/api");
-      const { role, changed } = await callApi<{ role: Role; changed: boolean }>(
-        "/api/auth/sync"
-      );
-      if (changed) {
-        // The claim is on the account but not yet on this token.
-        await user.getIdTokenResult(true);
-      }
-      setActualRole(role);
-    })().catch(() => {
+    void runSync(user).catch((cause: unknown) => {
       // An unreachable server must never block signing in — the app still
-      // works as a guest would. Retried on the next load.
+      // works as a guest would. Retried on the next load, and, unlike before,
+      // reported on /account instead of looking like an unrecognised address.
       syncedFor.current = null;
+      setSyncError(
+        cause instanceof Error ? cause.message : "Could not reach the server."
+      );
     });
-  }, [user]);
+  }, [user, runSync]);
+
+  /**
+   * Runs the same reconciliation on demand, for the "Refresh my access" button.
+   *
+   * Throws rather than swallowing, because the button's whole job is to report
+   * what it found — including a server that answered with an error.
+   */
+  const syncAccount = useCallback(async (): Promise<Role | null> => {
+    if (!user) return null;
+    try {
+      return await runSync(user);
+    } catch (cause) {
+      setSyncError(
+        cause instanceof Error ? cause.message : "Could not reach the server."
+      );
+      throw cause;
+    }
+  }, [user, runSync]);
 
   /**
    * Picks up a role granted since this token was issued.
@@ -264,6 +303,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!enabled) return;
     syncedFor.current = null;
     setViewAsState(null);
+    setSyncError(null);
     try {
       window.sessionStorage.removeItem(VIEW_AS_KEY);
     } catch {
@@ -289,9 +329,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       enabled,
       refreshRole,
+      syncError,
+      syncAccount,
       signOut,
     }),
-    [user, actualRole, viewAs, setViewAs, loading, enabled, refreshRole, signOut]
+    [
+      user,
+      actualRole,
+      viewAs,
+      setViewAs,
+      loading,
+      enabled,
+      refreshRole,
+      syncError,
+      syncAccount,
+      signOut,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -316,6 +369,8 @@ export function useAuth(): AuthState {
       loading: false,
       enabled: false,
       refreshRole: async () => null,
+      syncError: null,
+      syncAccount: async () => null,
       signOut: async () => {},
     }
   );

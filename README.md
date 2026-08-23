@@ -350,12 +350,53 @@ With the CLI, if you prefer: `firebase deploy --only firestore:rules,firestore:i
 - [ ] Email enumeration protection ON
 - [ ] Your Vercel domains added to **Authorized domains**
 - [ ] Rules and indexes published
-- [ ] `ADMIN_EMAILS` and `FIREBASE_SERVICE_ACCOUNT` set in Vercel, and you can
-      reach `/admin` after signing in
+- [ ] `ADMIN_EMAILS` and `FIREBASE_SERVICE_ACCOUNT` set in Vercel, **and
+      redeployed since**
+- [ ] `https://your-domain/api/health` returns
+      `{"ok":true,"adminConfigured":true}`
+- [ ] You can reach `/admin` after signing in
 - [ ] Submit one real week end to end and check it reaches `/kitchen`
 
 Optional hardening, worth doing once there is real traffic: enable **App Check**
 (reCAPTCHA Enterprise) for Firestore, and turn on scheduled Firestore backups.
+
+### When signing in does not make you an admin
+
+Check them in this order — the first one is the only one that is invisible from
+inside the app.
+
+1. **`/api/health`.** A 200 means the server is running. A 500 means it is not,
+   and no amount of configuration will grant anyone a role until it is fixed —
+   check the Vercel runtime logs and see the note below. `adminConfigured:
+   false` means the server runs but `FIREBASE_SERVICE_ACCOUNT` is missing or
+   malformed.
+2. **Did you redeploy?** An existing deployment does not pick up variables added
+   after it was built.
+3. **Is your address confirmed?** Owner access is only ever granted to a
+   confirmed address, so that nobody who merely knows an owner's email can
+   register it and claim the restaurant. Sign-up sends the confirmation, and
+   `/account` will say `Email confirmed: no` and offer to resend it. Google
+   sign-in is already confirmed.
+4. **Sign in again**, or press **Refresh my access** on `/account`. The check
+   runs on every sign-in, and `/account` now shows the server's actual error
+   when it fails instead of leaving you looking at a role of `none`.
+5. Still nothing — grant it directly, from a machine with project access:
+   `node scripts/grant-role.mjs you@example.com admin`.
+
+#### Do not remove the `overrides` block in `package.json`
+
+`firebase-admin` is on Next.js's default list of packages that are never
+bundled, so Vercel copies it into the lambda and `require`s it at runtime.
+Inside it, `jwks-rsa` does a CommonJS `require('jose')` — and `jose@6` is
+ESM-only. Vercel's loader has no `require(esm)`, so **every** `/api` route
+returned `ERR_REQUIRE_ESM` and a 500: no role was ever stamped, and no week
+could be sent to the kitchen. Pinning `jose` to a version that ships a CommonJS
+build is what makes the server loadable at all.
+
+`src/lib/server/runtime.test.ts` reproduces that runtime and fails if the pin
+goes away. Nothing else in the suite can: the other tests run on a Node that
+does support `require(esm)`, and the emulated suite never reaches `jwks-rsa`
+because `verifyIdToken` skips signature checks against the emulator.
 
 ## Project structure
 

@@ -1,11 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  RefreshCw,
+  ShieldAlert,
+  XCircle,
+} from "lucide-react";
 import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
 import { isFirebaseConfigured } from "@/lib/firebaseEnv";
 import { isCloudBackend } from "@/lib/storage";
 import { authErrorMessage } from "@/lib/auth/errors";
+import { ApiError } from "@/lib/api";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import SignInPrompt from "@/components/SignInPrompt";
@@ -59,6 +66,8 @@ export default function AccountAccess() {
     enabled,
     loading,
     refreshRole,
+    syncError,
+    syncAccount,
   } = useAuth();
   const { show } = useToast();
   const [busy, setBusy] = useState(false);
@@ -89,39 +98,36 @@ export default function AccountAccess() {
   }
 
   /**
-   * Refreshes the token, and first gives the owner bootstrap a chance to run.
+   * Re-runs the reconciliation, then re-reads the token.
    *
-   * claimAdminAccess grants admin only to an address on the server-side
-   * ADMIN_EMAILS allowlist, so calling it for everyone is safe — a customer
-   * simply gets permission-denied, which is the expected answer and not worth
-   * showing them. Without this the button could only ever report the deadlock:
-   * onUserCreate never backfills, and setUserRole needs an admin to already
-   * exist.
+   * The order matters: `/api/auth/sync` is what actually stamps the claim —
+   * including granting owner access to an allowlisted address — and refreshing
+   * a token first would only re-read the absence of one.
+   *
+   * This called the `claimAdminAccess` Cloud Function until now, and swallowed
+   * the failure. That function no longer exists: the server moved into the Next
+   * app, so the call could only ever fail, and the swallow meant the button
+   * still reported "no role" as though the allowlist had rejected you. Errors
+   * are shown now, for the same reason.
    */
   async function refresh() {
     setBusy(true);
     setTriedRefresh(true);
     try {
-      if (isCloudBackend()) {
-        try {
-          const [{ getFunctionsClient }, { httpsCallable }] = await Promise.all([
-            import("@/lib/storage/firebaseFunctions"),
-            import("firebase/functions"),
-          ]);
-          await httpsCallable(getFunctionsClient(), "claimAdminAccess")({});
-        } catch {
-          // Not on the allowlist, or the functions are not deployed. Either
-          // way the refresh below still reports the truth.
-        }
-      }
-      const next = await refreshRole();
+      const synced = isCloudBackend() ? await syncAccount() : null;
+      const next = (await refreshRole()) ?? synced;
       show(
         next
           ? `Your role is "${next}".`
           : "Still no role on this account. The claim has never been set."
       );
     } catch (cause) {
-      show(authErrorMessage(cause), "error");
+      // An ApiError already carries the server's own wording; anything else is
+      // a Firebase error and needs translating.
+      show(
+        cause instanceof ApiError ? cause.message : authErrorMessage(cause),
+        "error"
+      );
     } finally {
       setBusy(false);
     }
@@ -138,18 +144,21 @@ export default function AccountAccess() {
   /**
    * Deployment internals are for whoever can act on them.
    *
-   * A diner has no use for environment variable names, Secret Manager or a
-   * deploy command, and showing them is needless detail about how access is
-   * gated.
+   * A diner has no use for environment variable names or Vercel settings, and
+   * showing them is needless detail about how access is gated.
    *
    * "No role yet" is deliberately not enough to qualify. A brand-new account's
-   * ID token is minted before onUserCreate stamps the claim, so every customer
-   * is briefly roleless and would otherwise be shown the developer panel for
-   * the few seconds until their token refreshes. Asking for a refresh and
-   * still coming back with nothing is the real signal that someone is stuck.
+   * ID token is minted before /api/auth/sync stamps the claim, so every
+   * customer is briefly roleless and would otherwise be shown the developer
+   * panel for the few seconds until their token refreshes. Asking for a refresh
+   * and still coming back with nothing is the real signal that someone is
+   * stuck — as is a reconciliation that failed outright.
    */
   const stuck = Boolean(user) && actualRole === null && triedRefresh;
-  const showDiagnostics = isStaff(actualRole) || stuck;
+  // A failed reconciliation is a server fault, not a missing role, so it counts
+  // as being stuck on its own — without it the panel below never appears and
+  // the screen just says your role is "none".
+  const showDiagnostics = isStaff(actualRole) || stuck || Boolean(syncError);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
@@ -161,6 +170,21 @@ export default function AccountAccess() {
           ? "What this deployment thinks you can do, and where to look if it is wrong."
           : "Your details, what this account can do, and how to sign out."}
       </p>
+
+      {user && syncError && (
+        <Card className="mt-5 border-tomato/40 bg-tomato/5 p-4">
+          <h2 className="flex items-center gap-2 font-600 text-charcoal">
+            <AlertTriangle size={16} className="text-tomato-dark" /> The server
+            could not check your access
+          </h2>
+          <p className="mt-1 text-sm text-charcoal-soft">{syncError}</p>
+          <p className="mt-2 text-sm text-charcoal-soft">
+            Your role is decided by the server, so until this succeeds it stays
+            as it is — whatever <code>ADMIN_EMAILS</code> says. This is a
+            deployment problem, not a problem with your account.
+          </p>
+        </Card>
+      )}
 
       {!enabled && showDiagnostics && (
         <Card className="mt-5 border-gold/40 bg-gold/10 p-4">
@@ -290,30 +314,39 @@ export default function AccountAccess() {
       {/* Editing your own details, and the way out. */}
       <AccountProfile />
 
-      {stuck && user && (
+      {(stuck || syncError) && user && (
         <Card className="mt-5 p-4">
           <h2 className="font-display text-lg font-700 text-charcoal">
             No role? Check these, in order
           </h2>
           <ol className="mt-2 flex list-decimal flex-col gap-1.5 pl-5 text-sm text-charcoal-soft">
             <li>
-              The Cloud Functions are deployed —{" "}
-              <code>firebase deploy --only functions</code>. The trigger that
-              stamps roles is the only thing that can create the first admin.
-            </li>
-            <li>
-              <code>ADMIN_EMAILS</code> is set in Secret Manager and contains{" "}
+              <code>ADMIN_EMAILS</code> and <code>FIREBASE_SERVICE_ACCOUNT</code>{" "}
+              are set in <b className="text-charcoal">Vercel → Settings →
+              Environment Variables</b>, and the allowlist contains{" "}
               <b className="text-charcoal">{user.email}</b> exactly.
             </li>
             <li>
+              You have <b className="text-charcoal">redeployed since</b> setting
+              them. An existing deployment does not pick up new variables.
+            </li>
+            <li>
+              <code>/api/health</code> answers <code>200</code>. A 500 there
+              means the server itself is not running, and no amount of
+              configuration will grant a role until it is.
+            </li>
+            <li>
+              Your email is confirmed. Owner access is only ever granted to a
+              confirmed address, so that nobody who merely knows it can claim
+              the restaurant.
+            </li>
+            <li>
               Then press <b className="text-charcoal">Refresh my access</b>{" "}
-              above. The sign-up trigger never backfills, so an account older
-              than the deploy needs this to claim the role.
+              above, or simply sign in again — the check runs on every sign-in.
             </li>
             <li>
               Still nothing? Grant it directly, from a machine with project
-              access:{" "}
-              <code>node functions/scripts/grant-role.mjs {user.email} admin</code>
+              access: <code>node scripts/grant-role.mjs {user.email} admin</code>
               . The Firebase console has no editor for custom claims, so this
               cannot be done by hand in a browser.
             </li>
