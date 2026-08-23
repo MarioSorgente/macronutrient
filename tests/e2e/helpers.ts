@@ -144,7 +144,7 @@ export function mondayAhead(weeks: number): string {
 
 const AUTH_EMULATOR = "http://127.0.0.1:9099";
 
-/** The address on the emulator's ADMIN_EMAILS allowlist (functions/.secret.example). */
+/** The address on the emulator's ADMIN_EMAILS allowlist (playwright.config.ts). */
 export const OWNER_EMAIL = "owner@example.com";
 
 /** Marks an address confirmed, the way clicking the emailed link would. */

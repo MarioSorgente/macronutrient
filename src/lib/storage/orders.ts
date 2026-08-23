@@ -89,20 +89,24 @@ export async function listAllOrders(max = 200): Promise<Order[]> {
   return snap.docs.map((d) => d.data() as Order);
 }
 
+/**
+ * Moves an order through its lifecycle.
+ *
+ * Server-side, because a cancelled or rejected order also has to clear the
+ * kitchen's board and free the week on the plan — work a browser is not
+ * allowed to do, and which used to be a Firestore trigger. Doing it in the
+ * same request removes the window where an order is dead but the kitchen is
+ * still cooking it.
+ */
 export async function setOrderStatus(
   order: Order,
   status: OrderStatus,
-  byUid: string,
+  _byUid: string,
   note?: string
 ): Promise<void> {
-  const { db, doc, updateDoc } = await firestore();
-  const at = new Date().toISOString();
-  await updateDoc(doc(db, ORDERS, order.id), {
-    status,
-    updatedAt: at,
-    ...(note !== undefined ? { restaurantNote: note } : {}),
-    statusHistory: [...(order.statusHistory ?? []), { status, at, byUid }],
-  });
+  requireCloud("Updating an order");
+  const { callApi } = await import("@/lib/api");
+  await callApi("/api/orders/status", { orderId: order.id, status, note });
 }
 
 /**
@@ -113,16 +117,7 @@ export async function setOrderStatus(
  * board — and should not have to remember to.
  */
 export async function cancelOrder(order: Order, byUid: string): Promise<void> {
-  const { db, doc, updateDoc } = await firestore();
-  const at = new Date().toISOString();
-  await updateDoc(doc(db, ORDERS, order.id), {
-    status: "cancelled",
-    updatedAt: at,
-    statusHistory: [
-      ...(order.statusHistory ?? []),
-      { status: "cancelled", at, byUid },
-    ],
-  });
+  await setOrderStatus(order, "cancelled", byUid);
 }
 
 // --- Prep tasks -------------------------------------------------------------
@@ -281,21 +276,12 @@ export async function submitWeek(
   fulfilment: Record<number, Fulfilment>
 ): Promise<SubmitResult> {
   requireCloud("Submitting an order");
-  const [{ getFunctionsClient }, { httpsCallable }] = await Promise.all([
-    import("@/lib/storage/firebaseFunctions"),
-    import("firebase/functions"),
-  ]);
-  const call = httpsCallable<
-    { planId: string; weekNumber: number; fulfilment: Record<string, Fulfilment> },
-    SubmitResult
-  >(getFunctionsClient(), "submitOrder");
-
-  const result = await call({
+  const { callApi } = await import("@/lib/api");
+  return callApi<SubmitResult>("/api/orders/submit", {
     planId,
     weekNumber,
     fulfilment: Object.fromEntries(
       Object.entries(fulfilment).map(([day, value]) => [String(day), value])
     ),
   });
-  return result.data;
 }

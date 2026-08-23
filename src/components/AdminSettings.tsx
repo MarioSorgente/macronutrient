@@ -77,11 +77,8 @@ export default function AdminSettings() {
 
   async function changeRole(uid: string, next: Role) {
     try {
-      const [{ getFunctionsClient }, { httpsCallable }] = await Promise.all([
-        import("@/lib/storage/firebaseFunctions"),
-        import("firebase/functions"),
-      ]);
-      await httpsCallable(getFunctionsClient(), "setUserRole")({ uid, role: next });
+      const { callApi } = await import("@/lib/api");
+      await callApi("/api/admin/set-role", { uid, role: next });
       show(`Role updated to ${next}. It applies on their next token refresh.`);
       await refreshPeople();
     } catch (cause) {

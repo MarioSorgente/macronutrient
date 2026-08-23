@@ -180,12 +180,9 @@ npm run bench          # hot-path timings (not part of CI — machine dependent)
 ```
 
 `test:emulated` and `e2e` start the Firebase emulator suite themselves and shut
-it down afterwards; both need Java on the PATH. Before the first run, give the
-emulator the bootstrap admin allowlist the roles tests expect:
-
-```bash
-cp functions/.secret.example functions/.secret.local
-```
+it down afterwards; both need Java on the PATH. No credentials or setup are
+needed — the emulators require none, and the owner allowlist the tests use is
+configured in `vitest.config.ts` and `playwright.config.ts`.
 
 The end-to-end suite runs against a production build rather than `next dev`,
 because the dev server compiles routes on first request and that made the long
@@ -218,21 +215,22 @@ created before the functions were deployed, or before the allowlist contained
 your address. The sign-up trigger runs once and never backfills, so the role
 has to be claimed:
 
-1. Make sure `ADMIN_EMAILS` contains your address and the functions are
-   deployed, then **sign in again**. The app claims the role for you on every
-   sign-in, so being on the allowlist is enough — there is nothing to press.
+1. Make sure `ADMIN_EMAILS` contains your address in Vercel, **redeploy**, then
+   sign in again. The app reconciles your role on every sign-in, so being on
+   the allowlist is enough — there is nothing to press.
 
    The address has to be **confirmed**, so that nobody who merely knows an
    owner's email can register it and take the restaurant. Google sign-in is
    already verified; with a password, `/account` will say so and offer to send
    the confirmation.
-2. If the functions are not deployed yet, grant it directly from a machine with
-   project access:
+2. If that is not possible — the address is not on the allowlist, or you need
+   to grant someone the `restaurant` role before any admin exists — do it
+   directly from a machine with project access:
 
    ```bash
    gcloud auth application-default login
    GOOGLE_CLOUD_PROJECT=<project-id> \
-     node functions/scripts/grant-role.mjs you@example.com admin
+     node scripts/grant-role.mjs you@example.com admin
    ```
 
    The same script grants `restaurant`. The Firebase console has no editor for
@@ -291,10 +289,16 @@ downloads it — worth roughly 120 kB on every page.
 
 ## Deploying
 
-### 1. Vercel (the app)
+Everything ships with the app. There is no second deploy to remember: the
+server logic lives in the Next app's own API routes (`src/app/api/**`), so
+pushing to your default branch deploys the site *and* the server together.
 
-Import the repo; Next.js is auto-detected. Set these environment variables —
-everything `NEXT_PUBLIC_*` is shipped to the browser **by design**, since the
+### 1. Vercel — the app and its server
+
+Import the repo; Next.js is auto-detected. Then set the environment variables
+under **Project → Settings → Environment Variables**.
+
+Public — these are compiled into the browser bundle **by design**, since the
 Firebase web config is not a secret and security lives in the rules:
 
 ```
@@ -308,15 +312,36 @@ NEXT_PUBLIC_FIREBASE_APP_ID=…
 NEXT_PUBLIC_RESTAURANT_ID=negrita
 ```
 
-### 2. Firebase (rules, indexes, functions)
+Server-only — **never** give these a `NEXT_PUBLIC_` prefix, or they ship to
+every visitor's browser:
 
-**Deploy the rules before switching the backend on**, or every read is denied:
-
-```bash
-firebase deploy --only firestore:rules,firestore:indexes
-firebase functions:secrets:set ADMIN_EMAILS   # your email, comma-separated
-firebase deploy --only functions
 ```
+ADMIN_EMAILS=you@example.com
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account", … }
+```
+
+`ADMIN_EMAILS` is the owner allowlist: signing in with one of those addresses
+grants admin automatically. `FIREBASE_SERVICE_ACCOUNT` is the whole contents of
+a key from **Firebase console → Project settings → Service accounts → Generate
+new private key**, pasted on one line. It is what lets the server stamp a role
+onto a token and write the collections the rules deny to browsers.
+
+**Redeploy after changing any of them.** The `NEXT_PUBLIC_*` values are inlined
+at build time, so setting them is not enough on its own.
+
+### 2. Firebase — rules and indexes
+
+No Cloud Functions, so **no Blaze plan is required**: Firestore and
+Authentication both run on the free Spark tier.
+
+Two things still live in Firebase, and both can be published from the browser:
+
+- **Rules** — Firestore → Rules → paste `firestore.rules` → Publish. Do this
+  *before* switching the backend on, or every read is denied.
+- **Indexes** — Firestore → Indexes, or follow the link in the error the first
+  time a query needs one. The set is in `firestore.indexes.json`.
+
+With the CLI, if you prefer: `firebase deploy --only firestore:rules,firestore:indexes`.
 
 ### 3. Before going live
 
@@ -324,16 +349,13 @@ firebase deploy --only functions
 - [ ] Email/Password and Google sign-in enabled
 - [ ] Email enumeration protection ON
 - [ ] Your Vercel domains added to **Authorized domains**
-- [ ] Rules and indexes deployed
-- [ ] `ADMIN_EMAILS` secret set, and you can reach `/admin`
-- [ ] Budget alert set on the Blaze plan
+- [ ] Rules and indexes published
+- [ ] `ADMIN_EMAILS` and `FIREBASE_SERVICE_ACCOUNT` set in Vercel, and you can
+      reach `/admin` after signing in
 - [ ] Submit one real week end to end and check it reaches `/kitchen`
 
 Optional hardening, worth doing once there is real traffic: enable **App Check**
-(reCAPTCHA Enterprise) for Firestore and Functions, and turn on scheduled
-Firestore backups.
-
----
+(reCAPTCHA Enterprise) for Firestore, and turn on scheduled Firestore backups.
 
 ## Project structure
 
@@ -360,7 +382,8 @@ src/lib/storage/                     Repository (local + Firestore), orders, cla
 src/store/                           Dish-builder + house-recipe state (Zustand)
 src/components/ui/                   Button, Card, Modal, Field, Toast, DataTable…
 src/components/                      Planner, builder, kitchen board, dashboard…
-functions/src/                       Cloud Functions: roles, submitOrder
+src/app/api/                         Server routes: auth sync, roles, orders
+src/lib/server/                      Admin SDK, token verification, order + role logic
 firestore.rules                      Access rules
 firestore.indexes.json               Composite indexes for the queries above
 ```

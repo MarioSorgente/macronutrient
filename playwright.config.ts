@@ -21,6 +21,15 @@ import { defineConfig, devices } from "@playwright/test";
  * gitignored and CI needs these committed.
  */
 const EMULATOR_ENV = {
+  // Server-side: points the Admin SDK in the API routes at the emulators, so
+  // it needs no credentials. ADMIN_EMAILS is the owner allowlist the sync
+  // route reads — a plain server var, never NEXT_PUBLIC_.
+  FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
+  FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080",
+  FIREBASE_PROJECT_ID: "demo-mamma",
+  GOOGLE_CLOUD_PROJECT: "demo-mamma",
+  ADMIN_EMAILS: "owner@example.com,boss@negrita.test",
+
   NEXT_PUBLIC_STORAGE_BACKEND: "firebase",
   NEXT_PUBLIC_FIREBASE_API_KEY: "emulator-key",
   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "demo-mamma.firebaseapp.com",

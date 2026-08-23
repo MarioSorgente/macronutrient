@@ -16,11 +16,11 @@ Branch: `claude/production-readiness-qa-ru4hln`.
 | `npm run lint` | Could not pass — `next lint` with no ESLint config and neither `eslint` nor `eslint-config-next` installed | Passes; flat config, `eslint` called directly |
 | Unit tests | 29, in 7 files | **212**, in 17 files |
 | `firestore.rules` | Untested | **58 tests**, one per rule branch |
-| Cloud Functions | Untested | **74 tests** against the emulator |
+| Server logic | Untested | **56 tests** against the emulator |
 | Browser tests | None | **47**, desktop + 375 px phone |
 | CI | None | Lint → typecheck → unit → functions build → emulators → build → E2E |
 
-Total: **212 unit + 132 emulated + 47 end-to-end.**
+Total: **212 unit + 122 emulated + 47 end-to-end.**
 
 ---
 
@@ -138,7 +138,7 @@ Fixed three ways:
   already an admin, so being on the allowlist is enough on its own — no button
   to find, no page to visit. A customer simply gets `permission-denied`, which
   is the expected answer and never surfaced.
-- **`functions/scripts/grant-role.mjs`** for the one case the callable cannot
+- **`scripts/grant-role.mjs`** for the one case the app cannot
   cover — functions not deployed yet. Verified against the emulator and covered
   by its own tests, because nobody runs it on a normal day and it would
   otherwise rot unnoticed until someone was already locked out.
@@ -217,6 +217,49 @@ What *was* expensive was Firestore reads, not CPU — see defect 7.
 
 ---
 
+### 11. The server logic could not be deployed at all
+
+The five Cloud Functions in `functions/` were never deployed, and nothing in
+the repo could deploy them: Vercel builds the Next app only, and there was no
+CI step, no `vercel.json`, nothing. That is the root cause behind the admin
+report — and it was larger than the admin role, because `submitOrder` is the
+only thing permitted to create an order, so **no week could ever have been sent
+to the kitchen either**.
+
+Two things made it worse than a missing step. Firebase Cloud Functions require
+the paid **Blaze** plan, so on the free tier they were never deployable at all;
+and Firebase has no browser UI for deploying them, so an owner who does not use
+a terminal had no route forward.
+
+Moved into the Next app instead, where Vercel deploys it with everything else:
+
+| Was | Is |
+|---|---|
+| `submitOrder` | `POST /api/orders/submit` |
+| `setUserRole` | `POST /api/admin/set-role` |
+| `claimAdminAccess` + `onUserCreate` | `POST /api/auth/sync`, called on every sign-in |
+| `onOrderStatusChanged` (trigger) | the cascade inside `POST /api/orders/status` |
+
+Folding the auth trigger into a per-sign-in sync is what removes the original
+deadlock at its root: there is no longer a one-shot that can be missed.
+
+Two consequences worth knowing:
+
+- **No Blaze plan is needed.** Firestore and Auth run on the free Spark tier,
+  and the app uses no Firebase Storage. What remains in Firebase is rules and
+  indexes, both publishable from the browser.
+- **Orders became read-only from a browser.** Losing the Firestore trigger
+  meant a direct write could cancel an order without clearing the kitchen's
+  prep tasks, so `firestore.rules` now denies browser writes to `orders`
+  outright and every change goes through the API, where the cascade runs in the
+  same request. Covered by its own rules tests.
+
+The trade-off, stated plainly: the server now needs a service-account key as a
+Vercel environment variable, where Cloud Functions had ambient credentials.
+It is a real secret, it must never carry a `NEXT_PUBLIC_` prefix, and
+`src/lib/server/firebaseAdmin.ts` imports `server-only` so the build fails if
+it is ever pulled into a client bundle.
+
 ## Not covered
 
 Stated plainly, so the remaining risk is written down rather than assumed away.
@@ -244,10 +287,9 @@ Stated plainly, so the remaining risk is written down rather than assumed away.
 
 ```bash
 npm ci && npm --prefix functions ci
-cp functions/.secret.example functions/.secret.local   # emulator ADMIN_EMAILS
 npm run lint && npm run typecheck
 npm test                  # 212 unit
-npm run test:emulated     # 132 rules + Cloud Functions
+npm run test:emulated     # 122 rules, indexes + server logic
 npm run build
 npm run e2e               # 47 browser tests, desktop + 375 px
 ```
@@ -258,7 +300,7 @@ your email verified. Otherwise:
 
 ```bash
 GOOGLE_CLOUD_PROJECT=<project-id> \
-  node functions/scripts/grant-role.mjs you@example.com admin
+  node scripts/grant-role.mjs you@example.com admin
 ```
 
 All of it runs on every push via `.github/workflows/ci.yml`.

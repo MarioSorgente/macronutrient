@@ -1,26 +1,22 @@
 /**
  * Grants a role to an existing account, from a machine with project access.
  *
- *   node functions/scripts/grant-role.mjs owner@example.com admin
- *   node functions/scripts/grant-role.mjs cook@example.com  restaurant
+ *   node scripts/grant-role.mjs owner@example.com admin
+ *   node scripts/grant-role.mjs cook@example.com  restaurant
  *
- * Lives under functions/ because that is where firebase-admin is a real
- * dependency, and because this is a server-side administrative tool.
  *
  * WHY THIS EXISTS
  *
- * The role is a custom claim on the Firebase Auth token, and only two things
- * in the deployed app can set one: the `onUserCreate` trigger, which runs at
- * sign-up and never backfills, and `setUserRole`, which requires the caller to
- * already be an admin. An account that existed before the functions were
- * deployed — or before ADMIN_EMAILS contained its address — therefore has no
- * way to become admin from inside the app at all.
+ * The role is a custom claim on the Firebase Auth token, which only the Admin
+ * SDK can set. Inside the app that happens in /api/auth/sync (from the
+ * ADMIN_EMAILS allowlist) and /api/admin/set-role (admin only).
  *
- * `claimAdminAccess` fixes that for any project whose functions are deployed.
- * This script is the escape hatch for the case that one cannot cover: nothing
- * deployed yet, or an address that is not on the allowlist. It is also the
- * correct answer to "set the claim directly" — the Firebase console has no
- * custom-claims editor, so there is no way to do this by hand in a browser.
+ * The app now reconciles the role on every sign-in, so an allowlisted address
+ * becomes an admin on its own. This script is the escape hatch for the cases
+ * that cannot cover: an address that is not on the allowlist, or granting the
+ * `restaurant` role before any admin exists. It is also the correct answer to
+ * "set the claim directly" — the Firebase console has no custom-claims editor,
+ * so there is no way to do this by hand in a browser.
  *
  * CREDENTIALS
  *
@@ -29,7 +25,7 @@
  * or point GOOGLE_APPLICATION_CREDENTIALS at a service-account key.
  *
  * Set the project explicitly if it is not already in your environment:
- *   GOOGLE_CLOUD_PROJECT=your-project-id node functions/scripts/grant-role.mjs ...
+ *   GOOGLE_CLOUD_PROJECT=your-project-id node scripts/grant-role.mjs ...
  */
 
 import { initializeApp, applicationDefault } from "firebase-admin/app";
@@ -50,7 +46,7 @@ const [email, role] = process.argv.slice(2);
 
 if (!email || !role) {
   die(
-    "Usage: node functions/scripts/grant-role.mjs <email> <role>\n" +
+    "Usage: node scripts/grant-role.mjs <email> <role>\n" +
       `  roles: ${ROLES.join(", ")}`
   );
 }
@@ -91,7 +87,7 @@ try {
     `Could not reach Firebase Auth: ${cause?.message ?? cause}\n` +
       "  Check your credentials and that the project id is right:\n" +
       "    gcloud auth application-default login\n" +
-      "    GOOGLE_CLOUD_PROJECT=<project-id> node functions/scripts/grant-role.mjs ..."
+      "    GOOGLE_CLOUD_PROJECT=<project-id> node scripts/grant-role.mjs ..."
   );
 }
 
