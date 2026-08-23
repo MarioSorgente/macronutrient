@@ -9,10 +9,14 @@ const requestRef = (uid: string) =>
   adminDb().doc(`restaurants/${RESTAURANT_ID}/staffRequests/${uid}`);
 
 export async function requestStaffAccess(caller: DecodedIdToken) {
-  if (caller.role === "restaurant" || caller.role === "admin") {
-    return { status: caller.role as Role };
-  }
   const account = await adminAuth().getUser(caller.uid);
+  const currentRole = account.customClaims?.role;
+  if (currentRole === "restaurant" || currentRole === "admin") {
+    return { status: currentRole as Role };
+  }
+  if (currentRole !== undefined && currentRole !== "client") {
+    throw new HttpError(409, "This account has an unsupported role.");
+  }
   if (!account.email) throw new HttpError(400, "Your account needs an email address.");
   const now = new Date().toISOString();
   await requestRef(account.uid).set({
