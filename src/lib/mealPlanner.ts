@@ -6,7 +6,6 @@ import { ZERO_PRICE, addPrices, priceItems, type PriceResult } from "@/lib/prici
 import { TARGET_FIELDS, adherencePct } from "@/lib/clients";
 import {
   diagnoseDailyAdherence,
-  MEANINGFUL_DAILY_ERROR_DIFFERENCE,
   type DailyAdherenceDiagnostics,
   type MacroAdherenceDiagnostic,
 } from "@/lib/dailyAdherence";
@@ -195,7 +194,7 @@ function makeRandom(seed?: number): () => number {
     state ^= state >>> 17;
     state ^= state << 5;
     state >>>= 0;
-    return state / 0xffffffff;
+    return state / 0x100000000;
   };
 }
 
@@ -454,6 +453,15 @@ function readyCandidates(
 /** Maximum number of partial complete-day plans retained at each depth. */
 const BEAM_WIDTH = 160;
 /**
+ * Complete days closer than this are operationally equivalent. The error is
+ * already normalized by each macro's daily tolerance, so 0.1 is only one tenth
+ * of a tolerance unit on the four-macro average.
+ */
+export const COMPLETE_DAY_ERROR_EQUIVALENCE = 0.1;
+
+/** Floating-point noise must not turn equal secondary scores into preference. */
+const SECONDARY_SCORE_EQUIVALENCE = 1e-9;
+/**
  * Repeat penalties, applied per previous use in the week. Tiered so the exact
  * same meal is discouraged hardest, then the protein, then the carbohydrate —
  * without the carb tier a single rice or potato quietly runs the whole week.
@@ -558,14 +566,14 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
             REPEAT_PENALTY.carb * (usage.carb.get(candidate.carbKey) ?? 0);
           // The residual supplies the target for this tentative choice; the
           // complete-day distance keeps compensation, rather than slot fit,
-          // authoritative. Seeded jitter only breaks otherwise equal plans.
+          // authoritative. Beam pruning is deliberately deterministic.
           const score = scoreAgainst(macros, options.targets) +
             scoreAgainst(candidate.macros, nextTarget) / slotsLeft + repeat +
             // `candidate.score` includes culinary slot suitability and the
             // provisional allocation. It orders the beam only; it never
             // controls eligibility or whether the finished day is compliant.
             candidate.score + candidate.slotPenalty * 6 +
-            pricePenalty(priceIdr) + random() * 1e-6;
+            pricePenalty(priceIdr);
           expanded.push({
             candidates: [...state.candidates, candidate], macros, priceIdr,
             used, score,
@@ -578,26 +586,47 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
       beam = expanded.sort((a, b) => a.score - b.score).slice(0, BEAM_WIDTH);
     }
 
-    // Partition first: no preference, variety, taste, repetition or price can
-    // promote a non-compliant day while a compliant complete day exists.
-    const partitioned = beam.reduce<{ compliant: SearchState[]; nonCompliant: SearchState[] }>(
-      (groups, state) => {
-        groups[diagnoseDailyAdherence(state.macros, options.targets).compliant
-          ? "compliant" : "nonCompliant"].push(state);
-        return groups;
-      }, { compliant: [], nonCompliant: [] }
+    // Classify every complete-day solution before any random choice. Exact,
+    // within-tolerance, and best-effort are deliberately separate classes: a
+    // seed can therefore vary composition, but can never demote adherence.
+    const classified = beam.map((state) => ({
+      state,
+      diagnostics: diagnoseDailyAdherence(state.macros, options.targets),
+    }));
+    const adherenceRank = { Exact: 0, "Within tolerance": 1, "Best effort": 2,
+      Impossible: 3 } as const;
+    const bestRank = classified.reduce(
+      (best, item) => Math.min(best, adherenceRank[item.diagnostics.classification]),
+      Number.POSITIVE_INFINITY
     );
-    const eligible = partitioned.compliant.length
-      ? partitioned.compliant
-      : partitioned.nonCompliant; // one explicit Best effort path
-    const complete = eligible.sort((a, b) => {
-      const errorDifference =
-        diagnoseDailyAdherence(a.macros, options.targets).normalizedError -
-        diagnoseDailyAdherence(b.macros, options.targets).normalizedError;
-      return Math.abs(errorDifference) >= MEANINGFUL_DAILY_ERROR_DIFFERENCE
-        ? errorDifference
-        : a.softScore - b.softScore;
-    })[0];
+    const bestClass = classified.filter(
+      (item) => adherenceRank[item.diagnostics.classification] === bestRank
+    );
+    const bestError = bestClass.reduce(
+      (best, item) => Math.min(best, item.diagnostics.normalizedError),
+      Number.POSITIVE_INFINITY
+    );
+    // Macro adherence remains authoritative. Only days whose normalized error
+    // is effectively tied may compete on variety, preferences, suitability,
+    // and price (all represented by softScore).
+    const macroTiePool = bestClass.filter(
+      (item) => item.diagnostics.normalizedError <=
+        bestError + COMPLETE_DAY_ERROR_EQUIVALENCE
+    );
+    const bestSoftScore = macroTiePool.reduce(
+      (best, item) => Math.min(best, item.state.softScore),
+      Number.POSITIVE_INFINITY
+    );
+    const finalTiePool = macroTiePool.filter(
+      (item) => item.state.softScore <=
+        bestSoftScore + SECONDARY_SCORE_EQUIVALENCE
+    );
+    // Randomness is a final tie-breaker only. No random value participates in
+    // candidate generation, beam pruning, adherence, or secondary scoring.
+    const selected = finalTiePool.length > 1
+      ? finalTiePool[Math.floor(random() * finalTiePool.length)]
+      : finalTiePool[0];
+    const complete = selected?.state;
     const meals: GeneratedMeal[] = [];
     const dayMacros: Macros = complete?.macros ?? { ...EMPTY_MACROS };
     let dayPrice: PriceResult = { ...ZERO_PRICE };
