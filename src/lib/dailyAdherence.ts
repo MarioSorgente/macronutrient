@@ -13,6 +13,10 @@ export const DAILY_MACRO_KEYS = [
 ] as const satisfies readonly (keyof MacroTargets)[];
 
 export type DailyMacroKey = (typeof DAILY_MACRO_KEYS)[number];
+/** Precision used by the planner preview for each daily macro. */
+export const DAILY_DISPLAY_DECIMALS: Record<DailyMacroKey, number> = {
+  energy_kcal: 0, protein_g: 1, carbs_g: 1, fat_g: 1,
+};
 export type DailyAdherenceClassification =
   | "Exact"
   | "Within tolerance"
@@ -20,18 +24,33 @@ export type DailyAdherenceClassification =
   | "Impossible";
 export type DailyFailureReason =
   | `${"energy" | "protein" | "carbs" | "fat"}_${"below" | "above"}_tolerance`
+  | `no_eligible_${string}_candidates`
+  | "kitchen_portion_increments_prevent_compliance"
   | "insufficient_eligible_candidates"
   | "restrictions_make_target_infeasible";
+
+export interface DailyAdherenceReason {
+  /** Stable, machine-readable identifier. Do not use the message for logic. */
+  code: DailyFailureReason;
+  /** Human-readable explanation suitable for a planner preview. */
+  message: string;
+}
 
 export interface MacroAdherenceDiagnostic {
   actual: number;
   target: number;
+  /** Actual minus target (positive means over target). */
+  deviation: number;
+  /** Alias with an explicit API name for consumers presenting diagnostics. */
+  signedDeviation: number;
   tolerance: number;
+  allowedTolerance: number;
   lower: number;
   upper: number;
   remaining: number;
   normalizedError: number;
   compliant: boolean;
+  status: "pass" | "fail";
 }
 
 export interface DailyAdherenceDiagnostics {
@@ -41,6 +60,25 @@ export interface DailyAdherenceDiagnostics {
   macros: Record<DailyMacroKey, MacroAdherenceDiagnostic>;
   failureDimensions: DailyMacroKey[];
   reasonCodes: DailyFailureReason[];
+  reasons: DailyAdherenceReason[];
+}
+
+const MACRO_LABELS: Record<DailyMacroKey, string> = {
+  energy_kcal: "Calories", protein_g: "Protein", carbs_g: "Carbohydrates", fat_g: "Fat",
+};
+
+function reasonMessage(code: DailyFailureReason): string {
+  if (code === "insufficient_eligible_candidates") return "No valid complete day can be formed from the eligible candidates.";
+  if (code === "restrictions_make_target_infeasible") return "The enabled dietary restrictions make a complete day infeasible.";
+  if (code === "kitchen_portion_increments_prevent_compliance") return "Kitchen portion increments prevent a compliant combination.";
+  const slot = /^no_eligible_(.+)_candidates$/.exec(code)?.[1];
+  if (slot) return `No eligible ${slot.replaceAll("_", " ")} candidates are available.`;
+  const match = /^(energy|protein|carbs|fat)_(below|above)_tolerance$/.exec(code);
+  const key = match?.[1] === "energy" ? "energy_kcal" : `${match?.[1]}_g` as DailyMacroKey;
+  const label = MACRO_LABELS[key] ?? "Macro";
+  return match?.[2] === "below"
+    ? `${label} cannot reach its lower bound.`
+    : `${label} cannot stay below its upper bound.`;
 }
 
 export function dailyTolerance(key: DailyMacroKey, target: number): number {
@@ -52,18 +90,25 @@ export function dailyTolerance(key: DailyMacroKey, target: number): number {
 export function diagnoseDailyAdherence(
   actual: Macros,
   target: MacroTargets,
-  options: { complete?: boolean; restrictionsApplied?: boolean } = {}
+  options: {
+    complete?: boolean;
+    restrictionsApplied?: boolean;
+    unavailableSlots?: string[];
+    kitchenPortionsConstrained?: boolean;
+  } = {}
 ): DailyAdherenceDiagnostics {
   const complete = options.complete ?? true;
   const entries = DAILY_MACRO_KEYS.map((key) => {
     const tolerance = dailyTolerance(key, target[key]);
     const error = actual[key] - target[key];
     return [key, {
-      actual: actual[key], target: target[key], tolerance,
+      actual: actual[key], target: target[key], deviation: error, signedDeviation: error,
+      tolerance, allowedTolerance: tolerance,
       lower: target[key] - tolerance, upper: target[key] + tolerance,
       remaining: -error,
       normalizedError: tolerance > 0 ? Math.abs(error) / tolerance : Math.abs(error),
       compliant: Math.abs(error) <= tolerance,
+      status: Math.abs(error) <= tolerance ? "pass" : "fail",
     }] as const;
   });
   const macros = Object.fromEntries(entries) as DailyAdherenceDiagnostics["macros"];
@@ -74,13 +119,22 @@ export function diagnoseDailyAdherence(
     return `${name}_${direction}_tolerance` as DailyFailureReason;
   });
   const compliant = complete && failureDimensions.length === 0;
-  const exact = complete && DAILY_MACRO_KEYS.every(
-    (key) => Math.abs(actual[key] - target[key]) <= 1e-6
-  );
+  // "Exact" describes what a person sees, rather than floating-point noise
+  // hidden beyond the precision used by the planner preview.
+  const exact = complete && DAILY_MACRO_KEYS.every((key) => {
+    const scale = 10 ** DAILY_DISPLAY_DECIMALS[key];
+    return Math.round((actual[key] - target[key]) * scale) === 0;
+  });
   const reasonCodes: DailyFailureReason[] = complete
-    ? macroReasons
+    ? [
+        ...macroReasons,
+        ...(macroReasons.length && options.kitchenPortionsConstrained
+          ? ["kitchen_portion_increments_prevent_compliance" as const] : []),
+      ]
     : [
         "insufficient_eligible_candidates",
+        ...(options.unavailableSlots ?? []).map((slot) =>
+          `no_eligible_${slot.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_")}_candidates` as const),
         ...(options.restrictionsApplied ? ["restrictions_make_target_infeasible" as const] : []),
         ...macroReasons,
       ];
@@ -92,6 +146,7 @@ export function diagnoseDailyAdherence(
       DAILY_MACRO_KEYS.reduce((sum, key) => sum + macros[key].normalizedError, 0) /
       DAILY_MACRO_KEYS.length,
     macros, failureDimensions, reasonCodes,
+    reasons: reasonCodes.map((code) => ({ code, message: reasonMessage(code) })),
   };
 }
 
