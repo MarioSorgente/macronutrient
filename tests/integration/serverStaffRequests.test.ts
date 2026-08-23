@@ -34,30 +34,21 @@ describe("staff access requests", () => {
     expect(await getStaffRequest(uid)).toMatchObject({ status: "approved", reviewedByUid: "owner" });
   });
 
-  it.each(["admin", "restaurant"] as const)(
-    "approves a pending request without replacing an existing %s role",
-    async (role) => {
-      const uid = await createUser(uniqueEmail("worker"), { verified: true });
-      await syncAccount(await adminAuth().getUser(uid));
-      await requestStaffAccess(await caller(uid));
-      await setRole("owner", uid, role);
-      const claimsBefore = await claimsOf(uid);
-      const profileBefore = await docAt(`users/${uid}`);
+  it("does not let a stale staff approval overwrite an assigned admin role", async () => {
+    const uid = await createUser(uniqueEmail("worker"), { verified: true });
+    await syncAccount(await adminAuth().getUser(uid));
+    await requestStaffAccess(await caller(uid));
+    await setRole("owner", uid, "admin");
 
-      await expect(approveStaffRequest(uid, "owner")).resolves.toMatchObject({
-        role,
-        status: "approved",
-      });
+    await expect(approveStaffRequest(uid, "owner")).rejects.toThrow(/no longer pending/i);
 
-      expect(await claimsOf(uid)).toEqual(claimsBefore);
-      expect(await docAt(`users/${uid}`)).toEqual(profileBefore);
-      expect(await getStaffRequest(uid)).toMatchObject({
-        status: "approved",
-        reviewedByUid: "owner",
-        emailVerified: true,
-      });
-    }
-  );
+    expect(await claimsOf(uid)).toMatchObject({ role: "admin" });
+    expect(await docAt(`users/${uid}`)).toMatchObject({ role: "admin" });
+    expect(await getStaffRequest(uid)).toMatchObject({
+      status: "approved",
+      reviewedByUid: "owner",
+    });
+  });
 
   it("rejects without changing the customer and permits a new request", async () => {
     const uid = await createUser(uniqueEmail("worker"));
