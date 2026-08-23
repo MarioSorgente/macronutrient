@@ -18,6 +18,31 @@
 
 export type SlotKind = "breakfast" | "main" | "snack";
 
+/** Stable, machine-readable outcomes for hard slot eligibility. */
+export type SlotEligibilityReason =
+  | "ELIGIBLE_CLASSIFIED_SLOT"
+  | "ELIGIBLE_COMPATIBLE_INGREDIENTS"
+  | "ELIGIBLE_NAME_FALLBACK"
+  | "INELIGIBLE_CLASSIFIED_SLOT"
+  | "INELIGIBLE_BREAKFAST_MAIN"
+  | "INELIGIBLE_HEAVY_SNACK"
+  | "INELIGIBLE_UNRECOGNIZED";
+
+export interface SlotEligibilityResult {
+  allowed: boolean;
+  reason: SlotEligibilityReason;
+  explanation?: string;
+}
+
+export interface SlotEligibilityInput {
+  slot: string;
+  name?: string;
+  /** Normalized/curated classification, when the catalog has one. */
+  mealArchetype?: string;
+  eligibleMealTypes?: string[];
+  ingredients?: Array<{ ingredientId: string; name?: string; grams?: number }>;
+}
+
 export function slotKindOf(slot: string): SlotKind {
   const name = slot.toLowerCase();
   if (/breakfast|brunch|morning/.test(name)) return "breakfast";
@@ -95,6 +120,76 @@ const NOT_A_SNACK = new Set([
   "potato_roasted",
   "paratha_wholewheat",
 ]);
+
+const BREAKFAST_MAIN_WORDS =
+  /chicken breast|chicken plate|steak plate|peri.?peri chicken|teriyaki chicken|kebab|kofta|wagyu|curry|rendang|satay/i;
+const SNACK_WORDS = /snack|shake|smoothie|yogurt|fruit|banana|toast|bread/i;
+
+function requestedMealType(slot: string): string {
+  const lower = slot.toLowerCase();
+  if (/breakfast|brunch|morning/.test(lower)) return "breakfast";
+  if (/snack/.test(lower)) return "snack";
+  if (/pre-?workout/.test(lower)) return "pre-workout";
+  if (/post-?workout/.test(lower)) return "post-workout";
+  if (/lunch/.test(lower)) return "lunch";
+  return "dinner";
+}
+
+/**
+ * Hard culinary eligibility. Curated normalized metadata wins, followed by
+ * normalized ingredient identities; names are deliberately only a fallback.
+ * Macro amounts are not an input because a provisional slot allocation must
+ * never turn an otherwise appropriate meal into an ineligible one.
+ */
+export function mealSlotEligibility(input: SlotEligibilityInput): SlotEligibilityResult {
+  const kind = slotKindOf(input.slot);
+  const requested = requestedMealType(input.slot);
+  const classified = input.eligibleMealTypes?.map((type) => type.toLowerCase());
+  if (classified?.length) {
+    if (classified.includes(requested) ||
+        (kind === "snack" && classified.some((type) => /snack|workout/.test(type)))) {
+      return { allowed: true, reason: "ELIGIBLE_CLASSIFIED_SLOT" };
+    }
+    return { allowed: false, reason: "INELIGIBLE_CLASSIFIED_SLOT",
+      explanation: `Classified ${input.mealArchetype ?? "meal"} is not offered for ${requested}.` };
+  }
+
+  const ingredients = input.ingredients ?? [];
+  const ids = ingredients.map((item) => item.ingredientId);
+  const ingredientText = ingredients.map((item) =>
+    `${item.ingredientId} ${item.name ?? ""}`).join(" ").toLowerCase();
+  if (kind === "breakfast" && ingredients.length) {
+    if (ids.some((id) => DINNER_ONLY.has(id)) || BREAKFAST_MAIN_WORDS.test(ingredientText)) {
+      return { allowed: false, reason: "INELIGIBLE_BREAKFAST_MAIN",
+        explanation: "A lunch or dinner main is not an appropriate breakfast." };
+    }
+    if (ids.some((id) => BREAKFAST_FRIENDLY.has(id)) ||
+        /egg|yogurt|cottage|smoked salmon|oat|buckwheat|fruit|bread|avocado/.test(ingredientText)) {
+      return { allowed: true, reason: "ELIGIBLE_COMPATIBLE_INGREDIENTS" };
+    }
+  } else if (kind === "snack" && ingredients.length) {
+    const heavy = ingredients.some((item) => NOT_A_SNACK.has(item.ingredientId) &&
+      (item.grams ?? 300) >= 100);
+    if (heavy) return { allowed: false, reason: "INELIGIBLE_HEAVY_SNACK",
+      explanation: "A full plated main is too heavy for a snack slot." };
+    if (/shake|smoothie|yogurt|fruit|banana|bread|toast/.test(ingredientText)) {
+      return { allowed: true, reason: "ELIGIBLE_COMPATIBLE_INGREDIENTS" };
+    }
+  } else if (kind === "main" && ingredients.length) {
+    return { allowed: true, reason: "ELIGIBLE_COMPATIBLE_INGREDIENTS" };
+  }
+
+  const name = input.name ?? "";
+  if (kind === "breakfast" && BREAKFAST_MAIN_WORDS.test(name)) {
+    return { allowed: false, reason: "INELIGIBLE_BREAKFAST_MAIN" };
+  }
+  if ((kind === "breakfast" && BREAKFASTY_WORDS.test(name)) ||
+      (kind === "snack" && SNACK_WORDS.test(name))) {
+    return { allowed: true, reason: "ELIGIBLE_NAME_FALLBACK" };
+  }
+  return { allowed: false, reason: kind === "snack" ? "INELIGIBLE_HEAVY_SNACK" :
+    "INELIGIBLE_UNRECOGNIZED", explanation: "No compatible slot classification was found." };
+}
 
 /**
  * Penalties added to a candidate's score, sized against the planner's variety penalties (a repeated meal costs 1.2, a

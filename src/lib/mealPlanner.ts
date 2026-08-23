@@ -13,6 +13,7 @@ import { proteinSourceOf } from "@/lib/preferences";
 import { generatedDiyCandidate, readyPlannerCatalog } from "@/lib/plannerCandidates";
 import {
   mealSlotPenalty,
+  mealSlotEligibility,
   namedDishSlotPenalty,
   sectionSlotPenalty,
 } from "@/lib/slotSuitability";
@@ -347,6 +348,11 @@ function composedCandidates(
         id: parts.map((part) => `${part.ingredient.ingredient_id}:${part.grams}`).join("+"),
         name, items, macros, priceIdr,
       });
+      const eligibility = mealSlotEligibility({ slot, name,
+        mealArchetype: normalized.mealArchetype,
+        eligibleMealTypes: normalized.eligibleMealTypes,
+        ingredients: normalized.breakdown });
+      if (!eligibility.allowed) continue;
       out.push({
         ...normalized,
         name,
@@ -355,9 +361,7 @@ function composedCandidates(
         priceIdr,
         score:
           scoreAgainst(macros, target) +
-          pricePenalty(priceIdr) +
-          leanBonus(protein.ingredient, preferences.proteinLean) +
-          slotPenalty,
+          pricePenalty(priceIdr),
         slotPenalty,
         mealKey: normalized.exactDishIdentity,
         proteinKey: normalized.proteinFamily,
@@ -386,10 +390,11 @@ function readyCandidates(
     items.some((i) => avoid.includes(i.ingredientId));
 
   for (const normalized of readyPlannerCatalog(savedDishes, menuDishes)) {
-    const slotMealType = slot.toLowerCase().includes("breakfast") ? "breakfast"
-      : /snack|pre-?workout|post-?workout/.test(slot.toLowerCase()) ? "snack"
-      : slot.toLowerCase().includes("lunch") ? "lunch" : "dinner";
-    if (!normalized.eligibleMealTypes.includes(slotMealType)) continue;
+    const eligibility = mealSlotEligibility({ slot, name: normalized.displayName,
+      mealArchetype: normalized.mealArchetype,
+      eligibleMealTypes: normalized.eligibleMealTypes,
+      ingredients: normalized.breakdown });
+    if (!eligibility.allowed) continue;
     const items: DishItem[] = normalized.breakdown.map((item) => ({
       ingredientId: item.ingredientId, name: item.name, grams: item.grams,
       unitId: GRAM_UNIT_ID, quantity: item.grams,
@@ -415,8 +420,7 @@ function readyCandidates(
       macros,
       priceIdr: price.totalIdr,
       score:
-        scoreAgainst(macros, target) +
-        slotPenalty,
+        scoreAgainst(macros, target),
       slotPenalty,
       mealKey: normalized.exactDishIdentity,
       proteinKey: normalized.proteinFamily,
@@ -565,15 +569,16 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
           // authoritative. Beam pruning is deliberately deterministic.
           const score = scoreAgainst(macros, options.targets) +
             scoreAgainst(candidate.macros, nextTarget) / slotsLeft +
-            // `candidate.score` includes culinary slot suitability and the
-            // provisional allocation. It orders the beam only; it never
-            // controls eligibility or whether the finished day is compliant.
-            candidate.score + candidate.slotPenalty * 6 +
+            // Provisional macro fit helps beam pruning, but does not impose a
+            // slot limit. Culinary suitability is considered only after daily
+            // adherence, in `softScore` below.
+            candidate.score +
             pricePenalty(priceIdr);
           expanded.push({
             candidates: [...state.candidates, candidate], macros, priceIdr,
             used, score,
             softScore: state.softScore + candidate.slotPenalty +
+              (candidate.readyMadePriority === "high" ? -0.3 : 0) +
               (candidate.leaned ? -LEAN_BONUS : 0) + repeat +
               pricePenalty(candidate.priceIdr),
           });

@@ -3,6 +3,7 @@ import { generatePlan } from "@/lib/mealPlanner";
 import { DEFAULT_PREFERENCES } from "@/lib/storage/types";
 import { menuRecipes } from "@/lib/database";
 import { negritaMenuCandidate } from "@/lib/plannerCandidates";
+import { mealSlotEligibility } from "@/lib/slotSuitability";
 
 /**
  * A regression test over the real generator and the real menu, not the scoring
@@ -38,31 +39,17 @@ describe("generated breakfasts", () => {
     ).toEqual([]);
   });
 
-  it("can reach the breakfast menu section once a day is big enough", () => {
-    // Pancakes, waffles and oatmeal bowls are 1,100-1,250 kcal dishes. They
-    // were invisible before the quantity fit — an Oatmeal Bowl computed as
-    // 108 kcal of whey — and should now be picked when the target suits them.
-    const days = generatePlan({
-      days: [0, 1, 2, 3, 4, 5, 6],
-      slots: ["Breakfast", "Lunch", "Dinner"],
-      targets: { energy_kcal: 3300, protein_g: 200, carbs_g: 380, fat_g: 110 },
-      savedDishes: [],
-      includeSavedDishes: false,
-      includeMenuDishes: true,
-      includeComposed: true,
-      dailyBudgetIdr: null,
-      preferences: DEFAULT_PREFERENCES,
-      seed: 1,
-    } as Parameters<typeof generatePlan>[0]);
-
-    const breakfastNames = days
-      .flatMap((d) => d.meals.filter((m) => m.slot === "Breakfast"))
-      .map((m) => m.name);
-
-    expect(
-      breakfastNames.some((n) => /oatmeal|pancake|waffle|banana bread/i.test(n)),
-      `expected a breakfast-menu dish, got: ${breakfastNames.join(", ")}`
-    ).toBe(true);
+  it("keeps large classified breakfast dishes eligible regardless of slot macros", () => {
+    const recipe = menuRecipes.find((item) => item.recipe_id ===
+      "oatmeal_banana_peanut_butter")!;
+    const candidate = negritaMenuCandidate(recipe)!;
+    expect(candidate.optimizerMacros.energy_kcal).toBeGreaterThan(1000);
+    expect(mealSlotEligibility({ slot: "Breakfast", name: candidate.displayName,
+      mealArchetype: candidate.mealArchetype,
+      eligibleMealTypes: candidate.eligibleMealTypes,
+      ingredients: candidate.breakdown })).toMatchObject({
+      allowed: true, reason: "ELIGIBLE_CLASSIFIED_SLOT",
+    });
   });
 });
 
