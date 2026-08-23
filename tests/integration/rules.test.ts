@@ -250,58 +250,47 @@ describe("4. orders are created only by the Cloud Function", () => {
   });
 });
 
-describe("4b. a customer may cancel their own week, and nothing else", () => {
+describe("4b. an order cannot be written from a browser at all", () => {
+  /**
+   * Cancelling used to be a direct write, cleaned up afterwards by a Firestore
+   * trigger. The trigger is gone — the cascade runs inside /api/orders/status
+   * now — so a direct write would cancel an order and leave its prep tasks on
+   * the kitchen board forever. These make that impossible rather than merely
+   * unlikely.
+   */
   const path = `restaurants/${RID}/orders/o1`;
-  const asCustomer = () => doc(db("customer", claims.client), path);
 
-  it("allows submitted -> cancelled", async () => {
+  it("denies a customer cancelling their own week directly", async () => {
     await seed(path, orderDoc({ status: "submitted" }));
-    await assertSucceeds(updateDoc(asCustomer(), { status: "cancelled" }));
+    await assertFails(
+      updateDoc(doc(db("customer", claims.client), path), { status: "cancelled" })
+    );
   });
 
-  it("denies cancelling once the kitchen has accepted", async () => {
-    // The UI must therefore hide the button at that point.
-    await seed(path, orderDoc({ status: "accepted" }));
-    await assertFails(updateDoc(asCustomer(), { status: "cancelled" }));
-  });
-
-  it("denies moving to any status other than cancelled", async () => {
-    await seed(path, orderDoc({ status: "submitted" }));
-    await assertFails(updateDoc(asCustomer(), { status: "completed" }));
-  });
-
-  it.each(["priceIdr", "days", "userId", "totals", "mealCount", "payment", "restaurantId"])(
-    "denies a cancel that also rewrites %s",
-    async (field) => {
-      await seed(path, orderDoc({ status: "submitted" }));
-      // Every value here must differ from the seeded order: the rule tests
-      // diff().affectedKeys(), so rewriting a field with its existing value is
-      // not an "affected key" and is (harmlessly) allowed.
-      const tampered: Record<string, unknown> = {
-        priceIdr: 1,
-        days: [{ date: "2030-01-01", meals: [] }],
-        userId: "attacker",
-        totals: { energy_kcal: 99999 },
-        mealCount: 0,
-        payment: { status: "paid", method: "cash", amountIdr: 0 },
-        restaurantId: "elsewhere",
-      };
-      await assertFails(
-        updateDoc(asCustomer(), { status: "cancelled", [field]: tampered[field] })
-      );
-    }
-  );
-
-  it("denies cancelling somebody else's order", async () => {
-    await seed(path, orderDoc({ userId: "another", status: "submitted" }));
-    await assertFails(updateDoc(asCustomer(), { status: "cancelled" }));
-  });
-
-  it("lets staff move an order through its lifecycle", async () => {
+  it("denies staff moving an order directly", async () => {
     await seed(path, orderDoc());
-    await assertSucceeds(
+    await assertFails(
       updateDoc(doc(db("staff", claims.restaurant), path), { status: "accepted" })
     );
+  });
+
+  it("denies even an admin", async () => {
+    await seed(path, orderDoc());
+    await assertFails(
+      updateDoc(doc(db("admin", claims.admin), path), { status: "accepted" })
+    );
+  });
+
+  it("denies deleting an order, which would orphan its prep tasks", async () => {
+    await seed(path, orderDoc());
+    await assertFails(deleteDoc(doc(db("staff", claims.restaurant), path)));
+  });
+
+  it("still lets the customer and staff READ it", async () => {
+    // The receipt and the order book are browser screens; only writing moved.
+    await seed(path, orderDoc());
+    await assertSucceeds(getDoc(doc(db("customer", claims.client), path)));
+    await assertSucceeds(getDoc(doc(db("staff", claims.restaurant), path)));
   });
 });
 

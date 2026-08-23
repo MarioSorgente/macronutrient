@@ -5,15 +5,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ChefHat,
-  Eye,
   LogOut,
   Receipt,
   ShieldCheck,
   User as UserIcon,
 } from "lucide-react";
 import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
-import type { Role } from "@/lib/storage/types";
 import { cn } from "@/components/ui/cn";
+import ViewAsSwitch from "@/components/ViewAsSwitch";
 
 /** Initials for the avatar, falling back to the email's first character. */
 function initials(name: string, email: string): string {
@@ -27,8 +26,7 @@ function initials(name: string, email: string): string {
  * including the staff destinations the account's role unlocks.
  */
 export default function AccountMenu() {
-  const { user, role, actualRole, viewAs, setViewAs, loading, enabled, signOut } =
-    useAuth();
+  const { user, role, loading, enabled, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
@@ -158,39 +156,7 @@ export default function AccountMenu() {
           </Link>
 
           {/* Only an admin can preview, and only their real role unlocks it. */}
-          {actualRole === "admin" && (
-            <div className="border-t border-cream-deep px-3 py-2">
-              <p className="flex items-center gap-1.5 text-[11px] font-600 uppercase tracking-wide text-charcoal-soft">
-                <Eye size={12} /> View as
-              </p>
-              <div className="mt-1.5 flex gap-1">
-                {(["client", "restaurant", "admin"] as Role[]).map((option) => {
-                  const active =
-                    option === "admin" ? viewAs === null : viewAs === option;
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() =>
-                        setViewAs(option === "admin" ? null : option)
-                      }
-                      className={cn(
-                        "flex-1 rounded-lg px-2 py-1 text-[11px] font-600 capitalize transition-colors",
-                        active
-                          ? "bg-tomato text-cream"
-                          : "border border-cream-deep bg-white text-charcoal-soft hover:text-charcoal"
-                      )}
-                    >
-                      {option}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-1.5 text-[10px] leading-snug text-charcoal-soft">
-                Changes what you see, not what you can read.
-              </p>
-            </div>
-          )}
+          <ViewAsSwitch className="border-t border-cream-deep px-3 py-2" />
 
           <button
             type="button"

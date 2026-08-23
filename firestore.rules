@@ -7,8 +7,9 @@ rules_version = '2';
 //   1. Deny by default — the catch-all at the bottom.
 //   2. A plan is readable only by its owner; the restaurant never sees one.
 //   3. Nobody can write their own `role`. That is what stops self-promotion.
-//   4. Orders and prep tasks are created only by the submitOrder function,
-//      so prices and the weekly cutoff cannot be forged from a browser.
+//   4. Orders are read-only from a browser and prep tasks cannot be created
+//      there, so prices, the weekly cutoff and the kitchen's board are the
+//      server's alone.
 // Everything else is intentionally permissive for trusted staff.
 
 service cloud.firestore {
@@ -39,23 +40,20 @@ service cloud.firestore {
         allow write: if isStaffOf(rid);
       }
 
-      // Written by the submitOrder Cloud Function via the Admin SDK, which
-      // bypasses these rules. Staff may then manage them freely.
+      // Read from the browser; written only by the server.
+      //
+      // Every write goes through the app's own API routes (/api/orders/*) using
+      // the Admin SDK, which bypasses these rules. That is not just about
+      // forging a price: changing an order's status also has to clear the
+      // kitchen's prep tasks and free the week on the plan, and a direct write
+      // from a browser would skip that cascade and leave the kitchen cooking
+      // food nobody is collecting.
       match /orders/{orderId} {
         allow get:  if isStaffOf(rid) || (signedIn() && resource.data.userId == uid());
         // Per-document; a client's query MUST be constrained by
         // where('userId', '==', uid) or it is rejected wholesale.
         allow list: if isStaffOf(rid) || (signedIn() && resource.data.userId == uid());
-        allow create: if false;
-        // A customer may cancel their own week, and nothing else about it.
-        allow update: if isStaffOf(rid)
-                      || (signedIn()
-                          && resource.data.userId == uid()
-                          && resource.data.status == 'submitted'
-                          && request.resource.data.status == 'cancelled'
-                          && notTouching(['priceIdr', 'days', 'userId', 'totals',
-                                          'mealCount', 'payment', 'restaurantId']));
-        allow delete: if isStaffOf(rid);
+        allow create, update, delete: if false;
       }
 
       // Created by submitOrder alongside the order. Staff move them through

@@ -12,8 +12,8 @@
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
     "test:integration": "vitest run --project integration",
-    "emulators": "env -u HTTPS_PROXY -u https_proxy npx firebase emulators:start --only auth,firestore,functions --project demo-mamma",
-    "emulators:exec": "env -u HTTPS_PROXY -u https_proxy npx firebase emulators:exec --only auth,firestore,functions --project demo-mamma",
+    "emulators": "env -u HTTPS_PROXY -u https_proxy npx firebase emulators:start --only auth,firestore --project demo-mamma",
+    "emulators:exec": "env -u HTTPS_PROXY -u https_proxy npx firebase emulators:exec --only auth,firestore --project demo-mamma",
     "test:emulated": "npm run emulators:exec -- \"vitest run --project integration\"",
     "e2e": "npm run emulators:exec -- \"playwright test\"",
     "e2e:ui": "playwright test --ui",
@@ -22,10 +22,12 @@
   },
   "dependencies": {
     "firebase": "^11.3.1",
+    "firebase-admin": "^14.3.0",
     "lucide-react": "^0.469.0",
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "server-only": "^0.0.1",
     "zustand": "^5.0.3"
   },
   "devDependencies": {

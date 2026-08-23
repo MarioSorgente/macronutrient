@@ -1,3 +1,5 @@
+export { mondayAhead } from "../shared";
+
 import type { Page } from "@playwright/test";
 
 /** Unique address per test, so the emulator's account list never collides. */
@@ -133,18 +135,10 @@ export async function until<T>(
 }
 
 /** A Monday `weeks` weeks from the current one, as yyyy-mm-dd. */
-export function mondayAhead(weeks: number): string {
-  const now = new Date();
-  const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const dow = (new Date(midnight).getUTCDay() + 6) % 7; // 0 = Monday
-  return new Date(midnight - dow * 86_400_000 + weeks * 7 * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-}
 
 const AUTH_EMULATOR = "http://127.0.0.1:9099";
 
-/** The address on the emulator's ADMIN_EMAILS allowlist (functions/.secret.example). */
+/** The address on the emulator's ADMIN_EMAILS allowlist (playwright.config.ts). */
 export const OWNER_EMAIL = "owner@example.com";
 
 /** Marks an address confirmed, the way clicking the emailed link would. */
@@ -170,6 +164,22 @@ export async function verifyEmail(email: string): Promise<void> {
     }
   );
   if (!res.ok) throw new Error(`verifyEmail failed: ${res.status}`);
+}
+
+/**
+ * Deletes every document in the emulator's Firestore.
+ *
+ * Clearing accounts is not enough on its own: the profile documents under
+ * `users/` outlive them, and screens like the admin roster read Firestore
+ * rather than Auth. A test that asserts on "who is listed" therefore sees
+ * everyone every earlier test created unless this runs too.
+ */
+export async function clearFirestoreData(): Promise<void> {
+  const res = await fetch(
+    "http://127.0.0.1:8080/emulator/v1/projects/demo-mamma/databases/(default)/documents",
+    { method: "DELETE" }
+  );
+  if (!res.ok) throw new Error(`clearFirestoreData failed: ${res.status}`);
 }
 
 /**

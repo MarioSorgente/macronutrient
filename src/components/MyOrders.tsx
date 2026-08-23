@@ -11,6 +11,7 @@ import { authErrorMessage } from "@/lib/auth/errors";
 import type { Order } from "@/lib/storage/types";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
+import SignInPrompt from "@/components/SignInPrompt";
 import OrderStatusBadge from "@/components/OrderStatusBadge";
 import MacroChips from "@/components/MacroChips";
 
@@ -51,18 +52,11 @@ export default function MyOrders() {
 
   if (!user) {
     return (
-      <EmptyState
+      <SignInPrompt
         icon={<Receipt size={22} />}
         title="Sign in to see your orders"
         hint="Weeks you send to the kitchen show up here."
-        action={
-          <Link
-            href="/login?next=/orders"
-            className="inline-flex rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
-          >
-            Sign in
-          </Link>
-        }
+        next="/orders"
       />
     );
   }

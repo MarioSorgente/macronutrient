@@ -29,9 +29,7 @@ jobs:
           java-version: 21
 
       - name: Install
-        run: |
-          npm ci
-          npm --prefix functions ci
+        run: npm ci
 
       - name: Lint
         run: npm run lint
@@ -42,18 +40,7 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      # The functions bundle is what the emulator loads, so it has to exist
-      # before the integration suite runs.
-      - name: Build Cloud Functions
-        run: npm --prefix functions run build
-
-      # The emulator reads ADMIN_EMAILS from this file; production reads the
-      # real one from Secret Manager. The value is a test allowlist, not a
-      # secret, which is why the example is committed and this is not.
-      - name: Provide the emulator's ADMIN_EMAILS
-        run: cp functions/.secret.example functions/.secret.local
-
-      - name: Rules, index and Cloud Function tests
+      - name: Rules, index and server tests
         run: npm run test:emulated
 
       - name: Install Playwright's browser
