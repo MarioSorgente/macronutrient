@@ -167,6 +167,22 @@ export async function verifyEmail(email: string): Promise<void> {
 }
 
 /**
+ * Deletes every document in the emulator's Firestore.
+ *
+ * Clearing accounts is not enough on its own: the profile documents under
+ * `users/` outlive them, and screens like the admin roster read Firestore
+ * rather than Auth. A test that asserts on "who is listed" therefore sees
+ * everyone every earlier test created unless this runs too.
+ */
+export async function clearFirestoreData(): Promise<void> {
+  const res = await fetch(
+    "http://127.0.0.1:8080/emulator/v1/projects/demo-mamma/databases/(default)/documents",
+    { method: "DELETE" }
+  );
+  if (!res.ok) throw new Error(`clearFirestoreData failed: ${res.status}`);
+}
+
+/**
  * Deletes every emulator account.
  *
  * The owner tests need the allowlisted address to be fresh each time, and that

@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import {
   OWNER_EMAIL,
   clearAuthAccounts,
+  clearFirestoreData,
   signIn,
   signUp,
   uniqueEmail,
@@ -21,7 +22,9 @@ const AVATAR = 'button[aria-label^="Account:"]';
 
 test.beforeEach(async ({}, testInfo) => {
   test.skip(testInfo.project.name === "mobile", "covered on desktop");
-  await clearAuthAccounts();
+  // Both: profile documents outlive the accounts, and these tests assert on
+  // rosters and dashboards that read Firestore.
+  await Promise.all([clearAuthAccounts(), clearFirestoreData()]);
 });
 
 /** Signs up, confirms the address, and signs back in as the owner. */
@@ -70,9 +73,11 @@ test.describe("the owner", () => {
     await page.goto("/admin/settings");
     await expect(page.getByRole("heading", { name: /people and access/i })).toBeVisible();
     await expect(page.getByLabel("At")).toBeVisible();
-    // An admin cannot demote themselves into a lockout.
+    // An admin cannot demote themselves into a lockout. Targeted by name:
+    // `.first()` would be whichever account happens to sort first, which is
+    // somebody else's row and correctly enabled.
     await expect(
-      page.getByRole("combobox", { name: new RegExp(`Role for .*`) }).first()
+      page.getByRole("combobox", { name: "Role for Mario Sorgente" })
     ).toBeDisabled();
 
     // --- house items --------------------------------------------------------
