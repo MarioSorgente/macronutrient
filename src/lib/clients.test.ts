@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_TARGETS,
   adherencePct,
   assignmentBasePrice,
   assignmentItems,
@@ -252,14 +251,5 @@ describe("newAssignmentId", () => {
   it("produces unique ids", () => {
     const ids = new Set(Array.from({ length: 200 }, newAssignmentId));
     expect(ids.size).toBe(200);
-  });
-});
-
-describe("DEFAULT_TARGETS", () => {
-  it("is a coherent 2000 kcal day, since the planner and settings share it", () => {
-    const { energy_kcal, protein_g, carbs_g, fat_g } = DEFAULT_TARGETS;
-    expect(energy_kcal).toBe(2000);
-    // Atwater over the gram targets should land near the calorie target.
-    expect(protein_g * 4 + carbs_g * 4 + fat_g * 9).toBeCloseTo(energy_kcal, -2);
   });
 });

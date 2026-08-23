@@ -7,7 +7,8 @@ import {
   type Plan,
   type MacroTargets,
 } from "@/lib/storage/types";
-import { DEFAULT_TARGETS, TARGET_FIELDS } from "@/lib/clients";
+import { TARGET_FIELDS } from "@/lib/clients";
+import { resolveTarget } from "@/lib/targetResolution";
 import Modal from "@/components/ui/Modal";
 import Field from "@/components/ui/Field";
 
@@ -32,7 +33,10 @@ export default function PlanSettings({
   const [newSlot, setNewSlot] = useState("");
   const [targetsOn, setTargetsOn] = useState(Boolean(plan.targets));
   const [targets, setTargets] = useState<MacroTargets>(
-    plan.targets ?? DEFAULT_TARGETS
+    resolveTarget({
+      targets: plan.targets,
+      style: plan.preferences?.macroStyle,
+    }).target
   );
 
   function addSlot() {

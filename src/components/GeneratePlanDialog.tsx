@@ -19,7 +19,7 @@ import type {
   ProteinSource,
 } from "@/lib/storage/types";
 import { DEFAULT_PREFERENCES } from "@/lib/storage/types";
-import { DEFAULT_TARGETS, TARGET_FIELDS, DAY_SHORT } from "@/lib/clients";
+import { TARGET_FIELDS, DAY_SHORT } from "@/lib/clients";
 import {
   MACRO_STYLES,
   PROTEIN_SOURCES,
@@ -29,6 +29,7 @@ import { getIngredient } from "@/lib/database";
 import { generatePlan, type GeneratedDay } from "@/lib/mealPlanner";
 import { formatIdr, formatPrice } from "@/lib/pricing";
 import { round0, round1 } from "@/lib/format";
+import { resolveTarget } from "@/lib/targetResolution";
 import IngredientTypeahead from "@/components/IngredientTypeahead";
 import Modal from "@/components/ui/Modal";
 
@@ -58,9 +59,12 @@ export default function GeneratePlanDialog({
   const [preferences, setPreferences] = useState<ClientPreferences>(
     plan.preferences ?? DEFAULT_PREFERENCES
   );
-  const [targets, setTargets] = useState<MacroTargets>(
-    plan.targets ?? DEFAULT_TARGETS
-  );
+  const initialResolution = resolveTarget({
+    targets: plan.targets,
+    style: plan.preferences?.macroStyle,
+  });
+  const [targets, setTargets] = useState<MacroTargets>(initialResolution.target);
+  const [targetsExplicit, setTargetsExplicit] = useState(Boolean(plan.targets));
 
   const [includeMenu, setIncludeMenu] = useState(true);
   const [includeSaved, setIncludeSaved] = useState(true);
@@ -76,6 +80,7 @@ export default function GeneratePlanDialog({
   function chooseStyle(macroStyle: MacroStyle) {
     setPreferences({ ...preferences, macroStyle });
     setTargets(targetsFromStyle(targets.energy_kcal, macroStyle));
+    setTargetsExplicit(false);
     setPreview(null);
   }
 
@@ -91,11 +96,17 @@ export default function GeneratePlanDialog({
   }
 
 
+  const targetResolution = resolveTarget({
+    targets: targetsExplicit ? targets : { energy_kcal: targets.energy_kcal },
+    style: preferences.macroStyle,
+  });
+
   function run(nextSeed: number) {
     setSeed(nextSeed);
     setPreview(
       generatePlan({
-        targets,
+        targets: targetResolution.target,
+        targetStyle: preferences.macroStyle,
         slots: plan.mealSlots,
         includeMenuDishes: includeMenu,
         includeSavedDishes: includeSaved,
@@ -301,11 +312,12 @@ export default function GeneratePlanDialog({
                     <input
                       type="number"
                       min={0}
-                      value={targets[field.key]}
+                      value={targetResolution.target[field.key]}
                       onChange={(e) => {
                         const value = Math.max(0, Number(e.target.value) || 0);
                         // Changing calories restates the split; changing a macro
                         // is taken as a deliberate override and left alone.
+                        setTargetsExplicit(field.key !== "energy_kcal");
                         setTargets(
                           field.key === "energy_kcal"
                             ? targetsFromStyle(value, preferences.macroStyle)
@@ -317,6 +329,22 @@ export default function GeneratePlanDialog({
                     />
                   </label>
                 ))}
+              </div>
+              <div
+                className="mt-2 rounded-xl border border-cream-deep bg-cream/50 px-3 py-2 text-xs text-charcoal-soft"
+                data-testid="resolved-target"
+              >
+                <div className="font-700 text-charcoal">
+                  Resolved target · {targetResolution.selectedStyle} (
+                  {targetResolution.source})
+                </div>
+                <div className="mt-0.5 tabular-nums">
+                  {round0(targetResolution.target.energy_kcal)} kcal · P{" "}
+                  {round1(targetResolution.target.protein_g)} g · C{" "}
+                  {round1(targetResolution.target.carbs_g)} g · F{" "}
+                  {round1(targetResolution.target.fat_g)} g
+                </div>
+                <p className="mt-1">{targetResolution.explanation}</p>
               </div>
 
               {/* Sources */}

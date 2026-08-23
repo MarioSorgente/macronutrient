@@ -10,6 +10,7 @@ import {
   type MacroAdherenceDiagnostic,
 } from "@/lib/dailyAdherence";
 import { proteinSourceOf } from "@/lib/preferences";
+import { resolveTarget, type DerivationStyle } from "@/lib/targetResolution";
 import { generatedDiyCandidate, readyPlannerCatalog } from "@/lib/plannerCandidates";
 import { quantitiesNearResidual } from "@/lib/diyQuantities";
 import {
@@ -28,6 +29,7 @@ import {
   type Dish,
   type DishItem,
   type MacroTargets,
+  type MacroStyle,
   type ProteinSource,
 } from "@/lib/storage/types";
 
@@ -73,7 +75,9 @@ export interface GeneratedDay {
 export type { DailyAdherenceDiagnostics, MacroAdherenceDiagnostic };
 
 export interface GenerateOptions {
-  targets: MacroTargets;
+  /** Optional explicit target; otherwise derive one from `targetStyle`. */
+  targets?: MacroTargets | null;
+  targetStyle?: DerivationStyle | MacroStyle;
   slots: string[];
   /** Use the 25 Negrita menu dishes as whole-meal options. */
   includeMenuDishes: boolean;
@@ -497,6 +501,10 @@ interface SearchState {
 }
 
 export function generatePlan(options: GenerateOptions): GeneratedDay[] {
+  const resolvedTargets = resolveTarget({
+    targets: options.targets,
+    style: options.targetStyle ?? options.preferences?.macroStyle,
+  }).target;
   const random = makeRandom(options.seed);
 
   const preferences = options.preferences ?? DEFAULT_PREFERENCES;
@@ -509,10 +517,10 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
   const slotPlans = slots.map((slot, index) => {
     const share = weights[index] / weightTotal;
     const target: MacroTargets = {
-      energy_kcal: options.targets.energy_kcal * share,
-      protein_g: options.targets.protein_g * share,
-      carbs_g: options.targets.carbs_g * share,
-      fat_g: options.targets.fat_g * share,
+      energy_kcal: resolvedTargets.energy_kcal * share,
+      protein_g: resolvedTargets.protein_g * share,
+      carbs_g: resolvedTargets.carbs_g * share,
+      fat_g: resolvedTargets.fat_g * share,
     };
     // Each ingredient contributes only the snapped optimum and its immediate
     // neighbors for this residual, rather than its entire permitted range.
@@ -569,7 +577,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
       const slotsLeft = fillable.length - index;
       const expanded: SearchState[] = [];
       for (const state of beam) {
-        const residual = remaining(options.targets, state.macros);
+        const residual = remaining(resolvedTargets, state.macros);
         const nextTarget: MacroTargets = {
           energy_kcal: residual.energy_kcal / slotsLeft,
           protein_g: residual.protein_g / slotsLeft,
@@ -595,7 +603,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
           // The residual supplies the target for this tentative choice; the
           // complete-day distance keeps compensation, rather than slot fit,
           // authoritative. Beam pruning is deliberately deterministic.
-          const score = scoreAgainst(macros, options.targets) +
+          const score = scoreAgainst(macros, resolvedTargets) +
             scoreAgainst(candidate.macros, nextTarget) / slotsLeft +
             // Custom meals are scored against the *current daily residual*, not
             // the slot's initial allocation. A template's serving envelope is
@@ -621,7 +629,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
     // seed can therefore vary composition, but can never demote adherence.
     const classified = beam.map((state) => ({
       state,
-      diagnostics: diagnoseDailyAdherence(state.macros, options.targets),
+      diagnostics: diagnoseDailyAdherence(state.macros, resolvedTargets),
     }));
     const adherenceRank = { Exact: 0, "Within tolerance": 1, "Best effort": 2,
       Impossible: 3 } as const;
@@ -699,7 +707,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
 
     days.push({
       day, meals, macros: dayMacros, price: dayPrice, unfilledSlots,
-      adherence: diagnoseDailyAdherence(dayMacros, options.targets, {
+      adherence: diagnoseDailyAdherence(dayMacros, resolvedTargets, {
         complete: Boolean(complete) && unfilledSlots.length === 0,
         restrictionsApplied: preferences.avoidIngredientIds.length > 0,
       }),
