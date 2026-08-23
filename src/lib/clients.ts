@@ -31,18 +31,6 @@ export function byId(dishes: Dish[]): Map<string, Dish> {
 }
 
 /**
- * Starting point for someone who has not set targets yet — a middle-of-the-road
- * 2000 kcal day. Used by the settings dialog and the auto-planner, which must
- * not disagree about what "default" means.
- */
-export const DEFAULT_TARGETS: MacroTargets = {
-  energy_kcal: 2000,
-  protein_g: 150,
-  carbs_g: 200,
-  fat_g: 65,
-};
-
-/**
  * Macros for one assignment. The live dish wins whenever it still exists, so
  * edits to a dish flow through to the plan; the snapshot taken at assignment
  * time is the fallback when the dish has since been deleted.
