@@ -83,6 +83,8 @@ export interface GenerateOptions {
   includeMenuDishes: boolean;
   /** Use the user's own saved and custom dishes as whole-meal options. */
   includeSavedDishes: boolean;
+  /** Use meals assembled from kitchen components (defaults to true). */
+  includeComposed?: boolean;
   /** Saved dishes available as ready meals. */
   savedDishes: Dish[];
   /** Tastes. Leans bias the mix; the avoid list is absolute. */
@@ -541,7 +543,8 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
       slot,
       target,
       pool: [
-        ...composedCandidates(target, slot, pools, budget, preferences),
+        ...(options.includeComposed === false
+          ? [] : composedCandidates(target, slot, pools, budget, preferences)),
         ...readyCandidates(
           target,
           slot,
@@ -710,6 +713,10 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
       adherence: diagnoseDailyAdherence(dayMacros, resolvedTargets, {
         complete: Boolean(complete) && unfilledSlots.length === 0,
         restrictionsApplied: preferences.avoidIngredientIds.length > 0,
+        unavailableSlots: unfilledSlots,
+        kitchenPortionsConstrained: Boolean(complete?.candidates.some(
+          (candidate) => candidate.kind === "composed"
+        )),
       }),
     });
     previousDayMeals = new Set((complete?.candidates ?? []).map((candidate) => candidate.mealKey));
