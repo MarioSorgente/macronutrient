@@ -15,6 +15,8 @@ import {
 } from "@/lib/clients";
 import { formatPrice } from "@/lib/pricing";
 import { round0 } from "@/lib/format";
+import TargetAdherence from "@/components/TargetAdherence";
+import { diagnoseDailyAdherence } from "@/lib/dailyAdherence";
 
 /**
  * Seven-day overview. Kept deliberately sparse: a meal shows its name and
@@ -42,6 +44,9 @@ export default function PlanWeekGrid({
           const totals = dayTotals(plan, week, dayIndex, dishes);
           const price = dayPrice(plan, week, dayIndex, dishes);
           const date = dateFor(plan, week, dayIndex);
+          const adherence = plan.targets ? diagnoseDailyAdherence(totals, plan.targets, {
+            complete: plan.mealSlots.every((slot) => assignmentsFor(plan, week, dayIndex, slot).length > 0),
+          }) : null;
 
           return (
             <div key={dayIndex} className="flex flex-col rounded-xl2 bg-white/60 p-2">
@@ -128,17 +133,9 @@ export default function PlanWeekGrid({
                     {formatPrice(price)}
                   </div>
                 )}
-                {plan.targets && (
-                  <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-cream-deep">
-                    <span
-                      className="block h-full bg-tomato"
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          (totals.energy_kcal / plan.targets.energy_kcal) * 100
-                        )}%`,
-                      }}
-                    />
+                {plan.targets && adherence && (
+                  <div className="mt-2 text-left">
+                    <TargetAdherence actual={totals} targets={plan.targets} diagnostics={adherence} targetSource="Explicit" compact />
                   </div>
                 )}
               </div>

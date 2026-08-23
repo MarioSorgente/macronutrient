@@ -20,6 +20,7 @@ import { round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import TargetAdherence from "@/components/TargetAdherence";
 import MacroChips from "@/components/MacroChips";
+import { resolveTarget } from "@/lib/targetResolution";
 
 /**
  * One day, full width. The week grid has to truncate names to fit seven
@@ -46,6 +47,7 @@ export default function PlanDayView({
 }) {
   const totals = dayTotals(plan, week, day, dishes);
   const price = dayPrice(plan, week, day, dishes);
+  const targetResolution = resolveTarget({ targets: plan.targets, style: plan.preferences?.macroStyle });
 
   return (
     <div>
@@ -181,7 +183,7 @@ export default function PlanDayView({
             <h4 className="mb-2 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
               Against daily target
             </h4>
-            <TargetAdherence actual={totals} targets={plan.targets} />
+            <TargetAdherence actual={totals} targets={targetResolution.target} targetSource="Explicit" />
           </div>
         )}
       </section>
