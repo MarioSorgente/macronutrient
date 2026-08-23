@@ -2,6 +2,7 @@ import type { Macros } from "@/types/nutrition";
 import type { MacroTargets } from "@/lib/storage/types";
 import { TARGET_FIELDS, adherencePct } from "@/lib/clients";
 import { round0 } from "@/lib/format";
+import { diagnoseDailyAdherence } from "@/lib/dailyAdherence";
 
 /**
  * Actual vs target for each macro. Only rendered when the client has targets
@@ -14,6 +15,7 @@ export default function TargetAdherence({
   actual: Macros;
   targets: MacroTargets;
 }) {
+  const diagnostics = diagnoseDailyAdherence(actual, targets);
   return (
     <ul className="flex flex-col gap-2.5">
       {TARGET_FIELDS.map((field) => {
@@ -22,8 +24,9 @@ export default function TargetAdherence({
         const pct = adherencePct(value, target);
         // Over target is worth seeing, so the bar caps at 100% but the number doesn't.
         const width = Math.min(100, pct);
-        const over = pct > 105;
-        const under = pct < 95;
+        const diagnostic = diagnostics.macros[field.key];
+        const over = value > diagnostic.upper;
+        const under = value < diagnostic.lower;
 
         return (
           <li key={field.key}>

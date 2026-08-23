@@ -4,6 +4,12 @@ import { diyMenu, getIngredient, menuRecipes } from "@/lib/database";
 import { EMPTY_MACROS, addMacros, perItemMacros, sumDishMacros } from "@/lib/calc";
 import { ZERO_PRICE, addPrices, priceItems, type PriceResult } from "@/lib/pricing";
 import { TARGET_FIELDS, adherencePct } from "@/lib/clients";
+import {
+  diagnoseDailyAdherence,
+  MEANINGFUL_DAILY_ERROR_DIFFERENCE,
+  type DailyAdherenceDiagnostics,
+  type MacroAdherenceDiagnostic,
+} from "@/lib/dailyAdherence";
 import { proteinSourceOf } from "@/lib/preferences";
 import {
   mealSlotPenalty,
@@ -58,20 +64,7 @@ export interface GeneratedDay {
   adherence: DailyAdherenceDiagnostics;
 }
 
-export interface MacroAdherenceDiagnostic {
-  actual: number;
-  target: number;
-  lower: number;
-  upper: number;
-  remaining: number;
-  compliant: boolean;
-}
-
-export interface DailyAdherenceDiagnostics {
-  tolerance: number;
-  compliant: boolean;
-  macros: Record<keyof MacroTargets, MacroAdherenceDiagnostic>;
-}
+export type { DailyAdherenceDiagnostics, MacroAdherenceDiagnostic };
 
 export interface GenerateOptions {
   targets: MacroTargets;
@@ -460,8 +453,6 @@ function readyCandidates(
 
 /** Maximum number of partial complete-day plans retained at each depth. */
 const BEAM_WIDTH = 160;
-/** The final day, rather than any individual meal, must land within this band. */
-const DAILY_TOLERANCE = 0.1;
 /**
  * Repeat penalties, applied per previous use in the week. Tiered so the exact
  * same meal is discouraged hardest, then the protein, then the carbohydrate —
@@ -469,40 +460,13 @@ const DAILY_TOLERANCE = 0.1;
  */
 const REPEAT_PENALTY = { meal: 1.2, protein: 0.45, carb: 0.3 };
 
-const DAILY_KEYS: (keyof MacroTargets)[] = [
-  "energy_kcal",
-  "protein_g",
-  "carbs_g",
-  "fat_g",
-];
-
-function adherenceDiagnostics(
-  actual: Macros,
-  target: MacroTargets
-): DailyAdherenceDiagnostics {
-  const entries = DAILY_KEYS.map((key) => {
-    const lower = target[key] * (1 - DAILY_TOLERANCE);
-    const upper = target[key] * (1 + DAILY_TOLERANCE);
-    return [key, {
-      actual: actual[key], target: target[key], lower, upper,
-      remaining: target[key] - actual[key],
-      compliant: actual[key] >= lower && actual[key] <= upper,
-    }] as const;
-  });
-  const macros = Object.fromEntries(entries) as DailyAdherenceDiagnostics["macros"];
-  return {
-    tolerance: DAILY_TOLERANCE,
-    compliant: DAILY_KEYS.every((key) => macros[key].compliant),
-    macros,
-  };
-}
-
 interface SearchState {
   candidates: Candidate[];
   macros: Macros;
   priceIdr: number;
   used: Set<string>;
   score: number;
+  softScore: number;
 }
 
 export function generatePlan(options: GenerateOptions): GeneratedDay[] {
@@ -565,7 +529,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
     const unfilledSlots = slotPlans.filter(({ pool }) => !pool.length).map(({ slot }) => slot);
     let beam: SearchState[] = [{
       candidates: [], macros: { ...EMPTY_MACROS }, priceIdr: 0,
-      used: new Set(), score: 0,
+      used: new Set(), score: 0, softScore: 0,
     }];
 
     for (let index = 0; index < fillable.length; index += 1) {
@@ -605,20 +569,34 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
           expanded.push({
             candidates: [...state.candidates, candidate], macros, priceIdr,
             used, score,
+            softScore: state.softScore + candidate.slotPenalty +
+              (candidate.leaned ? -LEAN_BONUS : 0) + repeat +
+              pricePenalty(candidate.priceIdr),
           });
         }
       }
       beam = expanded.sort((a, b) => a.score - b.score).slice(0, BEAM_WIDTH);
     }
 
-    const complete = beam.sort((a, b) => {
-      const ac = adherenceDiagnostics(a.macros, options.targets).compliant;
-      const bc = adherenceDiagnostics(b.macros, options.targets).compliant;
-      return Number(bc) - Number(ac) ||
-        (ac && bc
-          ? a.score - b.score
-          : scoreAgainst(a.macros, options.targets) -
-              scoreAgainst(b.macros, options.targets) || a.score - b.score);
+    // Partition first: no preference, variety, taste, repetition or price can
+    // promote a non-compliant day while a compliant complete day exists.
+    const partitioned = beam.reduce<{ compliant: SearchState[]; nonCompliant: SearchState[] }>(
+      (groups, state) => {
+        groups[diagnoseDailyAdherence(state.macros, options.targets).compliant
+          ? "compliant" : "nonCompliant"].push(state);
+        return groups;
+      }, { compliant: [], nonCompliant: [] }
+    );
+    const eligible = partitioned.compliant.length
+      ? partitioned.compliant
+      : partitioned.nonCompliant; // one explicit Best effort path
+    const complete = eligible.sort((a, b) => {
+      const errorDifference =
+        diagnoseDailyAdherence(a.macros, options.targets).normalizedError -
+        diagnoseDailyAdherence(b.macros, options.targets).normalizedError;
+      return Math.abs(errorDifference) >= MEANINGFUL_DAILY_ERROR_DIFFERENCE
+        ? errorDifference
+        : a.softScore - b.softScore;
     })[0];
     const meals: GeneratedMeal[] = [];
     const dayMacros: Macros = complete?.macros ?? { ...EMPTY_MACROS };
@@ -657,7 +635,10 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
 
     days.push({
       day, meals, macros: dayMacros, price: dayPrice, unfilledSlots,
-      adherence: adherenceDiagnostics(dayMacros, options.targets),
+      adherence: diagnoseDailyAdherence(dayMacros, options.targets, {
+        complete: Boolean(complete) && unfilledSlots.length === 0,
+        restrictionsApplied: preferences.avoidIngredientIds.length > 0,
+      }),
     });
   }
 
