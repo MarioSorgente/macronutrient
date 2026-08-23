@@ -8,8 +8,10 @@ export default function AccountPage() {
   return (
     <div className="min-h-screen">
       <BrandHeader />
-      <div className="mx-auto max-w-3xl px-4 sm:px-6"><StaffAccessStatus /></div>
       <AccountAccess />
+      <div className="mx-auto max-w-2xl px-4 pb-6 sm:px-6">
+        <StaffAccessStatus />
+      </div>
     </div>
   );
 }

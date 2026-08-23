@@ -16,10 +16,10 @@ import { ApiError } from "@/lib/api";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import SignInPrompt from "@/components/SignInPrompt";
-import RoleBadge from "@/components/RoleBadge";
 import AccountProfile from "@/components/AccountProfile";
 import ViewAsSwitch from "@/components/ViewAsSwitch";
 import { useToast } from "@/components/ui/Toast";
+import { roleLabel } from "@/lib/roles";
 
 /**
  * What this account can actually do, and why.
@@ -118,8 +118,8 @@ export default function AccountAccess() {
       const next = (await refreshRole()) ?? synced;
       show(
         next
-          ? `Your role is "${next}".`
-          : "Still no role on this account. The claim has never been set."
+          ? `Your account type is ${roleLabel(next)}.`
+          : "We still couldn't determine this account's access."
       );
     } catch (cause) {
       // An ApiError already carries the server's own wording; anything else is
@@ -158,7 +158,7 @@ export default function AccountAccess() {
   // A failed reconciliation is a server fault, not a missing role, so it counts
   // as being stuck on its own — without it the panel below never appears and
   // the screen just says your role is "none".
-  const showDiagnostics = isStaff(actualRole) || stuck || Boolean(syncError);
+  const showDiagnostics = actualRole === "admin" || stuck || Boolean(syncError);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
@@ -224,6 +224,14 @@ export default function AccountAccess() {
           value={restaurantId || "—"}
           hint="NEXT_PUBLIC_RESTAURANT_ID"
         />
+        {user && (
+          <Row
+            label="Raw role diagnostic"
+            ok={actualRole !== null}
+            value={actualRole ?? "none"}
+            hint="Read from the ID token custom claim"
+          />
+        )}
       </Card>
       )}
 
@@ -243,20 +251,15 @@ export default function AccountAccess() {
           <>
             <Row label="Signed in as" ok value={user.email ?? user.uid} />
             <Row
-              label="Role on your token"
+              label="Account type"
               ok={actualRole !== null}
-              value={actualRole ?? "none"}
-              hint={
-                actualRole === null
-                  ? "Nothing has ever stamped a role on this account"
-                  : "Read from the ID token custom claim"
-              }
+              value={actualRole ? roleLabel(actualRole) : "Checking…"}
             />
             {viewAs && (
               <Row
                 label="Currently viewing as"
                 ok
-                value={viewAs}
+                value={roleLabel(viewAs)}
                 hint="Preview only — your real access is unchanged"
               />
             )}
@@ -284,7 +287,6 @@ export default function AccountAccess() {
               >
                 {busy ? "Refreshing…" : "Refresh my access"}
               </Button>
-              <RoleBadge role={actualRole} />
               {unverified && (
                 <Button onClick={sendVerification} disabled={verifying}>
                   {verifying ? "Sending…" : "Confirm my email"}
@@ -304,8 +306,8 @@ export default function AccountAccess() {
                 the avatar menu, which is where people looked and did not find it. */}
             <ViewAsSwitch className="mt-4 rounded-xl border border-cream-deep bg-white p-3" />
             <p className="mt-2 text-xs text-charcoal-soft">
-              Forces a new ID token. Use this if someone has just granted you a
-              role — a token issued before the grant does not carry it.
+              Use this if someone has just granted you restaurant access and
+              the change is not visible yet.
             </p>
           </>
         )}
