@@ -1,0 +1,133 @@
+import { sumDishMacros } from "@/lib/calc";
+import { getIngredient, menuRecipes } from "@/lib/database";
+import { priceItems } from "@/lib/pricing";
+import { GRAM_UNIT_ID, type Macros, type MenuRecipe, type PlannerCandidate,
+  type PlannerCandidateIngredient, type ProteinFamily, type CarbFamily } from "@/types/nutrition";
+import type { Dish, DishItem } from "@/lib/storage/types";
+
+const proteinPatterns: [ProteinFamily, RegExp][] = [
+  ["chicken", /chicken/], ["beef", /beef|wagyu|steak|tenderloin/],
+  ["fish", /fish|salmon|tuna|anchovy|tobiko|scallop|eel|shrimp|prawn/],
+  ["eggs", /(^|_)egg/],
+];
+const carbPatterns: [CarbFamily, RegExp][] = [
+  ["rice", /rice/], ["buckwheat", /buckwheat/], ["potato", /potato/],
+  ["bread", /bread|toast|bun|pita/], ["wrap", /wrap|tortilla/],
+];
+
+function ingredientText(items: PlannerCandidateIngredient[]): string {
+  return items.map((item) => `${item.ingredientId} ${item.name}`).join(" ").toLowerCase();
+}
+
+export function normalizedFamilies(items: PlannerCandidateIngredient[]): {
+  proteinFamily: ProteinFamily; carbFamily: CarbFamily;
+} {
+  const text = ingredientText(items);
+  const proteinFamily = proteinPatterns.find(([, pattern]) => pattern.test(text))?.[0]
+    ?? (items.some((item) => {
+      const category = getIngredient(item.ingredientId)?.category;
+      return category === "legume" || category === "dairy";
+    }) ? "vegetarian" : "other");
+  const carbFamily = carbPatterns.find(([, pattern]) => pattern.test(text))?.[0] ?? "other";
+  return { proteinFamily, carbFamily };
+}
+
+function cuisineFamily(name: string, items: PlannerCandidateIngredient[]): string {
+  const text = `${name} ${ingredientText(items)}`.toLowerCase();
+  if (/teriyaki|miso|tobiko|sushi/.test(text)) return "japanese";
+  if (/peri.?peri/.test(text)) return "peri_peri";
+  if (/curry|tikka|masala/.test(text)) return "south_asian";
+  if (/sambal/.test(text)) return "indonesian";
+  if (/pesto|bolognese|marinara/.test(text)) return "italian";
+  return "neutral";
+}
+
+function mealMetadata(name: string, section = ""): { archetype: string; eligible: string[] } {
+  const text = `${name} ${section}`.toLowerCase();
+  if (/breakfast|oat|pancake|waffle|toast|egg/.test(text)) {
+    return { archetype: "breakfast", eligible: ["breakfast"] };
+  }
+  if (/snack|dessert|smoothie|shake/.test(text)) {
+    return { archetype: "snack", eligible: ["snack", "pre-workout", "post-workout"] };
+  }
+  return { archetype: "main", eligible: ["lunch", "dinner"] };
+}
+
+function tags(items: PlannerCandidateIngredient[]): { dietary: string[]; allergens: string[]; sauces: string[] } {
+  const text = ingredientText(items);
+  const ingredients = items.map((item) => getIngredient(item.ingredientId)).filter(Boolean);
+  const flags = ingredients.flatMap((item) => item?.flags ?? []).map((flag) => flag.toLowerCase());
+  const allergens = new Set<string>();
+  if (/egg/.test(text)) allergens.add("egg");
+  if (/milk|cheese|yogurt|whey|cream/.test(text)) allergens.add("dairy");
+  if (/wheat|bread|wrap|tortilla/.test(text)) allergens.add("gluten");
+  if (/fish|salmon|tuna|anchovy|tobiko|eel/.test(text)) allergens.add("fish");
+  if (/shrimp|prawn|scallop/.test(text)) allergens.add("shellfish");
+  flags.filter((flag) => /allerg/.test(flag)).forEach((flag) => allergens.add(flag));
+  const vegetarian = normalizedFamilies(items).proteinFamily === "vegetarian";
+  const sauces = items.filter((item) => /sauce|dressing|sambal|pesto|teriyaki|peri/.test(
+    `${item.ingredientId} ${item.name}`.toLowerCase())).map((item) => item.ingredientId);
+  return { dietary: vegetarian ? ["vegetarian"] : [], allergens: [...allergens], sauces };
+}
+
+function breakdown(items: DishItem[]): PlannerCandidateIngredient[] {
+  return items.map((item) => ({ ingredientId: item.ingredientId, name: item.name,
+    grams: item.grams, preparation: getIngredient(item.ingredientId)?.notes ?? undefined }));
+}
+
+function finish(base: Omit<PlannerCandidate, "proteinFamily" | "carbFamily" | "cuisineFamily" |
+  "mealArchetype" | "eligibleMealTypes" | "modificationOptions" | "dietaryTags" |
+  "allergenTags" | "sauceFamilies">, section = ""): PlannerCandidate {
+  const families = normalizedFamilies(base.breakdown);
+  const meal = mealMetadata(base.displayName, section);
+  const classified = tags(base.breakdown);
+  return { ...base, ...families, cuisineFamily: cuisineFamily(base.displayName, base.breakdown),
+    mealArchetype: meal.archetype, eligibleMealTypes: meal.eligible,
+    modificationOptions: [
+      { type: "adjust_portion", label: "Adjust portion" },
+      ...base.breakdown.map((item) => ({ type: "remove_ingredient" as const,
+        ingredientId: item.ingredientId, label: `Remove ${item.name}` })),
+    ], dietaryTags: classified.dietary, allergenTags: classified.allergens,
+    sauceFamilies: classified.sauces };
+}
+
+export function savedDishCandidate(dish: Dish): PlannerCandidate | null {
+  const items = breakdown(dish.items);
+  const macros = sumDishMacros(dish.items);
+  if (!items.length || macros.energy_kcal <= 0) return null;
+  const price = priceItems(dish.items);
+  return finish({ id: `saved:${dish.id}`, source: "saved_dish", displayName: dish.name,
+    optimizerMacros: macros, breakdown: items, price, macroConfidence: "verified",
+    exactDishIdentity: `saved:${dish.id}` });
+}
+
+export function negritaMenuCandidate(recipe: MenuRecipe): PlannerCandidate | null {
+  const dishItems: DishItem[] = recipe.components.flatMap((component) => {
+    const ingredient = getIngredient(component.ingredient_id);
+    return ingredient && component.quantity_g ? [{ ingredientId: component.ingredient_id,
+      name: ingredient.name, grams: component.quantity_g, unitId: GRAM_UNIT_ID,
+      quantity: component.quantity_g }] : [];
+  });
+  if (!dishItems.length) return null;
+  return finish({ id: `menu:${recipe.recipe_id}`, source: "negrita_menu",
+    displayName: recipe.name, optimizerMacros: sumDishMacros(dishItems), breakdown: breakdown(dishItems),
+    price: { totalIdr: recipe.price_idr ?? 0, complete: recipe.price_idr !== null },
+    macroConfidence: recipe.quantity_complete ? (recipe.derived_quantities ? "estimated" : "verified") : "incomplete",
+    exactDishIdentity: `menu:${recipe.recipe_id}` }, recipe.section);
+}
+
+export function generatedDiyCandidate(input: { id: string; name: string; items: DishItem[];
+  macros: Macros; priceIdr: number }): PlannerCandidate {
+  return finish({ id: `diy:${input.id}`, source: "generated_diy", displayName: input.name,
+    optimizerMacros: input.macros, breakdown: breakdown(input.items),
+    price: { totalIdr: input.priceIdr, complete: true }, macroConfidence: "verified",
+    exactDishIdentity: `diy:${input.id}` });
+}
+
+/** The ready-made portion of the unified catalog; DIY candidates join it per target. */
+export function readyPlannerCatalog(saved: Dish[], includeMenu: boolean): PlannerCandidate[] {
+  return [
+    ...saved.map(savedDishCandidate),
+    ...(includeMenu ? menuRecipes.map(negritaMenuCandidate) : []),
+  ].filter((candidate): candidate is PlannerCandidate => candidate !== null);
+}
