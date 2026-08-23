@@ -61,7 +61,7 @@ export default function RequireRole({
           hint={
             noClaim
               ? "Nothing has granted this account a role. If you are the owner, check that the Cloud Functions are deployed and that ADMIN_EMAILS matches your email — then sign out and back in."
-              : "Your account is signed in as a client. Ask the restaurant to update your role."
+              : "Your account is signed in as a Customer. Staff access must be approved by a restaurant owner."
           }
           action={
             <Link

@@ -11,6 +11,7 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
+import { roleLabel } from "@/lib/roles";
 import { cn } from "@/components/ui/cn";
 import ViewAsSwitch from "@/components/ViewAsSwitch";
 
@@ -108,7 +109,7 @@ export default function AccountMenu() {
             <p className="truncate text-sm font-600 text-charcoal">{label}</p>
             <p className="truncate text-[11px] text-charcoal-soft">
               {user.email}
-              {role && role !== "client" ? ` · ${role}` : ""}
+              {role ? ` · ${roleLabel(role)}` : ""}
             </p>
           </div>
 

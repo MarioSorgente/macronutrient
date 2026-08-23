@@ -146,6 +146,21 @@ export const DEFAULT_MEAL_SLOTS = ["Breakfast", "Lunch", "Dinner", "Snack"];
  */
 export type Role = "client" | "restaurant" | "admin";
 
+export type StaffRequestStatus = "pending" | "approved" | "rejected";
+
+export interface StaffAccessRequest {
+  id: string;
+  restaurantId: string;
+  uid: string;
+  email: string;
+  displayName?: string;
+  emailVerified: boolean;
+  status: StaffRequestStatus;
+  createdAt: string;
+  reviewedAt?: string;
+  reviewedByUid?: string;
+}
+
 export interface UserProfile extends Entity {
   uid: string;
   email: string;

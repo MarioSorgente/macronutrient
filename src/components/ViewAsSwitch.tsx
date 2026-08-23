@@ -4,6 +4,7 @@ import { Eye } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import type { Role } from "@/lib/storage/types";
 import { cn } from "@/components/ui/cn";
+import { roleLabel } from "@/lib/roles";
 
 const OPTIONS: Role[] = ["client", "restaurant", "admin"];
 
@@ -48,7 +49,7 @@ export default function ViewAsSwitch({ className }: { className?: string }) {
                   : "border border-cream-deep bg-white text-charcoal-soft hover:text-charcoal"
               )}
             >
-              {option}
+              {roleLabel(option)}
             </button>
           );
         })}

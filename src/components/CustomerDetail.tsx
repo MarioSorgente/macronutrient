@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { roleLabel } from "@/lib/roles";
 import { getUser, listOrdersByUser } from "@/lib/storage/orders";
 import { favouriteMeals, revenueTotals } from "@/lib/admin/analytics";
 import { authErrorMessage } from "@/lib/auth/errors";
@@ -95,7 +96,7 @@ export default function CustomerDetail() {
         {person.email}
         {person.phone ? ` · ${person.phone}` : ""} · joined{" "}
         {person.createdAt ? formatBaliDay(person.createdAt) : "unknown"}
-        {person.role && person.role !== "client" ? ` · ${person.role}` : ""}
+        {person.role ? ` · ${roleLabel(person.role)}` : ""}
       </p>
 
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">

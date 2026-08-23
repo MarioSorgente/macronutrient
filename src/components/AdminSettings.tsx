@@ -12,6 +12,8 @@ import { authErrorMessage } from "@/lib/auth/errors";
 import { BALI_LABEL } from "@/lib/format";
 import { DAY_NAMES } from "@/lib/clients";
 import type { RestaurantConfig, Role, UserProfile } from "@/lib/storage/types";
+import type { StaffAccessRequest } from "@/lib/storage/types";
+import { roleLabel } from "@/lib/roles";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import Field from "@/components/ui/Field";
@@ -28,6 +30,7 @@ export default function AdminSettings() {
 
   const [config, setConfig] = useState<RestaurantConfig | null>(null);
   const [people, setPeople] = useState<UserProfile[]>([]);
+  const [staffRequests, setStaffRequests] = useState<StaffAccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,9 +45,15 @@ export default function AdminSettings() {
     }
   }, []);
 
+  const refreshRequests = useCallback(async () => {
+    const { getApi } = await import("@/lib/api");
+    const result = await getApi<{ requests: StaffAccessRequest[] }>("/api/admin/staff/requests");
+    setStaffRequests(result.requests);
+  }, []);
+
   useEffect(() => {
     let active = true;
-    Promise.all([loadRestaurantConfig(), listUsers().catch(() => [])])
+    Promise.all([loadRestaurantConfig(), listUsers().catch(() => []), refreshRequests().catch(() => undefined)])
       .then(([loadedConfig, loadedPeople]) => {
         if (!active) return;
         setConfig(loadedConfig);
@@ -55,7 +64,7 @@ export default function AdminSettings() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshRequests]);
 
   function patch(next: Partial<RestaurantConfig>) {
     setConfig((current) => (current ? { ...current, ...next } : current));
@@ -79,11 +88,21 @@ export default function AdminSettings() {
     try {
       const { callApi } = await import("@/lib/api");
       await callApi("/api/admin/set-role", { uid, role: next });
-      show(`Role updated to ${next}. It applies on their next token refresh.`);
+      show(`Access updated to ${roleLabel(next)}. It applies on their next token refresh.`);
       await refreshPeople();
     } catch (cause) {
       setError(authErrorMessage(cause));
     }
+  }
+
+  async function reviewRequest(uid: string, action: "approve" | "reject") {
+    setError(null);
+    try {
+      const { callApi } = await import("@/lib/api");
+      await callApi(`/api/admin/staff/${action}`, { uid });
+      show(action === "approve" ? "Staff access approved." : "Staff request rejected.");
+      await Promise.all([refreshRequests(), refreshPeople()]);
+    } catch (cause) { setError(authErrorMessage(cause)); }
   }
 
   if (role !== "admin") {
@@ -123,6 +142,30 @@ export default function AdminSettings() {
           {error}
         </p>
       )}
+
+      <Card className="mt-5 border-gold/50 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-lg font-700 text-charcoal">Staff requests</h2>
+          {staffRequests.length > 0 && <span className="rounded-full bg-gold/20 px-2 py-1 text-xs font-700 text-charcoal">{staffRequests.length} pending</span>}
+        </div>
+        {staffRequests.length === 0 ? (
+          <p className="mt-2 text-sm text-charcoal-soft">No pending staff requests.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {staffRequests.map((request) => (
+              <li key={request.uid} className="flex flex-wrap items-center gap-3 rounded-xl border border-gold/40 bg-gold/5 p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-700 text-charcoal">{request.displayName || request.email}</p>
+                  <p className="truncate text-xs text-charcoal-soft">{request.email}</p>
+                  <p className={`mt-1 text-xs font-600 ${request.emailVerified ? "text-basil" : "text-tomato-dark"}`}>{request.emailVerified ? "Email verified" : "Email not verified"}</p>
+                </div>
+                <Button variant="danger" onClick={() => reviewRequest(request.uid, "reject")}>Reject</Button>
+                <Button variant="primary" disabled={!request.emailVerified} title={!request.emailVerified ? "Email must be verified first" : undefined} onClick={() => reviewRequest(request.uid, "approve")}>Approve</Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       {/* Orders */}
       <Card className="mt-5 space-y-4 p-4">
@@ -329,7 +372,7 @@ export default function AdminSettings() {
               >
                 {ROLES.map((r) => (
                   <option key={r} value={r}>
-                    {r}
+                    {roleLabel(r)}
                   </option>
                 ))}
               </Select>

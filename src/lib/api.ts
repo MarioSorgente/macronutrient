@@ -52,3 +52,15 @@ export async function callApi<T>(path: string, body: unknown = {}): Promise<T> {
   }
   return payload as T;
 }
+
+export async function getApi<T>(path: string): Promise<T> {
+  const token = await idToken();
+  const response = await fetch(path, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new ApiError(response.status, (payload as { error?: string }).error ?? "Something went wrong.");
+  }
+  return payload as T;
+}

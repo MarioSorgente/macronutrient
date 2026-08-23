@@ -23,6 +23,7 @@ import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
 
 export type AuthMode = "login" | "signup" | "reset";
+type SignupIntent = "customer" | "staff";
 
 const COPY: Record<AuthMode, { title: string; blurb: string; submit: string }> = {
   login: {
@@ -107,6 +108,7 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [signupIntent, setSignupIntent] = useState<SignupIntent>("customer");
 
   const configured = isFirebaseConfigured();
   const copy = COPY[mode];
@@ -162,6 +164,12 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
         } catch (cause) {
           console.error("Could not send the verification email:", cause);
         }
+        if (signupIntent === "staff") {
+          const { callApi } = await import("@/lib/api");
+          await callApi("/api/staff/request-access");
+          router.push("/account?staff-requested=1");
+          return;
+        }
       } else {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       }
@@ -172,6 +180,12 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
   function google() {
     void withBusy(async () => {
       await signInWithPopup(getAuthClient(), new GoogleAuthProvider());
+      if (mode === "signup" && signupIntent === "staff") {
+        const { callApi } = await import("@/lib/api");
+        await callApi("/api/staff/request-access");
+        router.push("/account?staff-requested=1");
+        return;
+      }
       router.push(next);
     });
   }
@@ -198,6 +212,25 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
             Accounts are not switched on for this deployment yet. You can still
             plan your week as a guest — it is saved on this device.
           </p>
+        )}
+
+        {mode === "signup" && (
+          <fieldset className="mt-5">
+            <legend className="text-sm font-700 text-charcoal">How will you use this account?</legend>
+            <div className="mt-2 grid gap-2">
+              <label className={`cursor-pointer rounded-xl border p-3 ${signupIntent === "customer" ? "border-tomato bg-tomato/5" : "border-cream-deep"}`}>
+                <input className="sr-only" type="radio" name="intent" checked={signupIntent === "customer"} onChange={() => setSignupIntent("customer")} />
+                <span className="block text-sm font-700 text-charcoal">For myself</span>
+                <span className="block text-xs text-charcoal-soft">Plan meals, track macros and order food</span>
+              </label>
+              <label className={`cursor-pointer rounded-xl border p-3 ${signupIntent === "staff" ? "border-tomato bg-tomato/5" : "border-cream-deep"}`}>
+                <input className="sr-only" type="radio" name="intent" checked={signupIntent === "staff"} onChange={() => setSignupIntent("staff")} />
+                <span className="block text-sm font-700 text-charcoal">I work at the restaurant</span>
+                <span className="block text-xs text-charcoal-soft">Access kitchen and restaurant tools</span>
+                <span className="block text-xs font-600 text-tomato-dark">Requires approval from the restaurant owner</span>
+              </label>
+            </div>
+          </fieldset>
         )}
 
         {mode !== "reset" && (
