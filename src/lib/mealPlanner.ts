@@ -11,6 +11,7 @@ import {
 } from "@/lib/dailyAdherence";
 import { proteinSourceOf } from "@/lib/preferences";
 import { generatedDiyCandidate, readyPlannerCatalog } from "@/lib/plannerCandidates";
+import { quantitiesNearResidual } from "@/lib/diyQuantities";
 import {
   componentFitsTemplate,
   templatesForSlot,
@@ -206,10 +207,7 @@ function makeRandom(seed?: number): () => number {
 
 // --- component pool ----------------------------------------------------------
 
-/** Portion multipliers considered per component. */
-const MULTIPLIERS = [1, 2];
-
-function buildComponents(section: DiySection): Component[] {
+function buildComponents(section: DiySection, residual: MacroTargets): Component[] {
   const out: Component[] = [];
   const seen = new Set<string>();
 
@@ -221,14 +219,14 @@ function buildComponents(section: DiySection): Component[] {
     const ingredient = getIngredient(item.ingredient_id);
     if (!ingredient) continue;
 
-    for (const multiplier of MULTIPLIERS) {
-      const grams = item.portion_g * multiplier;
+    for (const grams of quantitiesNearResidual(ingredient, residual)) {
+      const portions = Math.ceil(grams / item.portion_g);
       out.push({
         ingredient,
-        portions: multiplier,
+        portions,
         grams,
         macros: perItemMacros(ingredient, grams),
-        priceIdr: item.price_idr * multiplier,
+        priceIdr: item.price_idr * portions,
         section,
       });
     }
@@ -500,12 +498,6 @@ interface SearchState {
 
 export function generatePlan(options: GenerateOptions): GeneratedDay[] {
   const random = makeRandom(options.seed);
-  const pools: Record<DiySection, Component[]> = {
-    carbs: buildComponents("carbs"),
-    protein: buildComponents("protein"),
-    veg: buildComponents("veg"),
-    fats: buildComponents("fats"),
-  };
 
   const preferences = options.preferences ?? DEFAULT_PREFERENCES;
   const slots = options.slots.length ? options.slots : ["Meal"];
@@ -521,6 +513,14 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
       protein_g: options.targets.protein_g * share,
       carbs_g: options.targets.carbs_g * share,
       fat_g: options.targets.fat_g * share,
+    };
+    // Each ingredient contributes only the snapped optimum and its immediate
+    // neighbors for this residual, rather than its entire permitted range.
+    const pools: Record<DiySection, Component[]> = {
+      carbs: buildComponents("carbs", target),
+      protein: buildComponents("protein", target),
+      veg: buildComponents("veg", target),
+      fats: buildComponents("fats", target),
     };
     const budget =
       options.dailyBudgetIdr && options.dailyBudgetIdr > 0

@@ -4,6 +4,7 @@ import addedData from "@data/enrichment/added-ingredients.json";
 import diyData from "@data/enrichment/diy-menu.json";
 import menuDescriptionData from "@data/enrichment/menu-descriptions.json";
 import menuQuantityData from "@data/enrichment/menu-quantities.json";
+import { diyQuantityMetadata } from "@/lib/diyQuantities";
 import {
   GRAM_UNIT,
   GRAM_UNIT_ID,
@@ -70,6 +71,7 @@ function decorate(base: BaseIngredient): Ingredient {
           diy_portion_g: diy.portion_g,
           diy_name: diy.name,
           diy_section: diy.section,
+          diy_quantity: diyQuantityMetadata(diy),
         }
       : {}),
   };
