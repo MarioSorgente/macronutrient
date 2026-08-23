@@ -1,5 +1,6 @@
 import type { Role } from "@/lib/storage/types";
 import { cn } from "@/components/ui/cn";
+import { roleLabel } from "@/lib/roles";
 
 /**
  * Says out loud which role the app is treating you as.
@@ -15,12 +16,6 @@ const TONES: Record<Role, string> = {
   admin: "border-tomato/40 bg-tomato/10 text-tomato",
 };
 
-const LABELS: Record<Role, string> = {
-  client: "Client",
-  restaurant: "Restaurant",
-  admin: "Admin",
-};
-
 export default function RoleBadge({
   role,
   className,
@@ -31,14 +26,14 @@ export default function RoleBadge({
   if (!role) return null;
   return (
     <span
-      title={`You are signed in as ${LABELS[role].toLowerCase()}`}
+      title={`You are signed in as ${roleLabel(role).toLowerCase()}`}
       className={cn(
         "shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-700 uppercase tracking-wide",
         TONES[role],
         className
       )}
     >
-      {LABELS[role]}
+      {roleLabel(role)}
     </span>
   );
 }

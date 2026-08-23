@@ -33,6 +33,12 @@ service cloud.firestore {
       allow read:  if true;
       allow write: if isStaffOf(rid);
 
+      // Requests and their review are server-only. The Admin SDK verifies the
+      // caller and bypasses rules; browsers cannot forge or approve one.
+      match /staffRequests/{userId} {
+        allow read, write: if false;
+      }
+
       // House recipes correct the macros shown to everyone, guests included,
       // so they are readable without an account.
       match /houseRecipes/{docId} {
