@@ -21,6 +21,7 @@
     "bench": "vitest bench --run --project bench"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "firebase": "^11.3.1",
     "firebase-admin": "^14.3.0",
     "lucide-react": "^0.469.0",
