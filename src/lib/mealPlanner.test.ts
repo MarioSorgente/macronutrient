@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { generatePlan } from "@/lib/mealPlanner";
+import { createWeeklyVarietyUsage, generatePlan, recordWeeklyVariety } from "@/lib/mealPlanner";
 import { DEFAULT_PREFERENCES } from "@/lib/storage/types";
 import { menuRecipes } from "@/lib/database";
-import { negritaMenuCandidate } from "@/lib/plannerCandidates";
+import { generatedDiyCandidate, negritaMenuCandidate } from "@/lib/plannerCandidates";
+import { sumDishMacros } from "@/lib/calc";
 import { mealSlotEligibility } from "@/lib/slotSuitability";
 
 /**
@@ -100,5 +101,31 @@ describe("curated menu eligibility", () => {
     expect(day.meals).toHaveLength(1);
     expect(day.meals[0]).toMatchObject({ slot, name: recipe.name, kind: "ready" });
     expect(day.meals[0].macros).toEqual(geisha.optimizerMacros);
+  });
+});
+
+describe("normalized weekly variety", () => {
+  it("counts Geisha, another chicken dish, and a generated plate as chicken repeats", () => {
+    const geisha = negritaMenuCandidate(menuRecipes.find((recipe) =>
+      recipe.recipe_id === "geisha")!)!;
+    const anotherChickenDish = menuRecipes.map(negritaMenuCandidate).find((candidate) =>
+      candidate?.proteinFamily === "chicken" &&
+      candidate.exactDishIdentity !== geisha.exactDishIdentity)!;
+    const items = [
+      { ingredientId: "chicken_breast_raw", name: "Chicken breast", grams: 150,
+        unitId: "g", quantity: 150 },
+      { ingredientId: "rice_jasmine_cooked_proxy", name: "Jasmine rice", grams: 150,
+        unitId: "g", quantity: 150 },
+    ];
+    const generatedPlate = generatedDiyCandidate({ id: "test-chicken-plate",
+      name: "Generated chicken plate", items, macros: sumDishMacros(items), priceIdr: 50000 });
+    const usage = createWeeklyVarietyUsage();
+
+    [geisha, anotherChickenDish, generatedPlate].forEach((candidate) =>
+      recordWeeklyVariety(usage, candidate));
+
+    expect(usage.proteinFamily.get("chicken")).toBe(3);
+    expect(usage.proteinFamily.has(geisha.id)).toBe(false);
+    expect(usage.exactDishIdentity.size).toBe(3);
   });
 });

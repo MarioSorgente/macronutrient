@@ -269,11 +269,6 @@ interface Candidate extends PlannerCandidate {
   priceIdr: number;
   score: number;
   slotPenalty: number;
-  /** Identity of the meal itself — used to stop exact repeats. */
-  mealKey: string;
-  proteinKey: string;
-  /** Tracked so the same carbohydrate doesn't run all week unnoticed. */
-  carbKey: string;
   /** Whether this meal's protein is one the plan leans toward. */
   leaned: boolean;
   kind: "composed" | "ready";
@@ -392,9 +387,6 @@ function composedCandidates(
           scoreAgainst(macros, target) +
           pricePenalty(priceIdr),
         slotPenalty,
-        mealKey: normalized.exactDishIdentity,
-        proteinKey: normalized.proteinFamily,
-        carbKey: normalized.carbFamily,
         leaned: leanBonus(protein.ingredient, preferences.proteinLean) < 0,
         kind: "composed",
       });
@@ -454,9 +446,6 @@ function readyCandidates(
       score:
         scoreAgainst(macros, target),
       slotPenalty,
-      mealKey: normalized.exactDishIdentity,
-      proteinKey: normalized.proteinFamily,
-      carbKey: normalized.carbFamily,
       leaned: false,
       kind: "ready",
       sourceDishId: normalized.source === "saved_dish" ? normalized.id.slice("saved:".length) : undefined,
@@ -489,15 +478,64 @@ const SECONDARY_SCORE_EQUIVALENCE = 1e-9;
  * without the carb tier a single rice or potato quietly runs the whole week.
  */
 const REPEAT_PENALTY = {
-  meal: 1.2, consecutiveMeal: 1.5, protein: 0.45, carb: 0.3,
-  cuisine: 0.2, sauce: 0.2,
-};
+  exactDishIdentity: 1.2,
+  proteinFamily: 0.45,
+  carbFamily: 0.3,
+  cuisineFamily: 0.2,
+  sauceFamilies: 0.2,
+  mealArchetype: 0.15,
+} as const;
+
+type VarietyDimension = keyof typeof REPEAT_PENALTY;
+export type WeeklyVarietyUsage = Record<VarietyDimension, Map<string, number>>;
+
+/** Source-independent counters: every candidate is measured by normalized metadata. */
+export function createWeeklyVarietyUsage(): WeeklyVarietyUsage {
+  return {
+    exactDishIdentity: new Map(), proteinFamily: new Map(), carbFamily: new Map(),
+    cuisineFamily: new Map(), sauceFamilies: new Map(), mealArchetype: new Map(),
+  };
+}
+
+function varietyValues(candidate: PlannerCandidate, dimension: VarietyDimension): string[] {
+  const value = candidate[dimension];
+  return Array.isArray(value) ? value : [value];
+}
+
+export function recordWeeklyVariety(
+  usage: WeeklyVarietyUsage,
+  candidate: PlannerCandidate
+): void {
+  for (const dimension of Object.keys(REPEAT_PENALTY) as VarietyDimension[]) {
+    for (const value of varietyValues(candidate, dimension)) {
+      usage[dimension].set(value, (usage[dimension].get(value) ?? 0) + 1);
+    }
+  }
+}
+
+/**
+ * Consecutive recurrence is an additional two base penalties, so it is always
+ * costlier than the same historical recurrence with a day between uses.
+ */
+function weeklyVarietyPenalty(candidate: Candidate, usage: WeeklyVarietyUsage,
+  previousDay: WeeklyVarietyUsage): number {
+  let penalty = 0;
+  for (const dimension of Object.keys(REPEAT_PENALTY) as VarietyDimension[]) {
+    const leanRelief = dimension === "proteinFamily" && candidate.leaned
+      ? LEAN_REPEAT_RELIEF : 1;
+    for (const value of varietyValues(candidate, dimension)) {
+      const weight = REPEAT_PENALTY[dimension] * leanRelief;
+      penalty += weight * (usage[dimension].get(value) ?? 0);
+      if (previousDay[dimension].has(value)) penalty += weight * 2;
+    }
+  }
+  return penalty;
+}
 
 interface SearchState {
   candidates: Candidate[];
   macros: Macros;
   priceIdr: number;
-  used: Set<string>;
   score: number;
   softScore: number;
 }
@@ -557,14 +595,8 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
     };
   });
 
-  const usage = {
-    meal: new Map<string, number>(),
-    protein: new Map<string, number>(),
-    carb: new Map<string, number>(),
-    cuisine: new Map<string, number>(),
-    sauce: new Map<string, number>(),
-  };
-  let previousDayMeals = new Set<string>();
+  const usage = createWeeklyVarietyUsage();
+  let previousDay = createWeeklyVarietyUsage();
   const days: GeneratedDay[] = [];
 
   for (const day of options.days) {
@@ -572,7 +604,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
     const unfilledSlots = slotPlans.filter(({ pool }) => !pool.length).map(({ slot }) => slot);
     let beam: SearchState[] = [{
       candidates: [], macros: { ...EMPTY_MACROS }, priceIdr: 0,
-      used: new Set(), score: 0, softScore: 0,
+      score: 0, softScore: 0,
     }];
 
     for (let index = 0; index < fillable.length; index += 1) {
@@ -588,21 +620,10 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
           fat_g: residual.fat_g / slotsLeft,
         };
         for (const candidate of pool) {
-          if (state.used.has(candidate.mealKey)) continue;
           const priceIdr = state.priceIdr + candidate.priceIdr;
           if (options.dailyBudgetIdr && priceIdr > options.dailyBudgetIdr) continue;
           const macros = addMacros(state.macros, candidate.macros);
-          const used = new Set(state.used);
-          used.add(candidate.mealKey);
-          const repeat =
-            REPEAT_PENALTY.meal * (usage.meal.get(candidate.mealKey) ?? 0) +
-            REPEAT_PENALTY.consecutiveMeal * (previousDayMeals.has(candidate.mealKey) ? 1 : 0) +
-            REPEAT_PENALTY.protein * (candidate.leaned ? LEAN_REPEAT_RELIEF : 1) *
-              (usage.protein.get(candidate.proteinKey) ?? 0) +
-            REPEAT_PENALTY.carb * (usage.carb.get(candidate.carbKey) ?? 0) +
-            REPEAT_PENALTY.cuisine * (usage.cuisine.get(candidate.cuisineFamily) ?? 0) +
-            REPEAT_PENALTY.sauce * candidate.sauceFamilies.reduce(
-              (sum, sauce) => sum + (usage.sauce.get(sauce) ?? 0), 0);
+          const repeat = weeklyVarietyPenalty(candidate, usage, previousDay);
           // The residual supplies the target for this tentative choice; the
           // complete-day distance keeps compensation, rather than slot fit,
           // authoritative. Beam pruning is deliberately deterministic.
@@ -616,7 +637,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
             pricePenalty(priceIdr);
           expanded.push({
             candidates: [...state.candidates, candidate], macros, priceIdr,
-            used, score,
+            score,
             softScore: state.softScore + candidate.slotPenalty +
               (candidate.readyMadePriority === "high" ? -0.3 : 0) +
               (candidate.leaned ? -LEAN_BONUS : 0) + repeat +
@@ -673,23 +694,7 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
     let dayPrice: PriceResult = { ...ZERO_PRICE };
 
     for (const [index, candidate] of (complete?.candidates ?? []).entries()) {
-      usage.meal.set(
-        candidate.mealKey,
-        (usage.meal.get(candidate.mealKey) ?? 0) + 1
-      );
-      usage.protein.set(
-        candidate.proteinKey,
-        (usage.protein.get(candidate.proteinKey) ?? 0) + 1
-      );
-      usage.carb.set(
-        candidate.carbKey,
-        (usage.carb.get(candidate.carbKey) ?? 0) + 1
-      );
-      usage.cuisine.set(candidate.cuisineFamily,
-        (usage.cuisine.get(candidate.cuisineFamily) ?? 0) + 1);
-      for (const sauce of candidate.sauceFamilies) {
-        usage.sauce.set(sauce, (usage.sauce.get(sauce) ?? 0) + 1);
-      }
+      recordWeeklyVariety(usage, candidate);
 
       const price =
         candidate.kind === "ready" && candidate.priceIdr > 0
@@ -719,7 +724,10 @@ export function generatePlan(options: GenerateOptions): GeneratedDay[] {
         )),
       }),
     });
-    previousDayMeals = new Set((complete?.candidates ?? []).map((candidate) => candidate.mealKey));
+    previousDay = createWeeklyVarietyUsage();
+    for (const candidate of complete?.candidates ?? []) {
+      recordWeeklyVariety(previousDay, candidate);
+    }
   }
 
   return days;
