@@ -63,3 +63,34 @@ describe("generated breakfasts", () => {
     ).toBe(true);
   });
 });
+
+describe("seeded complete-day selection", () => {
+  const options = {
+    days: [0],
+    slots: ["Breakfast", "Lunch", "Dinner"],
+    targets: { energy_kcal: 2200, protein_g: 160, carbs_g: 220, fat_g: 70 },
+    savedDishes: [],
+    includeSavedDishes: false,
+    includeMenuDishes: true,
+    includeComposed: true,
+    dailyBudgetIdr: null,
+    preferences: DEFAULT_PREFERENCES,
+  } as Parameters<typeof generatePlan>[0];
+
+  it("is deterministic for identical inputs and seed", () => {
+    expect(generatePlan({ ...options, seed: 8675309 })).toEqual(
+      generatePlan({ ...options, seed: 8675309 })
+    );
+  });
+
+  it("does not let the seed demote a feasible day to Best effort", () => {
+    // Target a day the real menu can produce, then vary only the tie-breaker.
+    const attainable = generatePlan({ ...options, seed: 1 })[0].macros;
+    const classifications = [1, 2, 3, 99].map((seed) =>
+      generatePlan({ ...options, targets: attainable, seed })[0].adherence.classification
+    );
+
+    expect(classifications).not.toContain("Best effort");
+    expect(new Set(classifications).size).toBe(1);
+  });
+});
