@@ -1,6 +1,7 @@
-import { adminAuth } from "@/lib/server/firebaseAdmin";
+import { adminAuth, adminDb } from "@/lib/server/firebaseAdmin";
 import { beforeEach, describe, expect, it } from "vitest";
 import { setRole, syncAccount } from "@/lib/server/roles";
+import { getStaffRequest, requestStaffAccess } from "@/lib/server/staffRequests";
 import { HttpError } from "@/lib/server/auth";
 import {
   RID,
@@ -28,6 +29,11 @@ import {
 const OWNER = "owner@example.com";
 
 const sync = async (uid: string) => syncAccount(await adminAuth().getUser(uid));
+
+async function caller(uid: string) {
+  const user = await adminAuth().getUser(uid);
+  return { uid, email: user.email, role: user.customClaims?.role } as never;
+}
 
 beforeEach(resetEmulators);
 
@@ -112,6 +118,58 @@ describe("setRole", () => {
     const before = (await docAt(`users/${uid}`))?.roleUpdatedAt;
     await setRole("admin-uid", uid, "restaurant");
     expect((await docAt(`users/${uid}`))?.roleUpdatedAt).not.toBe(before);
+  });
+
+  it.each([
+    ["Staff", "restaurant"],
+    ["Owner", "admin"],
+  ] as const)(
+    "resolves a Customer → %s promotion without weakening its claim",
+    async (_label, role) => {
+      const uid = await createUser(uniqueEmail("worker"));
+      await sync(uid);
+      await requestStaffAccess(await caller(uid));
+
+      await setRole("promoting-admin", uid, role);
+
+      expect(await claimsOf(uid)).toMatchObject({ role, rid: RID });
+      expect(await docAt(`users/${uid}`)).toMatchObject({ role, rid: RID });
+      expect(await getStaffRequest(uid)).toMatchObject({
+        status: "approved",
+        reviewedByUid: "promoting-admin",
+      });
+      expect((await getStaffRequest(uid))?.reviewedAt).toBeTruthy();
+    }
+  );
+
+  it("does not change a rejected request during a later promotion", async () => {
+    const uid = await createUser(uniqueEmail("worker"));
+    await sync(uid);
+    await requestStaffAccess(await caller(uid));
+    const requestRef = adminDb().doc(`restaurants/${RID}/staffRequests/${uid}`);
+    await requestRef.update({
+      status: "rejected",
+      reviewedAt: "earlier-review",
+      reviewedByUid: "first-admin",
+    });
+
+    await setRole("promoting-admin", uid, "restaurant");
+
+    expect(await getStaffRequest(uid)).toMatchObject({
+      status: "rejected",
+      reviewedAt: "earlier-review",
+      reviewedByUid: "first-admin",
+    });
+  });
+
+  it("does not reopen a pending request when assigning client", async () => {
+    const uid = await createUser(uniqueEmail("worker"));
+    await sync(uid);
+    await requestStaffAccess(await caller(uid));
+
+    await setRole("promoting-admin", uid, "client");
+
+    expect(await getStaffRequest(uid)).toMatchObject({ status: "pending" });
   });
 
   it.each([

@@ -142,12 +142,30 @@ export async function setRole(
   });
 
   const now = new Date().toISOString();
-  await adminDb()
-    .doc(`users/${uid}`)
-    .set(
+  const db = adminDb();
+  const profileRef = db.doc(`users/${uid}`);
+  const requestRef = db.doc(
+    `restaurants/${RESTAURANT_ID}/staffRequests/${uid}`
+  );
+  await db.runTransaction(async (transaction) => {
+    // Read before writing so the profile mirror and any pending application
+    // are resolved atomically. A role grant must never revive a rejected (or
+    // otherwise already reviewed) request.
+    const request = role === "client" ? null : await transaction.get(requestRef);
+    transaction.set(
+      profileRef,
       { role, rid: RESTAURANT_ID, roleUpdatedAt: now, updatedAt: now },
       { merge: true }
     );
+
+    if (request?.data()?.status === "pending") {
+      transaction.update(requestRef, {
+        status: "approved",
+        reviewedAt: now,
+        reviewedByUid: callerUid,
+      });
+    }
+  });
 
   return { uid, role: role as Role };
 }
