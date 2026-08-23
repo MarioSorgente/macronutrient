@@ -24,6 +24,7 @@ import { round0, round1 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import TargetAdherence from "@/components/TargetAdherence";
 import ReportShell, { ReportMessage } from "@/components/ReportShell";
+import { diagnoseDailyAdherence } from "@/lib/dailyAdherence";
 
 export default function PlanReport() {
   const repos = useRepos();
@@ -182,6 +183,9 @@ export default function PlanReport() {
                         );
                         if (!dayAssignments.length) return null;
                         const dTotals = dayTotals(plan, week, dayIndex, dishMap);
+                        const adherence = plan.targets ? diagnoseDailyAdherence(dTotals, plan.targets, {
+                          complete: plan.mealSlots.every((slot) => dayAssignments.some((assignment) => assignment.slot === slot)),
+                        }) : null;
 
                         return (
                           <div
@@ -207,6 +211,11 @@ export default function PlanReport() {
                                 )}
                               </span>
                             </div>
+                            {plan.targets && adherence && (
+                              <div className="border-b border-cream-deep p-3">
+                                <TargetAdherence actual={dTotals} targets={plan.targets} diagnostics={adherence} targetSource="Explicit" compact />
+                              </div>
+                            )}
                             <ul className="divide-y divide-cream-deep/60">
                               {plan.mealSlots.flatMap((slot) => {
                                 const slotItems = dayAssignments.filter(
@@ -236,7 +245,7 @@ export default function PlanReport() {
                                         <b className="text-tomato">
                                           {round0(macros.energy_kcal)}
                                         </b>{" "}
-                                        kcal
+                                        kcal · P {round1(macros.protein_g)} · C {round1(macros.carbs_g)} · F {round1(macros.fat_g)}
                                         <span className="ml-2">
                                           {formatPrice(
                                             assignmentPrice(a, dishMap)
@@ -261,5 +270,4 @@ export default function PlanReport() {
     </ReportShell>
   );
 }
-
 

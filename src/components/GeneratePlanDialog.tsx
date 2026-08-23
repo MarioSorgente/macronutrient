@@ -32,6 +32,7 @@ import { round0, round1 } from "@/lib/format";
 import { resolveTarget } from "@/lib/targetResolution";
 import IngredientTypeahead from "@/components/IngredientTypeahead";
 import Modal from "@/components/ui/Modal";
+import TargetAdherence from "@/components/TargetAdherence";
 
 /**
  * Two steps: say what you like, then produce and
@@ -335,8 +336,9 @@ export default function GeneratePlanDialog({
                 data-testid="resolved-target"
               >
                 <div className="font-700 text-charcoal">
-                  Resolved target · {targetResolution.selectedStyle} (
-                  {targetResolution.source})
+                  Resolved target · {targetResolution.source === "explicit"
+                    ? "Explicit"
+                    : `Derived · ${targetResolution.selectedStyle === "Balanced" && !preferences.macroStyle ? "Auto → Balanced" : targetResolution.selectedStyle}`}
                 </div>
                 <div className="mt-0.5 tabular-nums">
                   {round0(targetResolution.target.energy_kcal)} kcal · P{" "}
@@ -487,7 +489,7 @@ export default function GeneratePlanDialog({
                         key={day.day}
                         className="rounded-xl border border-cream-deep bg-white p-3"
                       >
-                        <div className="mb-1.5 flex items-baseline justify-between">
+                        <div className="mb-2 flex items-baseline justify-between">
                           <span className="font-display text-sm font-700 text-charcoal">
                             {DAY_SHORT[day.day]}
                           </span>
@@ -501,6 +503,13 @@ export default function GeneratePlanDialog({
                             </b>
                           </span>
                         </div>
+                        <TargetAdherence
+                          actual={day.macros}
+                          targets={targetResolution.target}
+                          diagnostics={day.adherence}
+                          targetSource={targetResolution.source === "explicit" ? "Explicit" : `Derived · ${targetResolution.selectedStyle}`}
+                          compact
+                        />
                         <ul className="space-y-0.5">
                           {day.meals.map((meal, i) => (
                             <li
@@ -514,7 +523,7 @@ export default function GeneratePlanDialog({
                                 <span className="text-charcoal">{meal.name}</span>
                               </span>
                               <span className="shrink-0 tabular-nums text-charcoal-soft">
-                                {round0(meal.macros.energy_kcal)} kcal
+                                {round0(meal.macros.energy_kcal)} kcal · P {round1(meal.macros.protein_g)} · C {round1(meal.macros.carbs_g)} · F {round1(meal.macros.fat_g)}
                               </span>
                             </li>
                           ))}
