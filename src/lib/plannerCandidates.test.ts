@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { sumDishMacros } from "@/lib/calc";
 import { menuRecipes } from "@/lib/database";
-import { generatedDiyCandidate, negritaMenuCandidate, readyPlannerCatalog, savedDishCandidate } from "@/lib/plannerCandidates";
+import { generatedDiyCandidate, macrosWithApprovedModification, negritaMenuCandidate, readyPlannerCatalog, savedDishCandidate } from "@/lib/plannerCandidates";
+import { NEGRITA_PLANNER_METADATA } from "@/lib/negritaPlannerMetadata";
 import { diagnoseDailyAdherence } from "@/lib/dailyAdherence";
 import type { Dish, DishItem } from "@/lib/storage/types";
 
@@ -35,6 +36,23 @@ describe("normalized planner candidates", () => {
     expect(catalog.every((candidate) => candidate.source === "negrita_menu")).toBe(true);
     expect(catalog.every((candidate) => candidate.id && candidate.breakdown.length)).toBe(true);
     expect(catalog.every((candidate) => candidate.macroConfidence === "published")).toBe(true);
+    expect(Object.keys(NEGRITA_PLANNER_METADATA).sort())
+      .toEqual(menuRecipes.map((recipe) => recipe.recipe_id).sort());
+  });
+
+  it("curates Geisha as a published ready chicken-and-rice lunch/dinner", () => {
+    const geisha = negritaMenuCandidate(menuRecipes.find((recipe) => recipe.recipe_id === "geisha")!)!;
+    const related = readyPlannerCatalog([], true).filter((candidate) =>
+      candidate.exactDishIdentity !== geisha.exactDishIdentity &&
+      candidate.proteinFamily === "chicken" && candidate.carbFamily === "rice");
+
+    expect(geisha).toMatchObject({ source: "negrita_menu", proteinFamily: "chicken",
+      carbFamily: "rice", cuisineFamily: "japanese_teriyaki", mealArchetype: "main",
+      eligibleMealTypes: ["lunch", "dinner"], readyMadePriority: "high",
+      macroConfidence: "published", exactDishIdentity: "menu:geisha" });
+    expect(related.length).toBeGreaterThan(0);
+    expect(geisha.modificationOptions).toEqual([]);
+    expect(macrosWithApprovedModification(geisha, 0)).toBeNull();
   });
 
   it.each([

@@ -5,6 +5,7 @@ import { GRAM_UNIT_ID, type Macros, type MenuRecipe, type PlannerCandidate,
   type PlannerCandidateIngredient, type ProteinFamily, type CarbFamily,
   type MacroConfidence } from "@/types/nutrition";
 import type { Dish, DishItem } from "@/lib/storage/types";
+import { NEGRITA_PLANNER_METADATA } from "@/lib/negritaPlannerMetadata";
 
 const proteinPatterns: [ProteinFamily, RegExp][] = [
   ["chicken", /chicken/], ["beef", /beef|wagyu|steak|tenderloin/],
@@ -98,17 +99,14 @@ function publishedConfidence(recipe: MenuRecipe): MacroConfidence {
 
 function finish(base: Omit<PlannerCandidate, "proteinFamily" | "carbFamily" | "cuisineFamily" |
   "mealArchetype" | "eligibleMealTypes" | "modificationOptions" | "dietaryTags" |
-  "allergenTags" | "sauceFamilies">, section = ""): PlannerCandidate {
+  "allergenTags" | "sauceFamilies" | "readyMadePriority">, section = ""): PlannerCandidate {
   const families = normalizedFamilies(base.breakdown);
   const meal = mealMetadata(base.displayName, section);
   const classified = tags(base.breakdown);
   return { ...base, ...families, cuisineFamily: cuisineFamily(base.displayName, base.breakdown),
     mealArchetype: meal.archetype, eligibleMealTypes: meal.eligible,
-    modificationOptions: [
-      { type: "adjust_portion", label: "Adjust portion" },
-      ...base.breakdown.map((item) => ({ type: "remove_ingredient" as const,
-        ingredientId: item.ingredientId, label: `Remove ${item.name}` })),
-    ], dietaryTags: classified.dietary, allergenTags: classified.allergens,
+    modificationOptions: [], readyMadePriority: "normal",
+    dietaryTags: classified.dietary, allergenTags: classified.allergens,
     sauceFamilies: classified.sauces };
 }
 
@@ -133,12 +131,24 @@ export function negritaMenuCandidate(recipe: MenuRecipe): PlannerCandidate | nul
   if (!dishItems.length) return null;
   const calculatedIngredientMacros = sumDishMacros(dishItems);
   const optimizerMacros = publishedMacros(recipe) ?? calculatedIngredientMacros;
-  return finish({ id: `menu:${recipe.recipe_id}`, source: "negrita_menu",
+  const metadata = NEGRITA_PLANNER_METADATA[recipe.recipe_id];
+  if (!metadata) return null;
+  const generic = finish({ id: `menu:${recipe.recipe_id}`, source: "negrita_menu",
     displayName: recipe.name, optimizerMacros, calculatedIngredientMacros,
     breakdown: breakdown(dishItems),
     price: { totalIdr: recipe.price_idr ?? 0, complete: recipe.price_idr !== null },
     macroConfidence: publishedMacros(recipe) ? publishedConfidence(recipe) : "incomplete",
     exactDishIdentity: `menu:${recipe.recipe_id}` }, recipe.section);
+  return { ...generic, ...metadata, readyMadePriority: "high" };
+}
+
+/** Apply only a kitchen-approved fixed delta; unknown modifications are unavailable. */
+export function macrosWithApprovedModification(candidate: PlannerCandidate,
+  optionIndex: number): Macros | null {
+  const option = candidate.modificationOptions[optionIndex];
+  if (!option) return null;
+  return Object.fromEntries(MACRO_KEYS.map((key) =>
+    [key, candidate.optimizerMacros[key] + option.macroDelta[key]])) as unknown as Macros;
 }
 
 export function generatedDiyCandidate(input: { id: string; name: string; items: DishItem[];
