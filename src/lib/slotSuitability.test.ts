@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ingredientSlotPenalty,
+  mealSlotEligibility,
   mealSlotPenalty,
   namedDishSlotPenalty,
   slotKindOf,
@@ -18,6 +19,24 @@ describe("slotKindOf", () => {
 });
 
 describe("breakfast suitability", () => {
+  it("keeps eligibility independent of a suggested protein allocation", () => {
+    const result = mealSlotEligibility({
+      slot: "Breakfast",
+      mealArchetype: "breakfast",
+      eligibleMealTypes: ["breakfast"],
+      ingredients: [{ ingredientId: "egg_whole_hard_boiled", grams: 300 }],
+    });
+    expect(result).toEqual({ allowed: true, reason: "ELIGIBLE_CLASSIFIED_SLOT" });
+  });
+
+  it("forbids a chicken plate even when its macros might improve the day", () => {
+    expect(mealSlotEligibility({
+      slot: "Breakfast",
+      ingredients: [{ ingredientId: "chicken_peri_peri_negrita", grams: 300 }],
+      name: "Peri-peri chicken plate",
+    })).toMatchObject({ allowed: false, reason: "INELIGIBLE_BREAKFAST_MAIN" });
+  });
+
   it("penalises a saucy dinner protein at breakfast", () => {
     // The complaint that prompted this: peri peri chicken at 8am.
     const peri = ingredientSlotPenalty("chicken_peri_peri_negrita", "breakfast");
@@ -63,6 +82,21 @@ describe("breakfast suitability", () => {
 });
 
 describe("main meals and snacks", () => {
+  it("allows a light snack regardless of the remaining carb shortage", () => {
+    expect(mealSlotEligibility({
+      slot: "Snack",
+      mealArchetype: "snack",
+      eligibleMealTypes: ["snack", "post-workout"],
+      ingredients: [{ ingredientId: "banana_raw", grams: 100 }],
+    })).toMatchObject({ allowed: true, reason: "ELIGIBLE_CLASSIFIED_SLOT" });
+  });
+
+  it("allows compatible plates at both lunch and dinner", () => {
+    const plate = [{ ingredientId: "chicken_breast_raw", grams: 300 }];
+    expect(mealSlotEligibility({ slot: "Lunch", ingredients: plate }).allowed).toBe(true);
+    expect(mealSlotEligibility({ slot: "Dinner", ingredients: plate }).allowed).toBe(true);
+  });
+
   it("mildly discourages breakfast food as a main course", () => {
     expect(ingredientSlotPenalty("bread_brioche", "main")).toBeGreaterThan(0);
     // ...but only mildly: it must not outweigh hitting the macro target.
