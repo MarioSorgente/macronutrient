@@ -1,6 +1,9 @@
 export { mondayAhead } from "../shared";
 
 import type { Page } from "@playwright/test";
+import { getApps, initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
 
 /** Unique address per test, so the emulator's account list never collides. */
 export function uniqueEmail(prefix = "diner"): string {
@@ -140,6 +143,42 @@ const AUTH_EMULATOR = "http://127.0.0.1:9099";
 
 /** The address on the emulator's ADMIN_EMAILS allowlist (playwright.config.ts). */
 export const OWNER_EMAIL = "owner@example.com";
+
+/**
+ * Gives an emulator account owner access without going through Firestore
+ * security rules.
+ *
+ * Role changes are server-owned in the application: the browser is
+ * deliberately forbidden from writing either the custom claim or the role
+ * mirror. E2E setup must use the same privileged boundary, rather than rely on
+ * the sign-in reconciliation racing the first protected UI assertion.
+ */
+export async function seedAdminProfileByEmail(email: string): Promise<void> {
+  const app = getApps()[0] ?? initializeApp({ projectId: "demo-mamma" });
+  const auth = getAuth(app);
+  const user = await auth.getUserByEmail(email);
+  const rid = "negrita";
+
+  await auth.setCustomUserClaims(user.uid, {
+    ...user.customClaims,
+    role: "admin",
+    rid,
+  });
+
+  const now = new Date().toISOString();
+  await getFirestore(app).doc(`users/${user.uid}`).set(
+    {
+      uid: user.uid,
+      email: user.email ?? email,
+      displayName: user.displayName ?? email.split("@")[0],
+      role: "admin",
+      rid,
+      roleUpdatedAt: now,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+}
 
 /** Marks an address confirmed, the way clicking the emailed link would. */
 export async function verifyEmail(email: string): Promise<void> {
