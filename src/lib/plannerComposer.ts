@@ -471,6 +471,24 @@ function headlineParts(draft: ComposedDraft): string[] {
   return names;
 }
 
+/**
+ * Culinary style for a composed meal: the archetype it was built from, plus the
+ * kind of protein anchoring it. A protein breakfast built on smoked salmon and
+ * one built on sausage are not the same breakfast, and the week should be able
+ * to tell — while chicken, beef and pork collapse together, because "meat and a
+ * starch" twice in a week reads as one style whichever animal it came from.
+ */
+const PROTEIN_STYLE_GROUP: Record<string, string> = {
+  chicken: "meat", beef: "meat", pork: "meat", "breakfast-meat": "meat",
+  eggs: "eggs", fish: "fish", vegetarian: "veg",
+};
+
+function composedStyle(draft: ComposedDraft): string {
+  const anchor = draft.parts.find((_, index) => draft.roles[index] === "protein");
+  const family = anchor ? cachedFamily(anchor.line.ingredient, "protein") : "none";
+  return `${draft.templateId}:${PROTEIN_STYLE_GROUP[family] ?? family}`;
+}
+
 function materialize(drafts: ComposedDraft[]): PlannerCandidate[] {
   return drafts.map((draft) => {
     const items: DishItem[] = draft.parts.map((part) => ({
@@ -489,6 +507,7 @@ function materialize(drafts: ComposedDraft[]): PlannerCandidate[] {
       priceIdr: draft.priceIdr,
     });
     candidate.mealArchetype = draft.templateId;
+    candidate.dishStyle = composedStyle(draft);
     candidate.eligibleMealTypes = [...(MEAL_TEMPLATES.find((item) =>
       item.id === draft.templateId)?.allowedSlots ?? [])];
     return candidate;

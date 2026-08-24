@@ -70,6 +70,13 @@ export interface PlannerCandidate {
   carbFamily: CarbFamily;
   cuisineFamily: string;
   mealArchetype: string;
+  /**
+   * Culinary style, at the level a person would name it: a pancake, an oatmeal
+   * bowl, a kebab plate. Coarser than the dish and finer than the archetype,
+   * which is the gap that let seven different-looking breakfasts all count as
+   * one "breakfast" and a week settle on a single style.
+   */
+  dishStyle: string;
   eligibleMealTypes: string[];
   macroConfidence: MacroConfidence;
   /** Menu dishes receive this priority when the menu preference is enabled. */

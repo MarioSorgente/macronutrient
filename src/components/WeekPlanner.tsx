@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -37,7 +37,7 @@ import { formatIdr, formatPrice, priceItems } from "@/lib/pricing";
 import { usePlanView, useShowPrices } from "@/lib/planView";
 import { EMPTY_MACROS, scaleMacros, sumDishMacros } from "@/lib/calc";
 import { ZERO_PRICE } from "@/lib/pricing";
-import { loadCurrentPlan } from "@/lib/currentPlan";
+import { loadCurrentPlan, savePlan } from "@/lib/currentPlan";
 import type { GeneratedDay } from "@/lib/mealPlanner";
 import { round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
@@ -75,6 +75,26 @@ export default function WeekPlanner() {
   const [assigning, setAssigning] = useState<{ day: number; slot: string } | null>(
     null
   );
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  /**
+   * Which account the plan on screen was loaded for. A token expiry or a sign-out
+   * in another tab flips `repos` to a different store, and nothing else ties the
+   * plan in state to the repository it came from — so without this an edit made
+   * a moment earlier can be written into the wrong person's storage.
+   */
+  const loadedFor = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    // In-app navigation is covered by the write barrier in currentPlan, which
+    // makes the next load wait for a save in flight. Closing or reloading the
+    // tab is the case it cannot cover: an unacknowledged Firestore write lives
+    // in memory only, and goes with the page.
+    if (!saving && !saveError) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [saving, saveError]);
 
   useEffect(() => {
     // Wait for auth: reading first would open the guest store and then swap it
@@ -85,7 +105,9 @@ export default function WeekPlanner() {
     loadCurrentPlan(repos.plans, repos.uid)
       .then((loaded) => {
         if (!active) return;
+        loadedFor.current = repos.uid;
         setClient(loaded);
+        setSaveError(null);
         // The plan is self-contained: assignment snapshots and inline items
         // are enough to render it while the dish library catches up.
       })
@@ -155,10 +177,39 @@ export default function WeekPlanner() {
     };
   }, [plan, currentWeekSafe, dishMap]);
 
-  const persist = useCallback(async (next: Plan) => {
-    const updated = { ...next, updatedAt: new Date().toISOString() };
-    setClient(updated);
-    await repos.plans.save(updated);
+  /**
+   * Saves a change and says so if it did not happen.
+   *
+   * The screen still updates first — the grid should never wait on a network —
+   * but the write is now watched. It used to be issued and dropped: six of the
+   * seven callers discarded the promise, so a rejected save left a fully
+   * applied week on screen that had never been written, and the next time the
+   * planner remounted it was simply gone with no explanation.
+   *
+   * Returns whether the write landed, so callers that should not move on until
+   * it has (applying a whole generated week) can wait for it.
+   */
+  const persist = useCallback(async (next: Plan): Promise<boolean> => {
+    if (loadedFor.current !== repos.uid) {
+      setSaveError("You are signed in as someone else now. Reload to keep editing.");
+      return false;
+    }
+    setClient(next);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const stored = await savePlan(repos.plans, repos.uid, next);
+      setClient((current) => (current === next ? stored : current));
+      return true;
+    } catch (cause) {
+      console.error("Could not save your plan:", cause);
+      setSaveError(
+        "We could not save your plan. Your week is still on screen — try again."
+      );
+      return false;
+    } finally {
+      setSaving(false);
+    }
   }, [repos]);
 
   function assign(dish: Dish, servings: number) {
@@ -173,7 +224,7 @@ export default function WeekPlanner() {
       // Snapshot keeps the plan readable if this dish is later deleted.
       snapshot: { name: dish.name, totals: sumDishMacros(dish.items) },
     };
-    persist({ ...plan, assignments: [...plan.assignments, assignment] });
+    void persist({ ...plan, assignments: [...plan.assignments, assignment] });
     setAssigning(null);
   }
 
@@ -219,7 +270,7 @@ export default function WeekPlanner() {
       snapshot: { name, totals },
       ...(dishId ? { dishId } : {}),
     };
-    persist({ ...plan, assignments: [...plan.assignments, assignment] });
+    void persist({ ...plan, assignments: [...plan.assignments, assignment] });
     setAssigning(null);
   }
 
@@ -232,7 +283,7 @@ export default function WeekPlanner() {
    */
   function clearWeek() {
     if (!plan) return;
-    persist({
+    void persist({
       ...plan,
       assignments: plan.assignments.filter((a) => a.week !== currentWeekSafe),
     });
@@ -241,7 +292,7 @@ export default function WeekPlanner() {
 
   function unassign(assignmentId: string) {
     if (!plan) return;
-    persist({
+    void persist({
       ...plan,
       assignments: plan.assignments.filter((a) => a.id !== assignmentId),
     });
@@ -251,7 +302,7 @@ export default function WeekPlanner() {
   /** Applies a patch to one assignment and saves. */
   function updateAssignment(assignmentId: string, patch: Partial<Assignment>) {
     if (!plan) return;
-    persist({
+    void persist({
       ...plan,
       assignments: plan.assignments.map((a) =>
         a.id === assignmentId ? { ...a, ...patch } : a
@@ -260,13 +311,13 @@ export default function WeekPlanner() {
   }
 
   /** Writes a generated week into the plan as inline meals. */
-  function applyGenerated(
+  async function applyGenerated(
     generated: GeneratedDay[],
     replace: boolean,
     preferences: ClientPreferences,
     resolvedTarget: MacroTargets
-  ) {
-    if (!plan) return;
+  ): Promise<boolean> {
+    if (!plan) return false;
     const kept = replace
       ? plan.assignments.filter((a) => a.week !== currentWeek)
       : [...plan.assignments];
@@ -293,9 +344,13 @@ export default function WeekPlanner() {
     // actually generated against. Without it a plan generated from a derived
     // "Auto → Balanced 2000 kcal" target saved with no target at all, and the
     // adherence bars afterwards measured the week against nothing.
-    persist({ ...plan, preferences, targets: resolvedTarget,
+    // The one write worth waiting for: twenty-odd assignments, the resolved
+    // target and the preferences, all at once. The dialog stays open if it
+    // fails, so the generated week is still in hand rather than lost.
+    const saved = await persist({ ...plan, preferences, targets: resolvedTarget,
       assignments: [...kept, ...additions] });
-    setGenerateOpen(false);
+    if (saved) setGenerateOpen(false);
+    return saved;
   }
 
   if (loading) {
@@ -343,6 +398,30 @@ export default function WeekPlanner() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
       <HouseRecipeLoader enabled={visibleWeekNeedsHouseRecipes} />
+
+      {/*
+        Sticky, not a toast. A toast that dismisses itself is the wrong shape
+        for "your week is not saved": the week is still on screen, so nothing
+        else on the page tells the person anything is wrong.
+      */}
+      {saveError && (
+        <div
+          role="alert"
+          data-testid="save-error"
+          className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-tomato bg-tomato/5 px-4 py-3 text-sm text-charcoal"
+        >
+          <AlertTriangle size={16} className="shrink-0 text-tomato" />
+          <span className="min-w-0 flex-1 font-600">{saveError}</span>
+          <button
+            type="button"
+            onClick={() => void persist(plan)}
+            disabled={saving}
+            className="rounded-lg bg-tomato px-3 py-1.5 text-xs font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Try again"}
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -459,7 +538,7 @@ export default function WeekPlanner() {
             <button
               type="button"
               onClick={() =>
-                persist({ ...plan, weekCount: plan.weekCount + 1 })
+                void persist({ ...plan, weekCount: plan.weekCount + 1 })
               }
               className="flex items-center gap-1 rounded-xl border border-dashed border-cream-deep px-2.5 py-2 text-sm font-600 text-charcoal-soft hover:border-tomato-soft hover:text-charcoal"
               aria-label="Add week"

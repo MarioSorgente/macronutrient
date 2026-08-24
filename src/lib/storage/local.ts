@@ -32,16 +32,25 @@ export function createLocalRepository<T extends Entity>(
     window.localStorage.setItem(storageKey, JSON.stringify(items));
   }
 
+  /**
+   * A record saved before `updatedAt` existed sorts as older than anything
+   * real, rather than poisoning the comparison. The plain `item.updatedAt >
+   * newest.updatedAt` reduce was worse than it looked: every comparison against
+   * `undefined` is false, so one undated record seeded first pinned `latest()`
+   * to itself permanently and hid every real plan behind it.
+   */
+  const changedAt = (item: T): string => item.updatedAt ?? "";
+
   return {
     async list() {
-      return read().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      return read().sort((a, b) => changedAt(b).localeCompare(changedAt(a)));
     },
 
     async latest() {
       return (
         read().reduce<T | null>(
           (newest, item) =>
-            !newest || item.updatedAt > newest.updatedAt ? item : newest,
+            !newest || changedAt(item) > changedAt(newest) ? item : newest,
           null
         )
       );

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { generatePlan, generatePlanWithTargets, type GeneratedDay } from "@/lib/mealPlanner";
 import { menuRecipes } from "@/lib/database";
 import { negritaMenuCandidate } from "@/lib/plannerCandidates";
+import { NEGRITA_PLANNER_METADATA } from "@/lib/negritaPlannerMetadata";
 import { DEFAULT_PREFERENCES, type MacroTargets } from "@/lib/storage/types";
 
 /**
@@ -109,6 +110,100 @@ describe("weekly variety on the real menu", () => {
       expect(day.adherence.classification, `day ${day.day}`).toBe("Within tolerance");
       expect(day.adherence.compliant).toBe(true);
     }
+  });
+});
+
+/**
+ * Breakfast is where repetition is most visible and where the menu offers the
+ * fewest genuinely different answers — so it gets its own block. The first fix
+ * for it stopped one dish taking all seven mornings and let the *next* dish
+ * take them instead, because nothing in the optimizer could tell a pancake from
+ * an oatmeal bowl from Before Cardio: every ready breakfast carried the same
+ * archetype. These guard both levels, exact dish and style.
+ */
+describe("breakfast rotates by style, not just by dish", () => {
+  const breakfastsOf = (days: GeneratedDay[]) => days.map((day) => day.meals[0]);
+
+  it("rotates exact dishes and styles across the week", () => {
+    const meals = breakfastsOf(week(HIGH_PROTEIN));
+    const names = meals.map((meal) => meal.name);
+    const styles = meals.map((meal) => meal.dishStyle);
+
+    expect(distinct(names), "distinct exact breakfasts").toBeGreaterThanOrEqual(4);
+    expect(distinct(styles), "distinct breakfast styles").toBeGreaterThanOrEqual(3);
+    expect(mostRepeated(names), "most repeated exact breakfast").toBeLessThanOrEqual(3);
+    expect(consecutive(names), "same breakfast on consecutive days").toEqual([]);
+  });
+
+  it("keeps the same breakfast to at most twice at this target", () => {
+    // Asserted separately from the <= 3 bound above, so the weaker guarantee
+    // still holds if a future menu change makes this one unreachable.
+    expect(mostRepeated(breakfastsOf(week(HIGH_PROTEIN)).map((meal) => meal.name)))
+      .toBeLessThanOrEqual(2);
+  });
+
+  it.each(["Before Cardio", "Breakfast Protein Burrito"])(
+    "does not let %s become the default breakfast", (dish) => {
+      // Both are legitimate menu breakfasts and neither is banned. The burrito
+      // took all seven mornings before the repeat penalties escalated; Before
+      // Cardio then took three, because it was the only ready breakfast filed
+      // as an egg dish and so sat in a repeat bucket of its own.
+      for (const targets of [HIGH_PROTEIN, BALANCED]) {
+        const names = breakfastsOf(week(targets)).map((meal) => meal.name);
+        expect(names.filter((name) => name.includes(dish)).length,
+          `${dish} at ${targets.protein_g} g protein`).toBeLessThanOrEqual(2);
+      }
+    });
+
+  it("does not pay for breakfast variety with adherence", () => {
+    for (const targets of [HIGH_PROTEIN, BALANCED]) {
+      for (const day of week(targets)) {
+        expect(day.adherence.classification, `day ${day.day}`).toBe("Within tolerance");
+      }
+    }
+  });
+
+  it("reaches for a pancake, waffle or oatmeal breakfast where a compliant day has one", () => {
+    // At HIGH_PROTEIN none of them fit: the sweet breakfasts are 1085-1175 kcal
+    // with 38-54 g of fat, which leaves the other three meals 12-29 g of fat to
+    // work with, and a single 150 g chicken portion is already 5 g. Rather than
+    // skip the assertion, prove it — then assert the rotation does appear at a
+    // target where those days genuinely exist.
+    const sweet = /pancake|waffle|oatmeal/i;
+    const compliantWithSweet = (targets: MacroTargets) => generatePlan({
+      days: [0], slots: SLOTS, targets, savedDishes: [], includeSavedDishes: false,
+      includeMenuDishes: true, includeComposed: true, dailyBudgetIdr: null,
+      preferences: DEFAULT_PREFERENCES, seed: 1,
+    } as Parameters<typeof generatePlan>[0])[0];
+
+    expect(compliantWithSweet(HIGH_PROTEIN).adherence.classification).toBe("Within tolerance");
+    expect(breakfastsOf(week(HIGH_PROTEIN)).some((meal) => sweet.test(meal.name)))
+      .toBe(false);
+
+    const roomForSweet: MacroTargets = {
+      energy_kcal: 2600, protein_g: 130, carbs_g: 330, fat_g: 80,
+    };
+    const sweetWeek = week(roomForSweet);
+    const names = breakfastsOf(sweetWeek).map((meal) => meal.name);
+    expect(names.some((name) => sweet.test(name)),
+      `expected a sweet breakfast among ${names.join(", ")}`).toBe(true);
+    expect(distinct(names)).toBeGreaterThanOrEqual(3);
+    expect(consecutive(names)).toEqual([]);
+    for (const day of sweetWeek) {
+      expect(day.adherence.classification).toBe("Within tolerance");
+    }
+  });
+
+  it("gives every ready breakfast its own style", () => {
+    const styles = Object.entries(NEGRITA_PLANNER_METADATA)
+      .filter(([, value]) => value.mealArchetype === "breakfast");
+    expect(styles.length).toBeGreaterThanOrEqual(7);
+    // A pancake, a waffle, an oatmeal bowl and a fruit-and-toast plate are four
+    // different breakfasts; before this they were four identical ones.
+    expect(distinct(styles.map(([, value]) => value.dishStyle)))
+      .toBeGreaterThanOrEqual(5);
+    expect(NEGRITA_PLANNER_METADATA.before_cardio.dishStyle)
+      .not.toBe(NEGRITA_PLANNER_METADATA.special_protein_pancake.dishStyle);
   });
 });
 
