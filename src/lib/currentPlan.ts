@@ -43,6 +43,8 @@ export function newPlan(ownerUid: string | null, title = DEFAULT_PLAN_TITLE): Pl
     ownerUid: ownerUid ?? "",
     title,
     targets: null,
+    targetMode: "preset",
+    targetPreset: "balanced",
     mealSlots: [...DEFAULT_MEAL_SLOTS],
     // Programs run Monday to Sunday, and "this week" means Bali's week.
     programStartDate: baliWeekStart(),

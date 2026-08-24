@@ -106,11 +106,12 @@ const generated: GeneratedDay[] = Array.from({ length: 7 }, (_, day) => ({
 vi.mock("@/components/GeneratePlanDialog", () => ({
   default: ({ onApply }: {
     onApply: (days: GeneratedDay[], replace: boolean, preferences: unknown,
-      resolvedTarget: MacroTargets) => Promise<boolean> | void;
+      resolvedTarget: MacroTargets, targetMode: "preset",
+      targetPreset: "balanced") => Promise<boolean> | void;
   }) => (
     <button type="button" onClick={() =>
       void onApply(generated, true, { macroStyle: "balanced", proteinLean: [],
-        avoidIngredientIds: [] }, RESOLVED)}>
+        avoidIngredientIds: [] }, RESOLVED, "preset", "balanced")}>
       apply generated week
     </button>
   ),

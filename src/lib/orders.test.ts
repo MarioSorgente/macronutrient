@@ -53,6 +53,7 @@ function plan(over: Partial<Plan> = {}): Plan {
     ownerUid: "u1",
     title: "My week",
     targets: null,
+    targetMode: "custom",
     mealSlots: ["Breakfast", "Lunch"],
     programStartDate: "2026-08-24", // a Monday
     weekCount: 2,
