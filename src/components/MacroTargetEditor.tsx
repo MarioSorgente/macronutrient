@@ -4,7 +4,7 @@ import type { MacroStyle, MacroTargets, TargetMode } from "@/lib/storage/types";
 import { TARGET_FIELDS } from "@/lib/clients";
 import { MACRO_STYLES, targetsFromStyle } from "@/lib/preferences";
 import { resolveTarget, validateMacroTarget } from "@/lib/targetResolution";
-import { formatMacroGrams, round0, wholeNonNegative } from "@/lib/format";
+import { formatMacroGrams, formatPercentageShare, round0, wholeNonNegative } from "@/lib/format";
 
 export interface MacroTargetSelection {
   targets: MacroTargets;
@@ -56,7 +56,7 @@ export default function MacroTargetEditor({ value, onChange }: {
             className={"rounded-xl border px-3 py-2 text-left " + (value.preset === style.id ? "border-tomato bg-tomato/5" : "border-cream-deep bg-white")}>
             <div className="text-sm font-700">{style.label}</div>
             <div className="text-[11px] text-charcoal-soft">{style.description}</div>
-            <div className="text-[10px] text-charcoal-soft">P {style.split.protein * 100}% · C {style.split.carbs * 100}% · F {style.split.fat * 100}%</div>
+            <div className="text-[10px] text-charcoal-soft">P {formatPercentageShare(style.split.protein)} · C {formatPercentageShare(style.split.carbs)} · F {formatPercentageShare(style.split.fat)}</div>
           </button>)}
         </div>
         <p className="mt-2 text-xs text-charcoal-soft">Choosing a preset recalculates every macro. Calories remain editable; preset grams are derived with 4/4/9 kcal per gram.</p>
