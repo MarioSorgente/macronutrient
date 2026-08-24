@@ -8,20 +8,30 @@ export const COMPLETE_DAY_TARGET: MacroTargets = {
 
 let fixtureIndex = 0;
 
+export interface PlannerFixtureOptions {
+  ingredientId?: string;
+  priceIdr?: number;
+  /** Extra slots this fixture is also offered for, e.g. lunch *and* dinner. */
+  alsoEligibleFor?: string[];
+}
+
 /** A bounded planner candidate with explicit culinary slot metadata. */
 export function plannerFixture(
   name: string,
-  slot: "Breakfast" | "Lunch" | "Dinner",
+  slot: "Breakfast" | "Lunch" | "Dinner" | "Snack",
   macros: Omit<Macros, "fiber_g"> & { fiber_g?: number },
-  ingredientId = `fixture_${fixtureIndex}`
+  options: PlannerFixtureOptions = {}
 ): PlannerCandidate {
   fixtureIndex += 1;
+  const ingredientId = options.ingredientId ?? `fixture_${fixtureIndex}`;
   const items: DishItem[] = [{ ingredientId, name: ingredientId, grams: 100,
     unitId: "g", quantity: 100 }];
   const candidate = generatedDiyCandidate({ id: `${name}_${fixtureIndex}`, name, items,
-    macros: { ...macros, fiber_g: macros.fiber_g ?? 0 }, priceIdr: 25_000 });
+    macros: { ...macros, fiber_g: macros.fiber_g ?? 0 },
+    priceIdr: options.priceIdr ?? 25_000 });
   candidate.mealArchetype = slot.toLowerCase();
-  candidate.eligibleMealTypes = [slot.toLowerCase()];
+  candidate.eligibleMealTypes = [slot.toLowerCase(),
+    ...(options.alsoEligibleFor ?? []).map((value) => value.toLowerCase())];
   return candidate;
 }
 

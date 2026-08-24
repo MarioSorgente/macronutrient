@@ -4,17 +4,50 @@ import { priceItems } from "@/lib/pricing";
 import { GRAM_UNIT_ID, type Macros, type MenuRecipe, type PlannerCandidate,
   type PlannerCandidateIngredient, type ProteinFamily, type CarbFamily,
   type MacroConfidence } from "@/types/nutrition";
-import type { Dish, DishItem } from "@/lib/storage/types";
+import type { Dish, DishItem, ProteinSource } from "@/lib/storage/types";
 import { NEGRITA_PLANNER_METADATA } from "@/lib/negritaPlannerMetadata";
 
 const proteinPatterns: [ProteinFamily, RegExp][] = [
   ["chicken", /chicken/], ["beef", /beef|wagyu|steak|tenderloin/],
+  // Pork before fish: "bacon" and "ham" would otherwise fall through to the
+  // vegetarian/other bucket and make a bacon breakfast invisible to both the
+  // protein lean and the weekly variety counters.
+  ["pork", /bacon|(^|[^a-z])ham([^a-z]|$)|pork|prosciutto|pancetta/],
   ["fish", /fish|salmon|tuna|anchovy|tobiko|scallop|eel|shrimp|prawn/],
   ["eggs", /(^|_)egg/],
 ];
+
+/**
+ * The protein lean is expressed in the vocabulary a person uses; candidates are
+ * normalized into families. One mapping, applied to menu dishes, saved dishes
+ * and generated meals alike, so "more fish" reaches a salmon menu dish exactly
+ * as it reaches a salmon plate the planner composed itself.
+ */
+const LEAN_SOURCE_BY_FAMILY: Partial<Record<ProteinFamily, ProteinSource>> = {
+  chicken: "chicken", beef: "beef", pork: "pork", fish: "fish", eggs: "eggs",
+  vegetarian: "veg",
+};
+
+export function proteinLeanSourceOf(family: ProteinFamily): ProteinSource | null {
+  return LEAN_SOURCE_BY_FAMILY[family] ?? null;
+}
+
+/** Whether a candidate's normalized protein family is one the plan leans toward. */
+export function candidateIsLeaned(family: ProteinFamily,
+  proteinLean: readonly ProteinSource[]): boolean {
+  if (!proteinLean.length) return false;
+  const source = proteinLeanSourceOf(family);
+  return source !== null && proteinLean.includes(source);
+}
+
 const carbPatterns: [CarbFamily, RegExp][] = [
-  ["rice", /rice/], ["buckwheat", /buckwheat/], ["potato", /potato/],
-  ["bread", /bread|toast|bun|pita/], ["wrap", /wrap|tortilla/],
+  ["rice", /rice/], ["buckwheat", /buckwheat/], ["oats", /oat|granola|porridge/],
+  ["potato", /potato|hash.brown/],
+  ["bread", /bread|toast|bun|pita|paratha|brioche|sourdough/],
+  ["wrap", /wrap|tortilla|burrito/],
+  // Pulses and quinoa carried the "other" label, which made a week built almost
+  // entirely on chickpeas look varied to the repeat counters.
+  ["quinoa", /quinoa/], ["legume", /chickpea|lentil|(^|[^a-z])beans?([^a-z]|$)/],
 ];
 
 function ingredientText(items: PlannerCandidateIngredient[]): string {

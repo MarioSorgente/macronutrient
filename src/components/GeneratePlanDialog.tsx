@@ -26,7 +26,7 @@ import {
   targetsFromStyle,
 } from "@/lib/preferences";
 import { getIngredient } from "@/lib/database";
-import { generatePlan, type GeneratedDay } from "@/lib/mealPlanner";
+import { generatePlanWithTargets, type GeneratedPlan } from "@/lib/mealPlanner";
 import { formatIdr, formatPrice } from "@/lib/pricing";
 import { round0, round1 } from "@/lib/format";
 import { resolveTarget } from "@/lib/targetResolution";
@@ -49,9 +49,11 @@ export default function GeneratePlanDialog({
   week: number;
   savedDishes: Dish[];
   onApply: (
-    days: GeneratedDay[],
+    days: GeneratedPlan["days"],
     replace: boolean,
-    preferences: ClientPreferences
+    preferences: ClientPreferences,
+    /** The target generation actually used, so the plan can remember it. */
+    resolvedTarget: MacroTargets
   ) => void;
   onClose: () => void;
 }) {
@@ -73,7 +75,7 @@ export default function GeneratePlanDialog({
   const [budget, setBudget] = useState(400000);
   const [replace, setReplace] = useState(true);
   const [seed, setSeed] = useState(1);
-  const [preview, setPreview] = useState<GeneratedDay[] | null>(null);
+  const [preview, setPreview] = useState<GeneratedPlan | null>(null);
 
   const days = useMemo(() => [0, 1, 2, 3, 4, 5, 6], []);
 
@@ -105,7 +107,7 @@ export default function GeneratePlanDialog({
   function run(nextSeed: number) {
     setSeed(nextSeed);
     setPreview(
-      generatePlan({
+      generatePlanWithTargets({
         targets: targetResolution.target,
         targetStyle: preferences.macroStyle,
         slots: plan.mealSlots,
@@ -120,12 +122,13 @@ export default function GeneratePlanDialog({
     );
   }
 
-  const weekCost = preview?.reduce((s, d) => s + d.price.totalIdr, 0) ?? 0;
-  const avgKcal = preview?.length
-    ? preview.reduce((s, d) => s + d.macros.energy_kcal, 0) / preview.length
+  const previewDays = preview?.days ?? [];
+  const weekCost = previewDays.reduce((s, d) => s + d.price.totalIdr, 0);
+  const avgKcal = previewDays.length
+    ? previewDays.reduce((s, d) => s + d.macros.energy_kcal, 0) / previewDays.length
     : 0;
-  const avgProtein = preview?.length
-    ? preview.reduce((s, d) => s + d.macros.protein_g, 0) / preview.length
+  const avgProtein = previewDays.length
+    ? previewDays.reduce((s, d) => s + d.macros.protein_g, 0) / previewDays.length
     : 0;
 
   return (
@@ -174,7 +177,10 @@ export default function GeneratePlanDialog({
             <button
               type="button"
               disabled={!preview}
-              onClick={() => preview && onApply(preview, replace, preferences)}
+              onClick={() =>
+                preview &&
+                onApply(preview.days, replace, preferences, preview.resolvedTarget)
+              }
               className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
             >
               Apply to week {week}
@@ -475,7 +481,7 @@ export default function GeneratePlanDialog({
                     </div>
                   </div>
 
-                  {preview.some((d) => d.unfilledSlots.length > 0) && (
+                  {previewDays.some((d) => d.unfilledSlots.length > 0) && (
                     <p className="mb-2 rounded-lg bg-gold/10 px-3 py-2 text-xs text-charcoal">
                       Some slots could not be filled without going far off target
                       {budgetOn ? " within this budget" : ""}, so they were left
@@ -484,7 +490,7 @@ export default function GeneratePlanDialog({
                   )}
 
                   <ul className="flex flex-col gap-2">
-                    {preview.map((day) => (
+                    {previewDays.map((day) => (
                       <li
                         key={day.day}
                         className="rounded-xl border border-cream-deep bg-white p-3"
@@ -505,9 +511,9 @@ export default function GeneratePlanDialog({
                         </div>
                         <TargetAdherence
                           actual={day.macros}
-                          targets={targetResolution.target}
+                          targets={preview.resolvedTarget}
                           diagnostics={day.adherence}
-                          targetSource={targetResolution.source === "explicit" ? "Explicit" : `Derived · ${targetResolution.selectedStyle}`}
+                          targetSource={preview.targetSource === "explicit" ? "Explicit" : `Derived · ${preview.targetStyle}`}
                           compact
                         />
                         <ul className="space-y-0.5">

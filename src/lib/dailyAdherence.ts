@@ -26,6 +26,7 @@ export type DailyFailureReason =
   | `${"energy" | "protein" | "carbs" | "fat"}_${"below" | "above"}_tolerance`
   | `no_eligible_${string}_candidates`
   | "kitchen_portion_increments_prevent_compliance"
+  | "closest_available_combination_outside_tolerance"
   | "insufficient_eligible_candidates"
   | "restrictions_make_target_infeasible";
 
@@ -71,6 +72,7 @@ function reasonMessage(code: DailyFailureReason): string {
   if (code === "insufficient_eligible_candidates") return "No valid complete day can be formed from the eligible candidates.";
   if (code === "restrictions_make_target_infeasible") return "The enabled dietary restrictions make a complete day infeasible.";
   if (code === "kitchen_portion_increments_prevent_compliance") return "Kitchen portion increments prevent a compliant combination.";
+  if (code === "closest_available_combination_outside_tolerance") return "This is the closest complete day the available meals can produce.";
   const slot = /^no_eligible_(.+)_candidates$/.exec(code)?.[1];
   if (slot) return `No eligible ${slot.replaceAll("_", " ")} candidates are available.`;
   const match = /^(energy|protein|carbs|fat)_(below|above)_tolerance$/.exec(code);
@@ -125,11 +127,18 @@ export function diagnoseDailyAdherence(
     const scale = 10 ** DAILY_DISPLAY_DECIMALS[key];
     return Math.round((actual[key] - target[key]) * scale) === 0;
   });
+  // A cause is only named when it is known. `kitchenPortionsConstrained` is a
+  // finding the caller has to establish — that a single serving step is wider
+  // than the tolerance window — not an inference from "the day used a composed
+  // meal". Everything else gets the honest generic reason instead of a guess.
   const reasonCodes: DailyFailureReason[] = complete
     ? [
         ...macroReasons,
-        ...(macroReasons.length && options.kitchenPortionsConstrained
-          ? ["kitchen_portion_increments_prevent_compliance" as const] : []),
+        ...(macroReasons.length
+          ? [options.kitchenPortionsConstrained
+              ? "kitchen_portion_increments_prevent_compliance" as const
+              : "closest_available_combination_outside_tolerance" as const]
+          : []),
       ]
     : [
         "insufficient_eligible_candidates",

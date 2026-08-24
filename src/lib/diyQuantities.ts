@@ -5,6 +5,16 @@ import type { MacroTargets } from "@/lib/storage/types";
 const FIXED_PORTION = /\bpcs?\b|\bslice\b/i;
 
 /**
+ * How far above its menu portion the kitchen will scale a component.
+ *
+ * The section default alone let a 25 g garnish inherit a 250 g ceiling, and the
+ * optimizer duly proposed a quarter kilo of flying fish roe because the macros
+ * worked. A portion is evidence of what a serving of that item looks like, so
+ * the ceiling is anchored to it: three servings, never ten.
+ */
+const PORTION_SCALE_CEILING = 3;
+
+/**
  * Operational serving metadata for each DIY line. Defaults are deliberately
  * section-specific; the overrides record kitchen-approved staple sequences.
  */
@@ -34,7 +44,9 @@ export function diyQuantityMetadata(item: DiyMenuItem): DiyQuantityMetadata {
   };
   const defaults = sectionDefaults[item.section];
   return { ...defaults, minimum_g: Math.min(defaults.minimum_g, item.portion_g),
-    maximum_g: Math.max(defaults.maximum_g, item.portion_g), preferred_g: item.portion_g,
+    maximum_g: Math.min(Math.max(defaults.maximum_g, item.portion_g),
+      item.portion_g * PORTION_SCALE_CEILING),
+    preferred_g: item.portion_g,
     ...overrides[item.ingredient_id] };
 }
 
