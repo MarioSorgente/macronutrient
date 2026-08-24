@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  ArrowRight,
   BadgeCheck,
   CalendarRange,
   ChefHat,
@@ -10,6 +9,7 @@ import {
   Target,
 } from "lucide-react";
 import BrandHeader from "@/components/BrandHeader";
+import LandingCtas from "@/components/LandingCtas";
 import { databaseMeta, ingredients, menuRecipes } from "@/lib/database";
 
 /**
@@ -31,7 +31,7 @@ const STEPS = [
   {
     icon: Target,
     title: "Set your targets",
-    body: "Calories and macros for a normal day. Or skip it — you can plan on feel and check the numbers after.",
+    body: "Calories and macros for a normal day. Set them once and they stay on your account, or plan on feel and check the numbers after.",
   },
   {
     icon: CalendarRange,
@@ -94,22 +94,11 @@ export default function LandingPage() {
             delivers, and have the kitchen prepare it. No weighing, no logging,
             no cooking.
           </p>
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/plan"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-tomato px-6 py-3 text-base font-700 text-cream shadow-card transition-colors hover:bg-tomato-dark"
-            >
-              Get started <ArrowRight size={18} />
-            </Link>
-            <Link
-              href="#how"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-cream-deep bg-white px-6 py-3 text-base font-600 text-charcoal transition-colors hover:border-tomato-soft"
-            >
+          <LandingCtas className="mt-7" />
+          <p className="mt-4 text-sm">
+            <Link href="#how" className="font-600 text-tomato hover:underline">
               See how it works
             </Link>
-          </div>
-          <p className="mt-3 text-xs text-charcoal-soft">
-            No account needed to start planning.
           </p>
         </div>
       </section>
@@ -211,16 +200,11 @@ export default function LandingPage() {
               Ready when you are
             </h2>
             <p className="mt-3 leading-relaxed text-cream/70">
-              Build your week now — nothing is saved to an account until you want
-              it to be. When it is ready, send it to the kitchen.
+              Sign in to keep your plan, orders and preferences synced. Build your
+              week, and when it is ready, send it to the kitchen.
             </p>
           </div>
-          <Link
-            href="/plan"
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-tomato px-6 py-3 text-base font-700 text-cream transition-colors hover:bg-tomato-dark"
-          >
-            Get started <ArrowRight size={18} />
-          </Link>
+          <LandingCtas className="shrink-0" />
         </div>
       </section>
 

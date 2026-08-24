@@ -65,11 +65,11 @@ test("and the dashboard and kitchen actually open", async ({ page }) => {
     .toBeVisible({ timeout: 20_000 });
 
   await page.goto("/admin");
-  await expect(page.getByText(/owner access only|this area is for negrita staff/i))
+  await expect(page.getByText(/owner access only|restaurant staff access is required/i))
     .toHaveCount(0);
 
   await page.goto("/kitchen");
-  await expect(page.getByText(/this area is for negrita staff|no role yet/i))
+  await expect(page.getByText(/restaurant staff access is required/i))
     .toHaveCount(0);
 });
 
@@ -80,14 +80,14 @@ test("an admin can preview the app as the restaurant", async ({ page }) => {
 
   await page.goto("/account");
   await expect(page.getByText("View as")).toBeVisible();
-  await page.getByRole("button", { name: "restaurant", exact: true }).click();
+  await page.getByRole("button", { name: "Staff", exact: true }).click();
 
   // The standing banner makes the preview unmissable and is always one click
   // from off. ("Viewing as" also appears as a row on /account, so this matches
   // the banner by its own control.)
   await expect(page.getByRole("button", { name: /back to admin/i })).toBeVisible();
   await page.goto("/kitchen");
-  await expect(page.getByText(/this area is for negrita staff/i)).toHaveCount(0);
+  await expect(page.getByText(/restaurant staff access is required/i)).toHaveCount(0);
 });
 
 test("an ordinary customer is unaffected by the bootstrap attempt", async ({ page }) => {
@@ -95,7 +95,10 @@ test("an ordinary customer is unaffected by the bootstrap attempt", async ({ pag
   await expect(page.locator("header").getByRole("link", { name: "Admin", exact: true }))
     .toHaveCount(0);
   await page.goto("/admin");
-  await expect(page.getByText(/this area is for negrita staff|no role yet/i)).toBeVisible();
+  // Not the dashboard, and not a locked door either: the staff-access flow.
+  await expect(
+    page.getByRole("heading", { name: /restaurant staff access is required/i })
+  ).toBeVisible({ timeout: 20_000 });
 });
 
 test('"Refresh my access" asks the server, not just the token', async ({
@@ -135,7 +138,7 @@ test('"Refresh my access" asks the server, not just the token', async ({
   // button reported "no role" as though the allowlist had rejected you.
   await button.click();
   await expect.poll(() => syncCalls, { timeout: 20_000 }).toBeGreaterThan(before);
-  await expect(page.getByText(/your role is "admin"/i)).toBeVisible({
+  await expect(page.getByText(/your account type is owner/i)).toBeVisible({
     timeout: 20_000,
   });
 });

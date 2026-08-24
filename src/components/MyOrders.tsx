@@ -55,7 +55,7 @@ export default function MyOrders() {
       <SignInPrompt
         icon={<Receipt size={22} />}
         title="Sign in to see your orders"
-        hint="Weeks you send to the kitchen show up here."
+        hint="Weeks you send to the kitchen are kept on your account."
         next="/orders"
       />
     );

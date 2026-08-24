@@ -195,15 +195,16 @@ export default function SubmitWeek() {
     );
   }
 
-  // Signing in is required to submit, but only at the moment of submitting —
-  // everything above this point works as a guest.
+  // RouteGuard sends a signed-out visitor to /login before this renders. Kept
+  // as a backstop for the moment a session expires mid-page, so the screen
+  // offers a way back in rather than an empty week.
   if (!user) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16">
         <SignInPrompt
           icon={<Send size={22} />}
           title="Sign in to send this week to the kitchen"
-          hint="Your plan stays on this device until you do, and moves to your account when you sign in."
+          hint="Your plan is on your account — sign back in and it is waiting."
           next="/plan/submit"
         />
       </main>

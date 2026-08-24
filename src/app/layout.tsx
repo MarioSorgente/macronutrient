@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import GuestDataClaim from "@/components/GuestDataClaim";
+import RouteGuard from "@/components/RouteGuard";
 import ViewAsBanner from "@/components/ViewAsBanner";
 import { Analytics } from "@vercel/analytics/next";
 
@@ -40,7 +41,10 @@ export default function RootLayout({
                 globally — the landing page has no use for them. */}
             <GuestDataClaim />
             <ViewAsBanner />
-            {children}
+            {/* Every route except the landing page and the auth screens needs an
+                account. Gating here rather than per page is the point: a new
+                screen is protected by existing, not by remembering to ask. */}
+            <RouteGuard>{children}</RouteGuard>
           </ToastProvider>
         </AuthProvider>
         <Analytics />

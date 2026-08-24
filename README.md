@@ -194,9 +194,22 @@ Everything above runs on every push via `.github/workflows/ci.yml`.
 
 ## Accounts and roles
 
-Planning works with no account at all — a guest's week lives in `localStorage`
-on their device. Signing in is required only to **send a week to the kitchen**,
-and at that moment the device's work is copied into the account.
+**An account is required to use the app.** Only the landing page, `/login`,
+`/signup` and `/reset` are public; everything else goes through `RouteGuard` in
+the root layout, which reads one table — `src/lib/auth/routePolicy.ts`. A route
+nobody has listed is protected, not open, so a new screen is gated by existing
+rather than by remembering to ask.
+
+The landing page offers the two journeys by name: **Plan my meals** →
+`/signup?intent=customer&next=/plan`, and **I work at Negrita** →
+`/signup?intent=staff&next=/kitchen`. The intent travels in the query string, so
+it survives a refresh, the switch between Sign in and Create account, and the
+Google popup. A staff sign-in is resolved against the account's real state
+(`src/lib/auth/staffIntent.ts`) rather than pushed at `/kitchen` to fail there.
+
+Devices that planned a week before accounts were required still hold one in
+`localStorage`; it is claimed into the account on the next sign-in
+(`src/lib/storage/claim.ts`). Nothing creates guest data any more.
 
 Three roles, held as **Firebase Auth custom claims** rather than in a document,
 because a document is something a user could try to write:
@@ -269,8 +282,10 @@ was ordered.
 
 Everything goes through one small `Repository<T>` interface with two backends:
 
-- **`local`** — the browser's `localStorage`. Zero setup; this is guest mode.
-- **`firebase`** — Cloud Firestore, scoped per account.
+- **`local`** — the browser's `localStorage`, keyed per account. Zero setup, but
+  a plan only exists on the device that made it.
+- **`firebase`** — Cloud Firestore, scoped per account. What a real deployment
+  runs, now that every user has one.
 
 ```
 users/{uid}                                profile (role mirror, login metrics)
@@ -282,8 +297,9 @@ restaurants/{rid}/orders/{orderId}         written only by submitOrder
 restaurants/{rid}/prepTasks/{taskId}       the kitchen board
 ```
 
-The Firestore SDK is imported **lazily** inside the repository, so a guest never
-downloads it — worth roughly 120 kB on every page.
+The Firestore SDK is imported **lazily** inside the repository, so the landing
+page never downloads it — worth roughly 120 kB on the one page a visitor sees
+before they have an account.
 
 ---
 

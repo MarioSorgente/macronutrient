@@ -163,9 +163,9 @@ function migratePlan(raw: unknown): Plan | null {
 // --- Factories --------------------------------------------------------------
 //
 // Repositories are keyed by uid rather than being module singletons, because
-// which store a component talks to now depends on who is signed in. `null`
-// means "this device" — the guest store the planner uses before anyone has an
-// account, and the one a new account's data is claimed from.
+// which store a component talks to depends on who is signed in. `null` means
+// "this device": nothing writes to it any more — the planner needs an account —
+// but it is still where a week built before that requirement is claimed from.
 
 const planRepos = new Map<string, PlanRepository>();
 const dishRepos = new Map<string, DishRepository>();
