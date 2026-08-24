@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { MacroStyle, MacroTargets, TargetMode } from "@/lib/storage/types";
 import { TARGET_FIELDS } from "@/lib/clients";
 import { MACRO_STYLES, targetsFromStyle } from "@/lib/preferences";
@@ -32,14 +33,29 @@ export default function MacroTargetEditor({ value, onChange }: {
   value: MacroTargetSelection;
   onChange: (next: MacroTargetSelection) => void;
 }) {
+  const [pendingPreset, setPendingPreset] = useState<MacroStyle | null>(null);
+  const confirmPresetRef = useRef<HTMLButtonElement>(null);
   const resolved = resolveTarget({ targets: value.targets, mode: value.mode, preset: value.preset });
   const validation = validateMacroTarget(resolved.target);
 
-  function choosePreset(preset: MacroStyle) {
-    if (value.mode === "custom" && !window.confirm(
-      "Use this preset? It will recalculate and replace all of your custom macro targets."
-    )) return;
+  useEffect(() => {
+    if (pendingPreset) confirmPresetRef.current?.focus();
+  }, [pendingPreset]);
+
+  function applyPreset(preset: MacroStyle) {
+    setPendingPreset(null);
     onChange({ mode: "preset", preset, targets: targetsFromStyle(value.targets.energy_kcal, preset) });
+  }
+
+  function choosePreset(preset: MacroStyle) {
+    const presetTargets = targetsFromStyle(value.targets.energy_kcal, preset);
+    const customMacrosDiffer = TARGET_FIELDS.some(({ key }) => value.targets[key] !== presetTargets[key]);
+
+    if (value.mode === "custom" && customMacrosDiffer) {
+      setPendingPreset(preset);
+      return;
+    }
+    applyPreset(preset);
   }
 
   return (
@@ -50,6 +66,15 @@ export default function MacroTargetEditor({ value, onChange }: {
         <button type="button" onClick={() => onChange({ ...value, mode: "custom", preset: undefined })}
           className={"rounded-xl border px-3 py-2 text-sm font-700 " + (value.mode === "custom" ? "border-tomato bg-tomato/5" : "border-cream-deep bg-white text-charcoal-soft")}>Set my own macros</button>
       </div>
+      {pendingPreset && <div role="alert" aria-labelledby="preset-confirmation-title" className="rounded-xl border border-tomato-soft bg-tomato/5 px-3 py-3">
+        <p id="preset-confirmation-title" className="text-sm font-700 text-charcoal">This preset will replace your custom macro targets.</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button ref={confirmPresetRef} type="button" onClick={() => applyPreset(pendingPreset)}
+            className="rounded-lg bg-tomato px-3 py-2 text-sm font-700 text-white focus:outline-none focus:ring-2 focus:ring-tomato-dark focus:ring-offset-2">Use preset</button>
+          <button type="button" onClick={() => setPendingPreset(null)}
+            className="rounded-lg border border-cream-deep bg-white px-3 py-2 text-sm font-700 text-charcoal focus:outline-none focus:ring-2 focus:ring-tomato-dark focus:ring-offset-2">Keep custom targets</button>
+        </div>
+      </div>}
       {value.mode === "preset" && <div>
         <div className="grid grid-cols-2 gap-2">
           {MACRO_STYLES.map((style) => <button key={style.id} type="button" onClick={() => choosePreset(style.id)}
