@@ -215,8 +215,10 @@ export default function AccountProfile() {
           disabled={!enabled}
           icon={<LogOut size={15} />}
           onClick={async () => {
-            await signOut();
+            // Off the protected page before the session ends, or the route
+            // guard redirects to sign-in instead of the landing page.
             router.push("/");
+            await signOut();
           }}
         >
           Sign out

@@ -34,7 +34,24 @@ export interface AuthState {
   restaurantId: string;
   /** True until Firebase has reported the initial auth state. */
   loading: boolean;
-  /** False when the app has no Firebase config — guest-only mode. */
+  /**
+   * True once this account's role is as good as it is going to get.
+   *
+   * A brand-new account's ID token is minted before `/api/auth/sync` stamps the
+   * claim, so for a second every new customer looks roleless. Without this, a
+   * role gate would greet them with "your account has no role yet" — blaming
+   * the account for a race. Signed out counts as settled, as does a token that
+   * already carries a claim; otherwise it waits for the first reconciliation to
+   * resolve, whether it succeeds or fails.
+   */
+  roleSettled: boolean;
+  /**
+   * False when the app has no Firebase config, so nobody can sign in.
+   *
+   * Since an account is required, this is no longer a degraded mode the app
+   * runs in — it is a broken deployment, and the guard says so rather than
+   * bouncing people at a sign-in form that cannot work.
+   */
   enabled: boolean;
   /** Forces a token refresh, picking up a role granted since sign-in. */
   refreshRole: () => Promise<Role | null>;
@@ -57,6 +74,27 @@ const AuthContext = createContext<AuthState | null>(null);
 
 /** Tab-scoped, so a preview ends with the tab. */
 const VIEW_AS_KEY = "mamma-calories:view-as";
+
+/**
+ * Runs the reconciliation again once before giving up.
+ *
+ * The failure this exists for is a single dropped request — a fetch cancelled
+ * by a navigation made moments after signing up, or a connection reset. One
+ * blip left `syncError` set for the rest of the session, and `/account` treats
+ * that as a stuck deployment: a diner who happened to lose one request was
+ * shown environment variable names and a Vercel checklist.
+ *
+ * Once, not until it works. A server that is genuinely down should be reported
+ * rather than hidden behind an indefinite retry.
+ */
+async function withOneRetry<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    return work();
+  }
+}
 
 /**
  * Holds the signed-in user and their role.
@@ -83,6 +121,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [viewAs, setViewAsState] = useState<Role | null>(null);
   const [loading, setLoading] = useState(enabled);
   const [syncError, setSyncError] = useState<string | null>(null);
+  /** Whether the first reconciliation for the current account has finished. */
+  const [syncSettled, setSyncSettled] = useState(false);
 
   // Guards the sync so a token refresh does not count as a new sign-in.
   const syncedFor = useRef<string | null>(null);
@@ -166,16 +206,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user || syncedFor.current === user.uid) return;
     syncedFor.current = user.uid;
+    setSyncSettled(false);
 
-    void runSync(user).catch((cause: unknown) => {
-      // An unreachable server must never block signing in — the app still
-      // works as a guest would. Retried on the next load, and, unlike before,
-      // reported on /account instead of looking like an unrecognised address.
-      syncedFor.current = null;
-      setSyncError(
-        cause instanceof Error ? cause.message : "Could not reach the server."
-      );
-    });
+    void withOneRetry(() => runSync(user))
+      .catch((cause: unknown) => {
+        // An unreachable server must never block signing in. Retried on the
+        // next load, and, unlike before, reported on /account instead of
+        // looking like an unrecognised address.
+        syncedFor.current = null;
+        setSyncError(
+          cause instanceof Error ? cause.message : "Could not reach the server."
+        );
+      })
+      // A failed reconciliation still settles the question: waiting longer will
+      // not produce a role, so the gate must stop saying "checking" and start
+      // saying what went wrong.
+      .finally(() => setSyncSettled(true));
   }, [user, runSync]);
 
   /**
@@ -327,6 +373,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setViewAs,
       restaurantId: RESTAURANT_ID,
       loading,
+      // Signed out settles it, and so does a token that already carries a
+      // claim — a returning staff member must not be shown a loading screen
+      // while a reconciliation they do not need finishes.
+      roleSettled: !user || actualRole !== null || syncSettled,
       enabled,
       refreshRole,
       syncError,
@@ -339,6 +389,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       viewAs,
       setViewAs,
       loading,
+      syncSettled,
       enabled,
       refreshRole,
       syncError,
@@ -367,6 +418,7 @@ export function useAuth(): AuthState {
       setViewAs: () => {},
       restaurantId: RESTAURANT_ID,
       loading: false,
+      roleSettled: true,
       enabled: false,
       refreshRole: async () => null,
       syncError: null,

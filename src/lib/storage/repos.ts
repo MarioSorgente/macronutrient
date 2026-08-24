@@ -17,7 +17,7 @@ export interface Repos {
   plans: PlanRepository;
   dishes: DishRepository;
   houseRecipes: HouseRecipeRepository;
-  /** null while signed out — the plan lives on this device only. */
+  /** null while signed out, which no protected screen should ever be. */
   uid: string | null;
   /** True until auth has reported, so callers can avoid a wrong-store read. */
   loading: boolean;
@@ -27,9 +27,8 @@ export interface Repos {
  * The repositories for whoever is currently signed in.
  *
  * Components ask for this rather than calling a factory directly, so no screen
- * has to know whether it is reading a guest's device or a signed-in account.
- * `loading` matters: reading before auth resolves would hit the guest store and
- * then swap underneath the user.
+ * has to know which store it is reading. `loading` matters: reading before auth
+ * resolves would hit the device store and then swap underneath the user.
  */
 export function useRepos(): Repos {
   const { user, loading } = useAuth();

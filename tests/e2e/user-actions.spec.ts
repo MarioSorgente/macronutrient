@@ -46,9 +46,10 @@ test.describe("signing out", () => {
     await page.locator(SIGN_OUT).click();
 
     await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
-    // And it really is a sign-out, not just a redirect.
+    // And it really is a sign-out, not just a redirect: the protected screen is
+    // no longer reachable at all.
     await page.goto("/orders");
-    await expect(page.getByText(/sign in to see your orders/i)).toBeVisible();
+    await expect(page).toHaveURL(/\/login\?next=%2Forders/, { timeout: 15_000 });
   });
 
   test.describe("is reachable from every signed-in page", () => {
@@ -146,15 +147,29 @@ test.describe("navigation dead ends", () => {
   });
 });
 
-test.describe("guests", () => {
-  test("can plan without an account and are offered a way in", async ({ page }) => {
+test.describe("visitors without an account", () => {
+  /**
+   * The inverse of what this file used to assert. The planner opened for
+   * anybody, which meant a week could be built with nowhere to keep it and
+   * staff onboarding existed only for whoever found /signup.
+   */
+  test("cannot open the planner, and are sent somewhere they can act", async ({ page }) => {
     await page.goto("/plan");
-    await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+
+    await expect(page).toHaveURL(/\/login\?next=%2Fplan/, { timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Settings" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
   });
 
-  test("are told to sign in for orders rather than shown an error", async ({ page }) => {
-    await page.goto("/orders");
-    await expect(page.getByText(/sign in to see your orders/i)).toBeVisible();
+  test("are given both doors on a public page, not just Sign in", async ({ page }) => {
+    await page.goto("/");
+    const header = page.locator("header");
+
+    await expect(header.getByRole("link", { name: "Sign in", exact: true })).toBeVisible();
+    await expect(header.getByRole("link", { name: "Create account" })).toBeVisible();
+    // A link into a protected route is not offered before there is an account
+    // to open it with.
+    await expect(header.getByRole("link", { name: "Plan & Build" })).toHaveCount(0);
   });
 });
 
@@ -183,7 +198,9 @@ test.describe("what a customer is shown about the deployment", () => {
     await page.goto("/account");
     await expect(page.getByLabel("Phone")).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
-    await expect(page.getByText(/role on your token/i)).toBeVisible();
+    // What the account can do, in the words a diner uses — not the claim name.
+    await expect(page.getByText("Account type")).toBeVisible();
+    await expect(page.getByText("Customer", { exact: true })).toBeVisible();
   });
 
   test("view-as is not offered to someone who is not an admin", async ({ page }) => {

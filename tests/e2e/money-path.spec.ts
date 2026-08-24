@@ -1,15 +1,27 @@
 import { test, expect, type Page } from "@playwright/test";
-import { dbGet, dbList, mondayAhead, signUp, until } from "./helpers";
+import {
+  clearAuthAccounts,
+  clearFirestoreData,
+  dbGet,
+  dbList,
+  mondayAhead,
+  signUp,
+  until,
+} from "./helpers";
 
 /**
  * The money path, end to end through the real UI and a real database:
- * plan a week as a guest → sign up → the guest's work is claimed into the
- * account → send it to the kitchen → the order and its prep tasks exist →
- * cancel → the kitchen's board is cleared and the week is free again.
+ * sign up → plan a week → it is saved to the account → send it to the kitchen →
+ * the order and its prep tasks exist → cancel → the kitchen's board is cleared
+ * and the week is free again.
  *
  * This is the last item on the README's own go-live checklist ("submit one
  * real week end to end and check it reaches /kitchen"), which nothing
  * automated had ever covered.
+ *
+ * It used to start as a guest, because the planner opened without an account.
+ * It does not any more; the one-time claim of a week left behind by that older
+ * build is covered in auth-gate.spec.ts instead.
  */
 
 const RID = "negrita";
@@ -21,11 +33,16 @@ test.describe.configure({ mode: "serial" });
  * grid this drives ("Add to Lunch on Mon") is not rendered there at all. The
  * phone viewport is covered by the user-action matrix instead.
  */
-test.beforeEach(({}, testInfo) => {
+test.beforeEach(async ({}, testInfo) => {
   test.skip(
     testInfo.project.name === "mobile",
     "drives the week grid, which is desktop-only"
   );
+  // This spec finds its account by looking for the only plan with two meals in
+  // it, and reads `orders[0]` as though the collection were empty. Both are true
+  // only of a clean database — and another spec's leftover week is a plan with
+  // two meals too, which made this fail with somebody else's uid.
+  await Promise.all([clearAuthAccounts(), clearFirestoreData()]);
 });
 
 /**
@@ -61,32 +78,15 @@ async function addMeal(page: Page, day: string, slot: string, ingredient: string
   await expect(dialog).toBeHidden();
 }
 
-test("a guest plans a week, signs up, sends it to the kitchen, then cancels", async ({ page }) => {
-  // --- as a guest, on this device only ------------------------------------
+test("a customer plans a week, sends it to the kitchen, then cancels", async ({ page }) => {
+  // --- an account first: the planner is not open without one ---------------
+  await signUp(page);
+
   await startPlanInTheFuture(page);
   await addMeal(page, "Mon", "Lunch", "Chicken breast");
   await addMeal(page, "Tue", "Lunch", "Chicken breast");
 
-  // Wait for the device store itself, not for a timeout: the planner persists
-  // asynchronously, and navigating to sign-up before the second write lands
-  // would leave a meal behind with nothing to claim.
-  await expect
-    .poll(
-      () =>
-        page.evaluate(() => {
-          const raw = localStorage.getItem("mamma-calories:clients");
-          const parsed = raw ? JSON.parse(raw) : [];
-          return Array.isArray(parsed)
-            ? (parsed[0]?.assignments?.length ?? 0)
-            : 0;
-        }),
-      { message: "both meals saved to the guest store", timeout: 15_000 }
-    )
-    .toBe(2);
-
-  // --- signing up claims that work into the account ------------------------
-  await signUp(page);
-
+  // --- and the week is on the account, not the device ----------------------
   const plan = await until(
     async () => {
       const users = await dbList("users");
@@ -98,7 +98,7 @@ test("a guest plans a week, signs up, sends it to the kitchen, then cancels", as
       }
       return null;
     },
-    "the guest's week to be claimed into the account",
+    "both meals to reach the account's plan",
     {
       describe: async () => {
         const users = await dbList("users");

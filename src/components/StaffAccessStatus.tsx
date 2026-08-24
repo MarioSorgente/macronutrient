@@ -1,8 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth/AuthProvider";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ShieldAlert } from "lucide-react";
+import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
 import { ApiError, callApi, getApi } from "@/lib/api";
+import { authErrorMessage } from "@/lib/auth/errors";
+import { STAFF_DESTINATION } from "@/lib/auth/staffIntent";
 import type { StaffAccessRequest } from "@/lib/storage/types";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -31,10 +36,46 @@ function mutationErrorMessage(cause: unknown): string {
   return message || "We couldn't request staff access. Please try again.";
 }
 
-export default function StaffAccessStatus() {
-  const { user, actualRole } = useAuth();
+/**
+ * Where a non-staff account stands on restaurant access, and what to do next.
+ *
+ * One component, two mount points: the card on `/account`, and the whole page
+ * somebody sees when they open `/kitchen` without staff access. They were always
+ * going to say the same four things, and the version on `/kitchen` used to say
+ * none of them — it was a flat "This area is for Negrita staff" with no way
+ * forward.
+ *
+ * The approved-but-stale case is the one that mattered most. Custom claims only
+ * reach a browser when the token rotates, so for up to an hour after an owner
+ * clicks Approve the app still believes you are a customer. The provider watches
+ * for that and refreshes on its own; this offers the button for when it cannot,
+ * so nobody has to understand Firebase tokens to start their shift.
+ */
+export default function StaffAccessStatus({
+  variant = "account",
+}: {
+  variant?: "account" | "gate";
+}) {
+  const { user, actualRole, syncAccount, refreshRole } = useAuth();
+  const router = useRouter();
+  // Read once on mount instead of through useSearchParams, which would drag a
+  // Suspense boundary along wherever this is mounted — including the guard.
+  const [justRequested, setJustRequested] = useState(false);
+
   const [requestState, setRequestState] = useState<RequestState>({ status: "loading" });
   const [mutationState, setMutationState] = useState<MutationState>({ status: "idle" });
+  const [activating, setActivating] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  /** So an approved request is only auto-activated once per mount. */
+  const autoActivated = useRef(false);
+
+  const staff = isStaff(actualRole);
+
+  useEffect(() => {
+    const search = new URLSearchParams(window.location.search);
+    setJustRequested(search.get("staff-requested") === "1");
+  }, []);
 
   const loadRequest = useCallback(async () => {
     setRequestState({ status: "loading" });
@@ -49,9 +90,56 @@ export default function StaffAccessStatus() {
   }, []);
 
   useEffect(() => {
-    if (!user || actualRole !== "client") return;
+    if (!user || staff) return;
     void loadRequest();
-  }, [actualRole, loadRequest, user]);
+  }, [loadRequest, staff, user]);
+
+  /**
+   * Pulls a granted role onto this token.
+   *
+   * Sync before refresh, for the same reason `/account` does it in that order:
+   * the server is what stamps the claim, and refreshing a token first would only
+   * re-read the absence of one.
+   */
+  const activate = useCallback(
+    async (navigate: boolean) => {
+      setActivating(true);
+      setMutationState({ status: "idle" });
+      try {
+        const synced = await syncAccount();
+        const role = (await refreshRole()) ?? synced;
+        if (role === "restaurant" || role === "admin") {
+          if (navigate) router.push(STAFF_DESTINATION);
+          return;
+        }
+        setMutationState({
+          status: "error",
+          message: "Your access is not active yet. Ask the owner to approve the request.",
+        });
+      } catch (cause) {
+        setMutationState({
+          status: "error",
+          message:
+            cause instanceof ApiError
+              ? cause.message
+              : "We couldn't activate staff access. Please try again.",
+        });
+      } finally {
+        setActivating(false);
+      }
+    },
+    [refreshRole, router, syncAccount]
+  );
+
+  // An approved request alongside a customer claim means the token simply
+  // predates the grant. Fix it without making anyone press anything.
+  useEffect(() => {
+    if (autoActivated.current || staff) return;
+    if (requestState.status !== "loaded") return;
+    if (requestState.request?.status !== "approved") return;
+    autoActivated.current = true;
+    void activate(false);
+  }, [activate, requestState, staff]);
 
   async function requestAccess() {
     setMutationState({ status: "submitting" });
@@ -64,12 +152,48 @@ export default function StaffAccessStatus() {
     }
   }
 
-  if (!user || actualRole !== "client") return null;
-  const busy = requestState.status === "loading" || mutationState.status === "submitting";
+  async function sendVerification() {
+    if (!user) return;
+    setVerifying(true);
+    try {
+      const { sendEmailVerification } = await import("firebase/auth");
+      await sendEmailVerification(user);
+      setNotice("Verification email sent. Open the link, then come back here.");
+    } catch (cause) {
+      setMutationState({ status: "error", message: authErrorMessage(cause) });
+    } finally {
+      setVerifying(false);
+    }
+  }
 
-  return (
-    <Card className="mt-5 border-gold/50 bg-gold/10 p-4">
-      <p className="text-sm font-700 text-charcoal">Restaurant access</p>
+  if (!user || staff) return null;
+
+  const busy =
+    requestState.status === "loading" ||
+    mutationState.status === "submitting" ||
+    activating;
+  const request = requestState.status === "loaded" ? requestState.request : null;
+  // Verification blocks approval, so it is only worth raising while approval is
+  // still the thing being waited on.
+  const verificationBlocks =
+    requestState.status === "loaded" &&
+    user.emailVerified === false &&
+    (request === null || request.status === "pending");
+
+  const body = (
+    <>
+      {variant === "gate" && (
+        <p className="mt-1 text-sm text-charcoal-soft">
+          The kitchen board and restaurant tools are for Negrita staff. This
+          account is signed in as a Customer.
+        </p>
+      )}
+
+      {justRequested && variant === "account" && (
+        <p className="mt-1 text-xs text-charcoal-soft">
+          Thanks — your request is with the restaurant owner.
+        </p>
+      )}
 
       {requestState.status === "loading" && (
         <p className="mt-1 text-xs text-charcoal-soft">Checking access…</p>
@@ -84,36 +208,116 @@ export default function StaffAccessStatus() {
         </div>
       )}
 
-      {requestState.status === "loaded" && requestState.request === null && (
+      {requestState.status === "loaded" && request === null && (
         <div>
           <p className="mt-1 text-xs text-charcoal-soft">Not requested</p>
+          <p className="mt-1 text-sm text-charcoal-soft">
+            Restaurant staff access is required, and a restaurant owner has to
+            approve it.
+          </p>
           <Button className="mt-3" size="sm" disabled={busy} onClick={() => void requestAccess()}>
             Request staff access
           </Button>
         </div>
       )}
 
-      {requestState.status === "loaded" && requestState.request?.status === "pending" && (
+      {request?.status === "pending" && (
         <div>
-          <p className="mt-1 text-sm font-700 text-charcoal">Pending approval</p>
+          <p className="mt-1 text-sm font-700 text-charcoal">Waiting for owner approval</p>
           <p className="mt-1 text-xs text-charcoal-soft">
-            A restaurant owner still needs to approve your staff access. You can still use the app as a customer while you wait.
+            A restaurant owner still needs to approve your staff access. You can
+            keep using the app as a customer while you wait.
           </p>
         </div>
       )}
 
-      {requestState.status === "loaded" && requestState.request?.status === "rejected" && (
+      {request?.status === "rejected" && (
         <div>
-          <p className="mt-1 text-sm font-700 text-charcoal">Request rejected</p>
+          <p className="mt-1 text-sm font-700 text-charcoal">
+            Your previous request was not approved
+          </p>
           <Button className="mt-3" size="sm" disabled={busy} onClick={() => void requestAccess()}>
-            Request staff access again
+            Request again
           </Button>
         </div>
       )}
 
+      {request?.status === "approved" && (
+        <div>
+          <p className="mt-1 text-sm font-700 text-charcoal">Staff access approved</p>
+          <p className="mt-1 text-xs text-charcoal-soft">
+            This sign-in still carries your old access. Activating picks up the
+            new one.
+          </p>
+          <Button
+            className="mt-3"
+            size="sm"
+            variant="primary"
+            disabled={busy}
+            onClick={() => void activate(true)}
+          >
+            {activating ? "Activating…" : "Activate staff access"}
+          </Button>
+        </div>
+      )}
+
+      {verificationBlocks && (
+        <div className="mt-4 rounded-xl border border-gold/40 bg-gold/10 p-3">
+          <p className="text-sm font-700 text-charcoal">
+            Confirm your email before the restaurant owner can approve your access
+          </p>
+          <p className="mt-1 text-xs text-charcoal-soft">
+            We sent a link to {user.email}. Owner approval is only ever given to a
+            confirmed address.
+          </p>
+          <Button
+            className="mt-3"
+            size="sm"
+            disabled={verifying}
+            onClick={() => void sendVerification()}
+          >
+            {verifying ? "Sending…" : "Send verification email again"}
+          </Button>
+        </div>
+      )}
+
+      {notice && <p className="mt-3 text-xs text-basil">{notice}</p>}
+
       {mutationState.status === "error" && (
         <p role="alert" className="mt-3 text-xs text-tomato-dark">{mutationState.message}</p>
       )}
+    </>
+  );
+
+  if (variant === "gate") {
+    return (
+      <main className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
+        <Card className="border-gold/50 bg-gold/10 p-5">
+          <h1 className="flex items-center gap-2 font-display text-xl font-700 text-charcoal">
+            <ShieldAlert size={20} className="text-gold" />
+            Restaurant staff access is required
+          </h1>
+          {body}
+          <p className="mt-5 text-xs text-charcoal-soft">
+            Meanwhile,{" "}
+            <Link href="/plan" className="font-600 text-tomato hover:underline">
+              plan your own week
+            </Link>{" "}
+            or open{" "}
+            <Link href="/account" className="font-600 text-tomato hover:underline">
+              Account &amp; access
+            </Link>
+            .
+          </p>
+        </Card>
+      </main>
+    );
+  }
+
+  return (
+    <Card className="mt-5 border-gold/50 bg-gold/10 p-4">
+      <p className="text-sm font-700 text-charcoal">Restaurant access</p>
+      {body}
     </Card>
   );
 }

@@ -12,15 +12,74 @@ export function uniqueEmail(prefix = "diner"): string {
 
 export const PASSWORD = "password123";
 
-/** Creates an account through the real sign-up form and lands on /plan. */
-export async function signUp(page: Page, email = uniqueEmail(), name = "Test Diner") {
-  await page.goto("/signup");
+/** Fills and submits the sign-up form, whatever intent the URL carried. */
+async function submitSignUp(page: Page, email: string, name: string) {
   await page.getByLabel("Your name").fill(name);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
+}
+
+/** Creates a customer account through the real sign-up form and lands on /plan. */
+export async function signUp(page: Page, email = uniqueEmail(), name = "Test Diner") {
+  await page.goto("/signup");
+  await submitSignUp(page, email, name);
   await page.waitForURL("**/plan**", { timeout: 30_000 });
   return email;
+}
+
+/**
+ * Creates an account the way the "I work at Negrita" CTA does.
+ *
+ * Lands on /account rather than /plan: a brand-new account is a customer
+ * until an owner approves the staff request this files.
+ */
+export async function signUpStaff(
+  page: Page,
+  email = uniqueEmail("staff"),
+  name = "Kitchen Hand"
+) {
+  await page.goto("/signup?intent=staff&next=%2Fkitchen");
+  await submitSignUp(page, email, name);
+  await page.waitForURL("**/account**", { timeout: 30_000 });
+  return email;
+}
+
+/**
+ * Puts a week into the device store the way the guest planner used to.
+ *
+ * Nothing can create this any more — the planner needs an account. It is
+ * seeded directly so the one-time claim into a new account stays covered for
+ * the devices that still hold one.
+ */
+export async function seedLegacyGuestPlan(
+  page: Page,
+  { programStartDate, meals }: { programStartDate: string; meals: number }
+) {
+  await page.goto("/");
+  await page.evaluate(
+    ({ start, count }) => {
+      const assignments = Array.from({ length: count }, (_, index) => ({
+        id: `assignment-${index}`,
+        dayIndex: index,
+        mealName: "Lunch",
+        items: [],
+      }));
+      localStorage.setItem(
+        "mamma-calories:clients",
+        JSON.stringify([
+          {
+            id: "primary",
+            name: "My week",
+            programStartDate: start,
+            assignments,
+            updatedAt: new Date().toISOString(),
+          },
+        ])
+      );
+    },
+    { start: programStartDate, count: meals }
+  );
 }
 
 export async function signIn(page: Page, email: string) {

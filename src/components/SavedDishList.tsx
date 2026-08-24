@@ -69,8 +69,8 @@ export default function SavedDishList() {
     <div className="space-y-3">
       {!isCloudBackend() && (
         <p className="rounded-lg bg-cream-deep px-3 py-2 text-xs text-charcoal-soft">
-          Saved on this device (browser storage). Connect Firebase later to share
-          dishes across devices.
+          This deployment is storing dishes in this browser rather than on your
+          account, so they will not follow you to another device.
         </p>
       )}
       <ul className="grid gap-3 sm:grid-cols-2">

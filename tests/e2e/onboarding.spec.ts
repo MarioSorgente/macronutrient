@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import {
   OWNER_EMAIL,
+  PASSWORD,
   clearAuthAccounts,
   clearFirestoreData,
   seedAdminProfileByEmail,
@@ -43,9 +44,9 @@ async function onboardOwner(page: Page) {
 async function signOut(page: Page) {
   await page.locator(AVATAR).click();
   await page.locator('[role="menu"] button:has-text("Sign out")').click();
-  // Where you land depends on where you were: signing out of a staff page
-  // bounces to /login, which has no site header. The avatar disappearing is
-  // the signal that holds either way.
+  // Signing out leaves for the landing page before the session ends, so the
+  // route guard never sees a signed-out visitor on a protected screen. The
+  // avatar disappearing is the signal that holds wherever they land.
   await expect(page.locator(AVATAR)).toHaveCount(0);
 }
 
@@ -54,9 +55,9 @@ test.describe("the owner", () => {
     // --- the landing page ---------------------------------------------------
     await page.goto("/");
     await expect(page.getByRole("heading", { name: /hit your macros/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /get started/i }).first()).toBeVisible();
-    // A visitor is told they can start without an account.
-    await expect(page.getByText(/no account needed/i)).toBeVisible();
+    // Two named doors, and both of them go through authentication.
+    await expect(page.getByRole("link", { name: /plan my meals/i }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /i work at negrita/i }).first()).toBeVisible();
 
     await onboardOwner(page);
 
@@ -84,13 +85,13 @@ test.describe("the owner", () => {
 
     // --- house items --------------------------------------------------------
     await page.goto("/admin/house-items");
-    await expect(page.getByText(/this area is for negrita staff/i)).toHaveCount(0);
+    await expect(page.getByText(/restaurant staff access is required/i)).toHaveCount(0);
 
     // --- the kitchen --------------------------------------------------------
     await page.goto("/kitchen");
-    await expect(page.getByText(/this area is for negrita staff/i)).toHaveCount(0);
+    await expect(page.getByText(/restaurant staff access is required/i)).toHaveCount(0);
     await page.goto("/kitchen/orders");
-    await expect(page.getByText(/this area is for negrita staff/i)).toHaveCount(0);
+    await expect(page.getByText(/restaurant staff access is required/i)).toHaveCount(0);
 
     // --- and out ------------------------------------------------------------
     await signOut(page);
@@ -115,7 +116,7 @@ test.describe("a restaurant account", () => {
     const row = page.getByRole("combobox", { name: `Role for Kitchen Hand` });
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.selectOption("restaurant");
-    await expect(page.getByText(/role updated to restaurant/i)).toBeVisible();
+    await expect(page.getByText(/access updated to staff/i)).toBeVisible();
     await signOut(page);
 
     // And the cook now has the kitchen — but not the dashboard.
@@ -126,11 +127,11 @@ test.describe("a restaurant account", () => {
     await expect(header.getByRole("link", { name: "Admin", exact: true })).toHaveCount(0);
 
     await page.goto("/kitchen");
-    await expect(page.getByText(/this area is for negrita staff/i)).toHaveCount(0);
+    await expect(page.getByText(/restaurant staff access is required/i)).toHaveCount(0);
     await page.goto("/kitchen/orders");
-    await expect(page.getByText(/this area is for negrita staff/i)).toHaveCount(0);
+    await expect(page.getByText(/restaurant staff access is required/i)).toHaveCount(0);
     await page.goto("/admin/house-items");
-    await expect(page.getByText(/this area is for negrita staff/i)).toHaveCount(0);
+    await expect(page.getByText(/restaurant staff access is required/i)).toHaveCount(0);
 
     // The owner's dashboard stays the owner's.
     await page.goto("/admin");
@@ -143,12 +144,18 @@ test.describe("a restaurant account", () => {
 test.describe("a customer", () => {
   test("goes from the landing page to a sent order and out again", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("link", { name: /get started/i }).first().click();
-    await expect(page).toHaveURL(/\/plan/);
+    await page.getByRole("link", { name: /plan my meals/i }).first().click();
 
-    // Planning works with no account at all.
+    // The CTA leads to sign-up, not to a planner anybody can use.
+    await expect(page).toHaveURL(/\/signup\?intent=customer&next=%2Fplan/);
+    await expect(page.getByRole("button", { name: "Settings" })).toHaveCount(0);
+
+    await page.getByLabel("Your name").fill("Hungry Person");
+    await page.getByLabel("Email").fill(uniqueEmail("diner"));
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Create account" }).click();
+    await page.waitForURL("**/plan**", { timeout: 30_000 });
     await expect(page.getByRole("button", { name: "Settings" })).toBeVisible();
-    await signUp(page, uniqueEmail("diner"), "Hungry Person");
 
     const header = page.locator(HEADER);
     await expect(header.getByRole("link", { name: "My orders" })).toBeVisible();
@@ -160,7 +167,7 @@ test.describe("a customer", () => {
     for (const [tab, heading] of [
       ["Build a dish", /build a dish/i],
       ["Saved dishes", /saved dishes|no saved dishes/i],
-      ["Send to kitchen", /send your week to the kitchen|sign in/i],
+      ["Send to kitchen", /send your week to the kitchen/i],
       ["My week", /my week/i],
     ] as const) {
       await page.getByRole("link", { name: tab }).click();

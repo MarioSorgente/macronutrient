@@ -20,6 +20,16 @@ type NavLink = { href: string; label: string; match: (path: string) => boolean }
 
 const LINKS: NavLink[] = [
   { href: "/", label: "Home", match: (p) => p === "/" },
+];
+
+/**
+ * The product itself, which now needs an account.
+ *
+ * Offering "Plan & Build" to a signed-out visitor advertised a destination
+ * that only bounces them to the sign-in screen. The two CTAs on the landing
+ * page are the way in.
+ */
+const PLANNER_LINKS: NavLink[] = [
   {
     href: "/plan",
     label: "Plan & Build",
@@ -61,6 +71,7 @@ export default function BrandHeader() {
   const { user, role } = useAuth();
   const links = [
     ...LINKS,
+    ...(user ? PLANNER_LINKS : []),
     ...(user ? ACCOUNT_LINKS : []),
     ...(isStaff(role) ? KITCHEN_LINKS : []),
     ...(role === "admin" ? ADMIN_LINKS : []),

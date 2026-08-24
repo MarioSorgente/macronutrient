@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
 import { roleLabel } from "@/lib/roles";
+import { authUrl } from "@/lib/auth/next";
 import { cn } from "@/components/ui/cn";
 import ViewAsSwitch from "@/components/ViewAsSwitch";
 
@@ -70,14 +71,26 @@ export default function AccountMenu() {
     return <span className="h-8 w-8 shrink-0 rounded-full bg-cream-deep" aria-hidden />;
   }
 
+  // Both doors, not just one: an account is now required, so "Sign in" alone
+  // left anybody without one guessing where to make one.
   if (!user) {
+    // A public page is not somewhere to come back to after signing in.
+    const back = pathname === "/" ? undefined : pathname;
     return (
-      <Link
-        href={`/login?next=${encodeURIComponent(pathname)}`}
-        className="shrink-0 whitespace-nowrap rounded-lg bg-tomato px-3 py-1.5 text-sm font-600 text-cream transition-colors hover:bg-tomato-dark"
-      >
-        Sign in
-      </Link>
+      <span className="flex shrink-0 items-center gap-2">
+        <Link
+          href={authUrl("login", { next: back })}
+          className="shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-600 text-charcoal-soft transition-colors hover:bg-cream-deep hover:text-charcoal"
+        >
+          Sign in
+        </Link>
+        <Link
+          href={authUrl("signup", { next: back, intent: "customer" })}
+          className="shrink-0 whitespace-nowrap rounded-lg bg-tomato px-3 py-1.5 text-sm font-600 text-cream transition-colors hover:bg-tomato-dark"
+        >
+          Create account
+        </Link>
+      </span>
     );
   }
 
@@ -164,8 +177,12 @@ export default function AccountMenu() {
             role="menuitem"
             onClick={async () => {
               setOpen(false);
-              await signOut();
+              // Leave the protected page first. Signing out while still on
+              // one hands the route guard a signed-out visitor on a page that
+              // needs an account, and it bounces them to the sign-in form —
+              // which is not where somebody who just chose to leave belongs.
               router.push("/");
+              await signOut();
             }}
             className="flex w-full items-center gap-2 border-t border-cream-deep px-3 py-2 text-left text-sm text-charcoal hover:bg-cream"
           >

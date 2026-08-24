@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -17,13 +17,21 @@ import { getAuthClient } from "@/lib/storage/firebaseAuth";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { isFirebaseConfigured } from "@/lib/firebaseEnv";
 import { authErrorMessage } from "@/lib/auth/errors";
+import {
+  DEFAULT_NEXT,
+  authUrl,
+  readIntent,
+  safeNext,
+  type AuthIntent,
+} from "@/lib/auth/next";
+import { policyFor } from "@/lib/auth/routePolicy";
+import { resolveStaffDestination } from "@/lib/auth/staffIntent";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Field from "@/components/ui/Field";
 import Input from "@/components/ui/Input";
 
 export type AuthMode = "login" | "signup" | "reset";
-type SignupIntent = "customer" | "staff";
 
 const COPY: Record<AuthMode, { title: string; blurb: string; submit: string }> = {
   login: {
@@ -88,19 +96,21 @@ function GoogleMark() {
 export default function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params?.get("next") || "/plan";
-  const { user, loading: authLoading } = useAuth();
-
+  // Sanitised, because anyone can hand out a `/login?next=…` link and this
+  // value is handed straight to the router. Empty when none was asked for,
+  // which is different from "/plan": a staff sign-in with no destination of
+  // its own belongs in the kitchen, not the planner.
+  const requested = safeNext(params?.get("next"), "");
+  const next = requested || DEFAULT_NEXT;
   /**
-   * Someone already signed in has nothing to do on this screen. Showing them
-   * the sign-in form again is a dead end: the form succeeds, and they are left
-   * looking at it. Password reset is exempt — that is still a sensible thing
-   * to ask for while signed in.
+   * Which journey brought them here, carried in the URL.
+   *
+   * The URL is the only store it needs: it survives a refresh, it survives
+   * the switch between Sign in and Create account, and `signInWithPopup`
+   * never leaves the page, so it survives Google too.
    */
-  useEffect(() => {
-    if (mode === "reset" || authLoading || !user) return;
-    router.replace(next);
-  }, [mode, authLoading, user, router, next]);
+  const urlIntent = readIntent(params?.get("intent"));
+  const { user, loading: authLoading } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -108,10 +118,62 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [signupIntent, setSignupIntent] = useState<SignupIntent>("customer");
+  const [signupIntent, setSignupIntent] = useState<AuthIntent>(urlIntent ?? "customer");
 
   const configured = isFirebaseConfigured();
   const copy = COPY[mode];
+  /**
+   * Guards the send-onward against running twice.
+   *
+   * Two paths reach it: the submit handler, and the effect that notices somebody
+   * is already signed in — and a successful sign-in triggers both. Once is
+   * enough, and for staff intent it also keeps a single sign-in from asking the
+   * request API twice.
+   */
+  const landed = useRef(false);
+  // Login has no radio, so the URL is the only signal there.
+  const intent: AuthIntent = mode === "signup" ? signupIntent : urlIntent ?? "customer";
+
+  /**
+   * Sends someone on once they are authenticated.
+   *
+   * Staff intent cannot be honoured by a plain redirect: the same click has to
+   * work for an approved cook, for an existing customer, and for somebody who
+   * was turned down last month. Pushing all three at `/kitchen` and letting
+   * authorization fail is what made staff onboarding look broken.
+   */
+  const land = useCallback(
+    async (how: "push" | "replace" = "push") => {
+      if (landed.current) return;
+      landed.current = true;
+      // Someone who arrived on the staff CTA and then chose "For myself" has
+      // changed their mind: `next` still says /kitchen, and honouring it would
+      // land them on the staff-access panel they just declined.
+      const customerNext = policyFor(next).kind === "role" ? DEFAULT_NEXT : next;
+      const to =
+        intent === "staff"
+          ? await resolveStaffDestination(requested)
+          : customerNext;
+      if (how === "replace") router.replace(to);
+      else router.push(to);
+    },
+    [intent, next, requested, router]
+  );
+
+  /**
+   * Someone already signed in has nothing to do on this screen. Showing them
+   * the sign-in form again is a dead end: the form succeeds, and they are left
+   * looking at it. Password reset is exempt — that is still a sensible thing to
+   * ask for while signed in.
+   *
+   * Staff intent is resolved here too. An existing customer who clicks "I work
+   * at Negrita" while already signed in must reach the request flow, not be
+   * dropped at a kitchen they cannot open.
+   */
+  useEffect(() => {
+    if (mode === "reset" || authLoading || !user) return;
+    void land("replace");
+  }, [mode, authLoading, user, land]);
 
   async function withBusy(work: () => Promise<void>) {
     setBusy(true);
@@ -129,17 +191,17 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
   function submit(event: FormEvent) {
     event.preventDefault();
     void withBusy(async () => {
-      const auth = getAuthClient();
+      const client = getAuthClient();
 
       if (mode === "reset") {
-        await sendPasswordResetEmail(auth, email.trim());
+        await sendPasswordResetEmail(client, email.trim());
         setNotice("Check your inbox for the reset link.");
         return;
       }
 
       if (mode === "signup") {
         const credential = await createUserWithEmailAndPassword(
-          auth,
+          client,
           email.trim(),
           password
         );
@@ -164,29 +226,17 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
         } catch (cause) {
           console.error("Could not send the verification email:", cause);
         }
-        if (signupIntent === "staff") {
-          const { callApi } = await import("@/lib/api");
-          await callApi("/api/staff/request-access");
-          router.push("/account?staff-requested=1");
-          return;
-        }
       } else {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
+        await signInWithEmailAndPassword(client, email.trim(), password);
       }
-      router.push(next);
+      await land();
     });
   }
 
   function google() {
     void withBusy(async () => {
       await signInWithPopup(getAuthClient(), new GoogleAuthProvider());
-      if (mode === "signup" && signupIntent === "staff") {
-        const { callApi } = await import("@/lib/api");
-        await callApi("/api/staff/request-access");
-        router.push("/account?staff-requested=1");
-        return;
-      }
-      router.push(next);
+      await land();
     });
   }
 
@@ -207,10 +257,18 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
         </h1>
         <p className="mt-1 text-sm text-charcoal-soft">{copy.blurb}</p>
 
+        {intent === "staff" && mode !== "reset" && (
+          <p className="mt-3 rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-xs text-charcoal">
+            Signing in to work at Negrita. We will check your access and, if you
+            do not have it yet, ask the owner to approve you.
+          </p>
+        )}
+
         {!configured && (
           <p className="mt-4 rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-xs text-charcoal">
-            Accounts are not switched on for this deployment yet. You can still
-            plan your week as a guest — it is saved on this device.
+            Accounts are not switched on for this deployment yet, and Mamma
+            Calories needs one. The NEXT_PUBLIC_FIREBASE_ variables are inlined
+            at build time, so the site has to be redeployed after they are set.
           </p>
         )}
 
@@ -335,7 +393,7 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
             <>
               <p>
                 New here?{" "}
-                <Link href="/signup" className="font-600 text-tomato hover:underline">
+                <Link href={authUrl("signup", { next, intent })} className="font-600 text-tomato hover:underline">
                   Create an account
                 </Link>
               </p>
@@ -349,7 +407,7 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
           {mode === "signup" && (
             <p>
               Already have an account?{" "}
-              <Link href="/login" className="font-600 text-tomato hover:underline">
+              <Link href={authUrl("login", { next, intent })} className="font-600 text-tomato hover:underline">
                 Sign in
               </Link>
             </p>
@@ -365,10 +423,8 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
       </Card>
 
       <p className="mt-6 text-center text-xs text-charcoal-soft">
-        You can keep planning as a guest —{" "}
-        <Link href="/plan" className="font-600 text-tomato hover:underline">
-          skip for now
-        </Link>
+        Your plan, orders and preferences stay with your account, on every
+        device you sign in on.
       </p>
     </main>
   );
