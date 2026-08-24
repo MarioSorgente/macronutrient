@@ -25,6 +25,41 @@ export interface TargetResolution {
   explanation: string;
 }
 
+export interface MacroTargetValidation {
+  valid: boolean;
+  macroEnergyKcal: number;
+  differenceKcal: number;
+  differencePercent: number;
+}
+
+/** Menu labels and decimal rounding may account for 50 kcal or 5%, whichever is larger. */
+export function validateMacroTarget(target: MacroTargets): MacroTargetValidation {
+  const macroEnergyKcal = target.protein_g * 4 + target.carbs_g * 4 + target.fat_g * 9;
+  const differenceKcal = macroEnergyKcal - target.energy_kcal;
+  const differencePercent = target.energy_kcal > 0
+    ? Math.abs(differenceKcal) / target.energy_kcal * 100
+    : (macroEnergyKcal === 0 ? 0 : Number.POSITIVE_INFINITY);
+  return {
+    valid: Math.abs(differenceKcal) <= Math.max(50, target.energy_kcal * 0.05),
+    macroEnergyKcal,
+    differenceKcal,
+    differencePercent,
+  };
+}
+
+/** Re-state a target at a new calorie level while retaining its energy proportions. */
+export function scaleTargetEnergy(target: MacroTargets, energyKcal: number): MacroTargets {
+  const represented = validateMacroTarget(target).macroEnergyKcal;
+  if (!(represented > 0)) return resolveTarget({ targets: { energy_kcal: energyKcal } }).target;
+  const scale = energyKcal / represented;
+  return {
+    energy_kcal: energyKcal,
+    protein_g: target.protein_g * scale,
+    carbs_g: target.carbs_g * scale,
+    fat_g: target.fat_g * scale,
+  };
+}
+
 export const DEFAULT_DERIVED_ENERGY_KCAL = 2000;
 
 const RULES = {

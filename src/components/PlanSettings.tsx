@@ -8,7 +8,8 @@ import {
   type MacroTargets,
 } from "@/lib/storage/types";
 import { TARGET_FIELDS } from "@/lib/clients";
-import { resolveTarget } from "@/lib/targetResolution";
+import { resolveTarget, scaleTargetEnergy, validateMacroTarget } from "@/lib/targetResolution";
+import { targetsFromStyle } from "@/lib/preferences";
 import Modal from "@/components/ui/Modal";
 import Field from "@/components/ui/Field";
 
@@ -38,6 +39,7 @@ export default function PlanSettings({
       style: plan.preferences?.macroStyle,
     }).target
   );
+  const targetValidation = validateMacroTarget(targets);
 
   function addSlot() {
     const trimmed = newSlot.trim();
@@ -80,7 +82,8 @@ export default function PlanSettings({
           <button
             type="button"
             onClick={save}
-            className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
+            disabled={targetsOn && !targetValidation.valid}
+            className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
           >
             Save settings
           </button>
@@ -226,21 +229,31 @@ export default function PlanSettings({
                     type="number"
                     min={0}
                     value={targets[field.key]}
-                    onChange={(e) =>
-                      setTargets({
-                        ...targets,
-                        [field.key]: Math.max(0, Number(e.target.value) || 0),
-                      })
-                    }
+                    onChange={(e) => {
+                      const value = Math.max(0, Number(e.target.value) || 0);
+                      if (field.key === "energy_kcal") {
+                        setTargets(plan.preferences?.macroStyle
+                          ? targetsFromStyle(value, plan.preferences.macroStyle)
+                          : scaleTargetEnergy(targets, value));
+                      } else {
+                        setTargets({ ...targets, [field.key]: value });
+                      }
+                    }}
                     className="no-spin w-full rounded-lg border border-cream-deep px-2 py-1.5 text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
                   />
                 </label>
               ))}
             </div>
           )}
+          {targetsOn && !targetValidation.valid && (
+            <p role="alert" className="mt-2 text-xs font-600 text-tomato-dark">
+              Macro grams represent {Math.round(targetValidation.macroEnergyKcal)} kcal,
+              which does not match the calorie target. Adjust the macros or change calories
+              to recalculate a coherent target before saving.
+            </p>
+          )}
         </div>
     </Modal>
   );
 }
-
 

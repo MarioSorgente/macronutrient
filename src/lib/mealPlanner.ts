@@ -13,7 +13,7 @@ import {
   type MacroAdherenceDiagnostic,
 } from "@/lib/dailyAdherence";
 import { remainingTarget, scoreAgainst } from "@/lib/macroFit";
-import { resolveTarget, type DerivationStyle, type TargetMode } from "@/lib/targetResolution";
+import { resolveTarget, validateMacroTarget, type DerivationStyle, type TargetMode } from "@/lib/targetResolution";
 import { candidateIsLeaned, readyPlannerCatalog } from "@/lib/plannerCandidates";
 import { composeCandidatesForResidual } from "@/lib/plannerComposer";
 import {
@@ -547,7 +547,8 @@ function searchCompleteDays(
   preferences: ClientPreferences,
   budget: number | null,
   complete: boolean,
-  allowRepeats = false
+  allowRepeats = false,
+  forcedFirst?: Candidate
 ): CompleteDay[] {
   const suffix: MacroRange[] = new Array(fillable.length + 1);
   suffix[fillable.length] = emptyRange();
@@ -564,14 +565,19 @@ function searchCompleteDays(
     const plan = fillable[index];
     const remainingWeight = fillable.slice(index).reduce((sum, item) => sum + item.weight, 0);
     const share = remainingWeight > 0 ? plan.weight / remainingWeight : 1;
-    const expanded = expandDepth(beam, plan, index, fillable.length, share, suffix[index + 1],
-      target, options, preferences, budget, allowRepeats);
+    const searchPlan = index === 0 && forcedFirst
+      ? { ...plan, ready: [forcedFirst], reach: rangeOver([forcedFirst]) }
+      : plan;
+    const expanded = expandDepth(beam, searchPlan, index, fillable.length, share, suffix[index + 1],
+      target, { ...options, includeComposed: index === 0 && forcedFirst ? false : options.includeComposed },
+      preferences, budget, allowRepeats);
     // A duplicate ban must never leave a slot unfillable. When nothing survives
     // it, the depth is replayed with repeats allowed — the explicit fallback,
     // not the normal path.
     beam = retainBeam(expanded.length ? expanded
-      : expandDepth(beam, plan, index, fillable.length, share, suffix[index + 1],
-        target, options, preferences, budget, true), index,
+      : expandDepth(beam, searchPlan, index, fillable.length, share, suffix[index + 1],
+        target, { ...options, includeComposed: index === 0 && forcedFirst ? false : options.includeComposed },
+        preferences, budget, true), index,
       preferences.proteinLean.length > 0);
     if (!beam.length) return [];
   }
@@ -1100,12 +1106,30 @@ export function kitchenIncrementsPreventCompliance(
 
 // --- generation --------------------------------------------------------------
 
+export class InvalidMacroTargetError extends Error {
+  readonly code = "INVALID_TARGET_MACRO_ENERGY_MISMATCH" as const;
+  constructor(
+    readonly requestedEnergyKcal: number,
+    readonly macroEnergyKcal: number,
+    readonly differenceKcal: number,
+    readonly differencePercent: number
+  ) {
+    super(`Macro grams represent ${macroEnergyKcal.toFixed(1)} kcal, not ${requestedEnergyKcal.toFixed(1)} kcal.`);
+    this.name = "InvalidMacroTargetError";
+  }
+}
+
 export function generatePlanWithTargets(options: GenerateOptions): GeneratedPlan {
   const resolution = resolveTarget({
     targets: options.targets,
     style: options.targetStyle ?? options.preferences?.macroStyle,
   });
   const target = resolution.target;
+  const validation = validateMacroTarget(target);
+  if (!validation.valid) {
+    throw new InvalidMacroTargetError(target.energy_kcal, validation.macroEnergyKcal,
+      validation.differenceKcal, validation.differencePercent);
+  }
   const preferences = options.preferences ?? DEFAULT_PREFERENCES;
   const slots = options.slots.length ? options.slots : ["Meal"];
   const budget = options.dailyBudgetIdr && options.dailyBudgetIdr > 0
@@ -1142,9 +1166,31 @@ export function generatePlanWithTargets(options: GenerateOptions): GeneratedPlan
   const complete = unfilledSlots.length === 0;
 
   const slotNames = fillable.map((plan) => plan.slot);
-  let pool = selectDayPool(
-    searchCompleteDays(fillable, target, options, preferences, budget, complete),
-    slotNames);
+  const ordinaryDays = searchCompleteDays(fillable, target, options, preferences, budget, complete);
+  // Test each published breakfast as a complete-day proposition. A large
+  // breakfast is not infeasible merely because it loses the partial-day beam:
+  // lock it, give lunch/dinner/snack the real residual, and let only the final
+  // adherence class decide whether that breakfast survives.
+  const breakfastPlan = target.energy_kcal >= 3000 && fillable[0] &&
+    slotKindOf(fillable[0].slot) === "breakfast"
+    ? fillable[0] : undefined;
+  const generatedBreakfastRepresentatives = breakfastPlan
+    ? [...breakfastPlan.composed.values()].flatMap((entry) => entry.candidates)
+      .sort((a, b) => Math.abs(a.macros.energy_kcal - target.energy_kcal * 0.25) -
+        Math.abs(b.macros.energy_kcal - target.energy_kcal * 0.25))
+      .filter((candidate, index, all) => all.slice(0, index)
+        .filter((other) => other.dishStyle === candidate.dishStyle).length < 3)
+    : [];
+  const lockedBreakfastDays = breakfastPlan
+    ? [...new Map([
+        ...breakfastPlan.ready.map((candidate) => [candidate.dishShape, candidate] as const),
+        ...generatedBreakfastRepresentatives
+          .map((candidate) => [`generated:${candidate.id}`, candidate] as const),
+      ]).values()]
+      .flatMap((candidate) => searchCompleteDays(fillable, target, options, preferences,
+        budget, complete, false, candidate))
+    : [];
+  let pool = selectDayPool([...ordinaryDays, ...lockedBreakfastDays], slotNames);
   // The explicit fallback. Normal generation never serves the same dish twice in
   // a day, but a ban is not worth an infeasible day: when nothing compliant can
   // be built without repeating, the search is rerun with repeats permitted and

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveTarget } from "@/lib/targetResolution";
+import { resolveTarget, scaleTargetEnergy, validateMacroTarget } from "@/lib/targetResolution";
 
 const macroEnergy = (target: ReturnType<typeof resolveTarget>["target"]) =>
   target.protein_g * 4 + target.carbs_g * 4 + target.fat_g * 9;
@@ -26,5 +26,25 @@ describe("resolveTarget", () => {
     expect(resolveTarget({ style: "Auto" })).toEqual(resolveTarget({}));
     expect(resolveTarget({}).selectedStyle).toBe("Balanced");
     expect(macroEnergy(resolveTarget({}).target)).toBeCloseTo(2000, 10);
+  });
+});
+
+describe("target integrity", () => {
+  it("rescales an explicit split when calories alone change", () => {
+    const result = scaleTargetEnergy(
+      { energy_kcal: 2000, protein_g: 175, carbs_g: 175, fat_g: 66.7 }, 4000);
+    expect(result).toMatchObject({ energy_kcal: 4000 });
+    expect(result.protein_g).toBeCloseTo(350, 0);
+    expect(result.carbs_g).toBeCloseTo(350, 0);
+    expect(result.fat_g).toBeCloseTo(133.4, 0);
+    expect(validateMacroTarget(result).valid).toBe(true);
+  });
+
+  it("rejects the reported contradictory 4000 kcal target", () => {
+    const validation = validateMacroTarget({
+      energy_kcal: 4000, protein_g: 175, carbs_g: 175, fat_g: 66.7,
+    });
+    expect(validation.valid).toBe(false);
+    expect(validation.macroEnergyKcal).toBeCloseTo(2000.3, 5);
   });
 });
