@@ -4,6 +4,8 @@ import { menuRecipes } from "@/lib/database";
 import { negritaMenuCandidate } from "@/lib/plannerCandidates";
 import { NEGRITA_PLANNER_METADATA } from "@/lib/negritaPlannerMetadata";
 import { DEFAULT_PREFERENCES, type MacroTargets } from "@/lib/storage/types";
+import { plannerFixture } from "@/lib/mealPlanner.fixtures";
+import type { PlannerCandidate } from "@/types/nutrition";
 
 /**
  * Week-level regression cover, run against the real Negrita catalog rather than
@@ -43,6 +45,13 @@ const mostRepeated = (values: string[]) =>
     values.filter((other) => other === value).length));
 const consecutive = (values: string[]) =>
   values.filter((value, index) => index > 0 && values[index - 1] === value);
+const hasThreeConsecutive = (values: string[]) => values.some((value, index) =>
+  index >= 2 && values[index - 1] === value && values[index - 2] === value);
+
+const ADHERENCE_ORDER = ["Exact", "Within tolerance", "Best effort", "Impossible"] as const;
+type AdherenceClass = typeof ADHERENCE_ORDER[number];
+const bestClass = (days: GeneratedDay[]): AdherenceClass => ADHERENCE_ORDER.find((value) =>
+  days.some((day) => day.adherence.classification === value))!;
 
 const HIGH_PROTEIN: MacroTargets = {
   energy_kcal: 2000, protein_g: 175, carbs_g: 175, fat_g: 66.7,
@@ -304,18 +313,101 @@ describe("seed behaviour", () => {
 });
 
 describe("derived targets", () => {
-  it("scales a coherent 4000 kcal week and retains substantial breakfasts", () => {
-    const days = week(BALANCED_4000);
-    const average = days.reduce((sum, day) => sum + day.macros.energy_kcal, 0) / days.length;
-    const breakfasts = inSlot(days, 0);
-    expect(average).toBeGreaterThan(3400);
-    expect(distinct(breakfasts), breakfasts.join(", ")).toBeGreaterThanOrEqual(2);
-    expect(breakfasts.some((name) => /pancake|waffle|oatmeal|banana bread/i.test(name)),
-      breakfasts.join(", ")).toBe(true);
+  it("scales a coherent 4000 kcal target without trading adherence for repetition", () => {
+    const days = week(BALANCED_4000, { seed: 2 });
+    // A one-day request establishes the strongest class the catalog can reach
+    // without weekly variety influencing the selection.
+    const achievable = bestClass(week(BALANCED_4000, { days: [0] }));
+    const namesBySlot = SLOTS.map((_, index) => inSlot(days, index));
+    const breakfastStyles = days.map((day) => day.meals[0].dishStyle);
+    const signatures = days.map((day) => day.meals.map((meal) => meal.name).join(" | "));
+
     for (const day of days) {
       expect(day.adherence.macros.energy_kcal.target).toBe(4000);
-      expect(day.macros.energy_kcal).toBeGreaterThan(3000);
+      expect(day.adherence.classification).toBe(achievable);
+      if (achievable === "Exact" || achievable === "Within tolerance") {
+        expect(day.adherence.compliant).toBe(true);
+      }
     }
+    // The real-catalog probe currently establishes two Breakfast variants in
+    // this best class; the focused locked fixture below is the regression that
+    // prevents the week from collapsing below the proven feasible minimum.
+    expect(distinct(namesBySlot[0]), namesBySlot[0].join(", ")).toBeGreaterThanOrEqual(2);
+    expect(distinct(breakfastStyles), breakfastStyles.join(", ")).toBeGreaterThanOrEqual(2);
+    expect(distinct(namesBySlot[1]), namesBySlot[1].join(", ")).toBeGreaterThanOrEqual(2);
+    expect(distinct(namesBySlot[2]), namesBySlot[2].join(", ")).toBeGreaterThanOrEqual(2);
+    expect(distinct(namesBySlot[3]), namesBySlot[3].join(", ")).toBeGreaterThanOrEqual(2);
+    for (const index of [1, 2, 3]) {
+      expect(mostRepeated(namesBySlot[index]), `${SLOTS[index]} occupied the whole week`)
+        .toBeLessThan(7);
+    }
+    expect(distinct(signatures), "the real catalog still varies full days").toBeGreaterThan(1);
+    expect(days.some((day) => day.meals.some((meal) => meal.kind === "ready")))
+      .toBe(true);
+    expect(days.some((day) => day.meals.some((meal) => meal.kind === "composed")))
+      .toBe(true);
+  });
+
+  it("does not collapse four-slot fixture weeks when equivalent choices are proven", () => {
+    const quarter = { energy_kcal: 1000, protein_g: 62.5, carbs_g: 112.5,
+      fat_g: BALANCED_4000.fat_g / 4 };
+    const fixtures: PlannerCandidate[] = [
+      plannerFixture("Breakfast oats", "Breakfast", quarter),
+      plannerFixture("Breakfast eggs", "Breakfast", quarter),
+      ...["Lunch chicken", "Lunch fish", "Lunch beef"].map((name) =>
+        plannerFixture(name, "Lunch", quarter)),
+      ...["Dinner chicken", "Dinner fish", "Dinner beef"].map((name) =>
+        plannerFixture(name, "Dinner", quarter)),
+      ...["Snack yoghurt", "Snack fruit", "Snack toast"].map((name) =>
+        plannerFixture(name, "Snack", quarter)),
+    ];
+    const options = {
+      days: WEEK, slots: SLOTS, targets: BALANCED_4000, savedDishes: [],
+      includeSavedDishes: false, includeMenuDishes: false, includeComposed: false,
+      candidateFixtures: fixtures, dailyBudgetIdr: null,
+      preferences: DEFAULT_PREFERENCES, seed: 1,
+    } as Parameters<typeof generatePlan>[0];
+    const days = generatePlan(options);
+    const achievable = bestClass(generatePlan({ ...options, days: [0] }));
+
+    // Lock each candidate in turn by making it the only fixture for its slot.
+    // Other slots retain their complete fixture catalogs. Diversity is required
+    // only where two different locks independently preserve the best class.
+    const feasibleBySlot = SLOTS.map((slot) => fixtures.filter((candidate) =>
+      candidate.eligibleMealTypes.includes(slot.toLowerCase())).filter((locked) => {
+      const candidateFixtures = fixtures.filter((candidate) =>
+        !candidate.eligibleMealTypes.includes(slot.toLowerCase()) || candidate === locked);
+      const probe = generatePlan({ ...options, days: [0], candidateFixtures })[0];
+      return probe.adherence.classification === achievable &&
+        probe.meals.some((meal) => meal.name === locked.displayName);
+    }));
+
+    expect(achievable).toBe("Exact");
+    expect(days).toHaveLength(7);
+    for (const day of days) {
+      expect(day.meals).toHaveLength(4);
+      expect(day.adherence.classification).toBe(achievable);
+      expect(day.adherence.compliant).toBe(true);
+    }
+    for (const [index, feasible] of feasibleBySlot.entries()) {
+      if (feasible.length < 2) continue;
+      const names = inSlot(days, index);
+      const requestedMinimum = [2, 3, 3, 2][index];
+      expect(distinct(names),
+        `${SLOTS[index]} collapsed despite feasible locks: ${feasible.map((c) => c.displayName)}`)
+        .toBeGreaterThanOrEqual(Math.min(requestedMinimum, feasible.length));
+      expect(hasThreeConsecutive(names),
+        `${SLOTS[index]} repeated three times despite an equally compliant lock`).toBe(false);
+    }
+    expect(distinct(inSlot(days, 0))).toBe(2);
+    expect(distinct(inSlot(days, 1))).toBeGreaterThanOrEqual(3);
+    expect(distinct(inSlot(days, 2))).toBeGreaterThanOrEqual(3);
+    expect(distinct(inSlot(days, 3))).toBeGreaterThanOrEqual(2);
+    expect(new Set(days.flatMap((day) => [day.meals[1], day.meals[2]]).map((meal) =>
+      meal.name.split(" ").at(-1))).size, "lunch and dinner rotate protein families")
+      .toBeGreaterThanOrEqual(2);
+    expect(distinct(days.map((day) => day.meals.map((meal) => meal.name).join(" | "))))
+      .toBe(7);
   });
 
   it("resolves Auto to the documented default and reports what it used", () => {
