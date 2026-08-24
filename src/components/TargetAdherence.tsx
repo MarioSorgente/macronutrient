@@ -1,7 +1,7 @@
 import type { Macros } from "@/types/nutrition";
 import type { MacroTargets } from "@/lib/storage/types";
 import { TARGET_FIELDS } from "@/lib/clients";
-import { round0, round1 } from "@/lib/format";
+import { formatMacroGrams, round0 } from "@/lib/format";
 import {
   diagnoseDailyAdherence,
   type DailyAdherenceDiagnostics,
@@ -98,7 +98,7 @@ export default function TargetAdherence({
       <div className={isCompact ? "grid grid-cols-4 gap-1" : "grid grid-cols-2 gap-2 sm:grid-cols-4"}>
         {TARGET_FIELDS.map((field) => {
           const item = diagnostics.macros[field.key];
-          const format = field.key === "energy_kcal" ? round0 : round1;
+          const format = field.key === "energy_kcal" ? round0 : formatMacroGrams;
           const deviation = format(item.signedDeviation);
           const signed = item.signedDeviation > 0 ? `+${deviation}` : `${deviation}`;
           const valueTone = diagnostics.classification === "Exact" || diagnostics.classification === "Within tolerance"

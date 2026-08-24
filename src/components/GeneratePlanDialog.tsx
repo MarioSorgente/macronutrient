@@ -27,7 +27,7 @@ import {
 import { getIngredient } from "@/lib/database";
 import { generatePlanWithTargets, type GeneratedPlan } from "@/lib/mealPlanner";
 import { formatIdr, formatPrice } from "@/lib/pricing";
-import { round0, round1 } from "@/lib/format";
+import { formatMacroGrams, round0 } from "@/lib/format";
 import { resolveTarget, validateMacroTarget } from "@/lib/targetResolution";
 import MacroTargetEditor, { TargetSummary, type MacroTargetSelection } from "@/components/MacroTargetEditor";
 import IngredientTypeahead from "@/components/IngredientTypeahead";
@@ -426,7 +426,7 @@ export default function GeneratePlanDialog({
                         avg <b className="text-charcoal">{round0(avgKcal)}</b> kcal
                       </span>
                       <span>
-                        avg <b className="text-charcoal">{round1(avgProtein)}</b> g P
+                        avg <b className="text-charcoal">{formatMacroGrams(avgProtein)}</b> g P
                       </span>
                       <span className="font-700 text-tomato">
                         {formatIdr(weekCost)} / week
@@ -456,7 +456,7 @@ export default function GeneratePlanDialog({
                             <b className="text-tomato">
                               {round0(day.macros.energy_kcal)}
                             </b>{" "}
-                            kcal · P {round1(day.macros.protein_g)} ·{" "}
+                            kcal · P {formatMacroGrams(day.macros.protein_g)} ·{" "}
                             <b className="text-charcoal">
                               {formatPrice(day.price)}
                             </b>
@@ -482,7 +482,7 @@ export default function GeneratePlanDialog({
                                 <span className="text-charcoal">{meal.name}</span>
                               </span>
                               <span className="shrink-0 tabular-nums text-charcoal-soft">
-                                {round0(meal.macros.energy_kcal)} kcal · P {round1(meal.macros.protein_g)} · C {round1(meal.macros.carbs_g)} · F {round1(meal.macros.fat_g)}
+                                {round0(meal.macros.energy_kcal)} kcal · P {formatMacroGrams(meal.macros.protein_g)} · C {formatMacroGrams(meal.macros.carbs_g)} · F {formatMacroGrams(meal.macros.fat_g)}
                               </span>
                             </li>
                           ))}

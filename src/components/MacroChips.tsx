@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Macros } from "@/types/nutrition";
-import { round0, round1 } from "@/lib/format";
+import { formatMacroGrams, round0 } from "@/lib/format";
 import { cn } from "@/components/ui/cn";
 
 const SIZES = {
@@ -46,11 +46,11 @@ export default function MacroChips({
   if (variant === "dots") {
     return (
       <div className={cn(SIZES[size], "tabular-nums", toneClass, className)}>
-        {round0(macros.energy_kcal)} kcal · P {round1(macros.protein_g)}
-        {g} · C {round1(macros.carbs_g)}
-        {g} · F {round1(macros.fat_g)}
+        {round0(macros.energy_kcal)} kcal · P {formatMacroGrams(macros.protein_g)}
+        {g} · C {formatMacroGrams(macros.carbs_g)}
+        {g} · F {formatMacroGrams(macros.fat_g)}
         {g}
-        {showFiber && <> · Fiber {round1(macros.fiber_g)}{g}</>}
+        {showFiber && <> · Fiber {formatMacroGrams(macros.fiber_g)}{g}</>}
         {children}
       </div>
     );
@@ -68,10 +68,10 @@ export default function MacroChips({
       <span>
         <b className="font-700 text-tomato">{round0(macros.energy_kcal)}</b> kcal
       </span>
-      <span>P {round1(macros.protein_g)}{g}</span>
-      <span>C {round1(macros.carbs_g)}{g}</span>
-      <span>F {round1(macros.fat_g)}{g}</span>
-      {showFiber && <span>Fiber {round1(macros.fiber_g)}{g}</span>}
+      <span>P {formatMacroGrams(macros.protein_g)}{g}</span>
+      <span>C {formatMacroGrams(macros.carbs_g)}{g}</span>
+      <span>F {formatMacroGrams(macros.fat_g)}{g}</span>
+      {showFiber && <span>Fiber {formatMacroGrams(macros.fiber_g)}{g}</span>}
       {children}
     </div>
   );

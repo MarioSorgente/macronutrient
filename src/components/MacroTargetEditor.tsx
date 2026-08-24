@@ -4,7 +4,7 @@ import type { MacroStyle, MacroTargets, TargetMode } from "@/lib/storage/types";
 import { TARGET_FIELDS } from "@/lib/clients";
 import { MACRO_STYLES, targetsFromStyle } from "@/lib/preferences";
 import { resolveTarget, validateMacroTarget } from "@/lib/targetResolution";
-import { round0, round1 } from "@/lib/format";
+import { formatMacroGrams, round0, wholeNonNegative } from "@/lib/format";
 
 export interface MacroTargetSelection {
   targets: MacroTargets;
@@ -20,8 +20,8 @@ export function TargetSummary({ selection }: { selection: MacroTargetSelection }
         {selection.mode === "custom" ? "Custom" : `Preset · ${resolved.selectedStyle}`}
       </div>
       <div className="mt-0.5 tabular-nums text-charcoal-soft">
-        {round0(resolved.target.energy_kcal)} kcal · P {round1(resolved.target.protein_g)} g · C{" "}
-        {round1(resolved.target.carbs_g)} g · F {round1(resolved.target.fat_g)} g
+        {round0(resolved.target.energy_kcal)} kcal · P {formatMacroGrams(resolved.target.protein_g)} g · C{" "}
+        {formatMacroGrams(resolved.target.carbs_g)} g · F {formatMacroGrams(resolved.target.fat_g)} g
       </div>
     </div>
   );
@@ -64,11 +64,11 @@ export default function MacroTargetEditor({ value, onChange }: {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {TARGET_FIELDS.map((field) => <label key={field.key} className="text-xs">
           <span className="mb-1 block font-600 text-charcoal-soft">{field.label} ({field.unit})</span>
-          <input type="number" min={0}
+          <input type="number" min={0} step={1} inputMode="numeric"
             value={value.mode === "preset" && field.key !== "energy_kcal" ? Math.round(resolved.target[field.key]) : value.targets[field.key]}
             readOnly={value.mode === "preset" && field.key !== "energy_kcal"}
             onChange={(event) => {
-              const amount = Math.max(0, Number(event.target.value) || 0);
+              const amount = wholeNonNegative(Number(event.target.value));
               if (field.key === "energy_kcal" && value.mode === "preset") {
                 onChange({ ...value, targets: targetsFromStyle(amount, value.preset ?? "balanced") });
               } else {
