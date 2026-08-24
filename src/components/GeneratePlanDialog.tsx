@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -26,6 +26,7 @@ import {
 } from "@/lib/preferences";
 import { getIngredient } from "@/lib/database";
 import { generatePlanWithTargets, type GeneratedPlan } from "@/lib/mealPlanner";
+import { searchShuffleAlternatives } from "@/lib/plannerShuffle";
 import { formatIdr, formatPrice } from "@/lib/pricing";
 import { formatMacroGrams, round0 } from "@/lib/format";
 import { resolveTarget, validateMacroTarget } from "@/lib/targetResolution";
@@ -90,6 +91,10 @@ export default function GeneratePlanDialog({
   const [seed, setSeed] = useState(1);
   const [preview, setPreview] = useState<GeneratedPlan | null>(null);
   const [applying, setApplying] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generationMessage, setGenerationMessage] = useState("");
+  const requestRef = useRef<{ id: number; controller: AbortController } | null>(null);
+  const nextRequestId = useRef(0);
 
   const days = useMemo(() => [0, 1, 2, 3, 4, 5, 6], []);
 
@@ -113,10 +118,7 @@ export default function GeneratePlanDialog({
   });
   const targetValidation = validateMacroTarget(targetResolution.target);
 
-  function run(nextSeed: number) {
-    setSeed(nextSeed);
-    setPreview(
-      generatePlanWithTargets({
+  const generationOptions = {
         targets: targetResolution.target,
         targetStyle: targetPreset,
         slots: plan.mealSlots,
@@ -126,9 +128,58 @@ export default function GeneratePlanDialog({
         preferences,
         dailyBudgetIdr: budgetOn ? budget : null,
         days,
-        seed: nextSeed,
-      })
-    );
+  };
+
+  function cancelGeneration() {
+    requestRef.current?.controller.abort();
+    requestRef.current = null;
+    setGenerating(false);
+  }
+
+  useEffect(() => () => requestRef.current?.controller.abort(), []);
+  useEffect(() => {
+    // A programmatic input update can still occur while controls are disabled.
+    // Abort it just like a close so its obsolete result cannot replace preview.
+    requestRef.current?.controller.abort();
+    requestRef.current = null;
+    setGenerating(false);
+  }, [targets, targetMode, targetPreset, includeMenu, includeSaved, budgetOn, budget, preferences, days]);
+
+  async function run(nextSeed: number, shuffle = false) {
+    cancelGeneration();
+    const controller = new AbortController();
+    const id = ++nextRequestId.current;
+    requestRef.current = { id, controller };
+    setGenerating(true);
+    setGenerationMessage(shuffle ? "Searching for an equivalent, more varied week…" : "Generating your week…");
+    try {
+      // Yield before CPU-intensive planning so the loading state paints first.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      if (controller.signal.aborted) return;
+      if (shuffle && preview) {
+        const result = await searchShuffleAlternatives({
+          current: preview, generation: generationOptions, firstSeed: nextSeed,
+          generate: generatePlanWithTargets, signal: controller.signal,
+        });
+        if (controller.signal.aborted || requestRef.current?.id !== id) return;
+        if (result.changed) {
+          setPreview(result.plan); setSeed(result.seed);
+          setGenerationMessage(`Found a meaningfully different week after checking ${result.evaluated} alternatives.`);
+        } else {
+          setGenerationMessage("No meaningfully different equivalent week was found. Your current preview was kept.");
+        }
+      } else {
+        const result = generatePlanWithTargets({ ...generationOptions, seed: nextSeed });
+        if (controller.signal.aborted || requestRef.current?.id !== id) return;
+        setSeed(nextSeed); setPreview(result);
+        setGenerationMessage("Week generated and ready to review.");
+      }
+    } finally {
+      if (requestRef.current?.id === id) {
+        requestRef.current = null;
+        setGenerating(false);
+      }
+    }
   }
 
   const previewDays = preview?.days ?? [];
@@ -153,14 +204,14 @@ export default function GeneratePlanDialog({
           ? "Tastes shape the mix, not the maths"
           : "Targets, sources, then review"
       }`}
-      onClose={onClose}
+      onClose={() => { cancelGeneration(); onClose(); }}
       size="2xl"
       footer={
         <>
           {step === 2 && (
             <button
               type="button"
-              onClick={() => setStep(1)}
+              onClick={() => setStep(1)} disabled={generating}
               className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-600 text-charcoal-soft hover:text-charcoal"
             >
               <ArrowLeft size={15} /> Preferences
@@ -169,7 +220,7 @@ export default function GeneratePlanDialog({
           <div className="flex-1" />
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => { cancelGeneration(); onClose(); }}
             className="rounded-xl border border-cream-deep bg-white px-4 py-2 text-sm font-600 text-charcoal"
           >
             Cancel
@@ -185,7 +236,7 @@ export default function GeneratePlanDialog({
           ) : (
             <button
               type="button"
-              disabled={!preview || applying}
+              disabled={!preview || applying || generating}
               onClick={async () => {
                 if (!preview) return;
                 setApplying(true);
@@ -292,19 +343,19 @@ export default function GeneratePlanDialog({
                   <div><div className="mb-1 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">Daily targets</div>
                     <TargetSummary selection={{ targets: targetResolution.target, mode: targetMode, preset: targetPreset }} />
                   </div>
-                  <button type="button" onClick={() => setEditingTargets(!editingTargets)} className="shrink-0 rounded-lg border border-cream-deep bg-white px-3 py-1.5 text-xs font-700 text-tomato-dark">
+                  <button type="button" disabled={generating} onClick={() => setEditingTargets(!editingTargets)} className="shrink-0 rounded-lg border border-cream-deep bg-white px-3 py-1.5 text-xs font-700 text-tomato-dark disabled:opacity-50">
                     {editingTargets ? "Done" : "Change targets"}
                   </button>
                 </div>
               </div>
               {editingTargets && <div className="mt-3 rounded-xl border border-cream-deep bg-white p-3">
-                <MacroTargetEditor value={{ targets, mode: targetMode, preset: targetPreset }} onChange={(next) => {
+                <fieldset disabled={generating}><MacroTargetEditor value={{ targets, mode: targetMode, preset: targetPreset }} onChange={(next) => {
                   setTargets(next.targets); setTargetMode(next.mode); setTargetPreset(next.preset); setPreview(null);
                 }} />
                 <button type="button" disabled={!targetValidation.valid} onClick={async () => {
                   await onTargetsSave({ targets: targetResolution.target, mode: targetMode, preset: targetPreset });
                   setEditingTargets(false);
-                }} className="mt-3 rounded-xl bg-tomato px-3 py-2 text-sm font-700 text-cream disabled:opacity-50">Save targets</button>
+                }} className="mt-3 rounded-xl bg-tomato px-3 py-2 text-sm font-700 text-cream disabled:opacity-50">Save targets</button></fieldset>
               </div>}
 
               {/* Sources */}
@@ -318,6 +369,7 @@ export default function GeneratePlanDialog({
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
+                    disabled={generating}
                     checked={includeMenu}
                     onChange={(e) => {
                       setIncludeMenu(e.target.checked);
@@ -332,6 +384,7 @@ export default function GeneratePlanDialog({
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
+                    disabled={generating}
                     checked={includeSaved}
                     onChange={(e) => {
                       setIncludeSaved(e.target.checked);
@@ -350,6 +403,7 @@ export default function GeneratePlanDialog({
                 <label className="flex flex-wrap items-center gap-2 border-t border-cream-deep pt-2 text-sm">
                   <input
                     type="checkbox"
+                    disabled={generating}
                     checked={budgetOn}
                     onChange={(e) => {
                       setBudgetOn(e.target.checked);
@@ -364,6 +418,7 @@ export default function GeneratePlanDialog({
                     <span className="flex items-center gap-1.5">
                       <input
                         type="number"
+                        disabled={generating}
                         min={0}
                         step={10000}
                         value={budget}
@@ -383,6 +438,7 @@ export default function GeneratePlanDialog({
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
+                    disabled={generating}
                     checked={replace}
                     onChange={(e) => setReplace(e.target.checked)}
                     className="h-4 w-4 accent-tomato"
@@ -397,22 +453,26 @@ export default function GeneratePlanDialog({
               <div className="mt-4 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => run(seed)}
-                  disabled={!targetValidation.valid}
+                  onClick={() => void run(seed)}
+                  disabled={!targetValidation.valid || generating}
                   className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-tomato px-4 py-2.5 font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
                 >
-                  <Sparkles size={16} /> {preview ? "Regenerate" : "Generate"}
+                  <Sparkles size={16} /> {generating ? "Generating…" : preview ? "Regenerate" : "Generate"}
                 </button>
                 {preview && (
                   <button
                     type="button"
-                    onClick={() => run(seed + 1)}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-cream-deep bg-white px-4 py-2.5 font-600 text-charcoal hover:border-tomato-soft"
+                    onClick={() => void run(seed + 1, true)}
+                    disabled={generating}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-cream-deep bg-white px-4 py-2.5 font-600 text-charcoal hover:border-tomato-soft disabled:opacity-50"
                   >
-                    <RefreshCw size={15} /> Shuffle
+                    <RefreshCw size={15} className={generating ? "animate-spin" : ""} /> Shuffle
                   </button>
                 )}
               </div>
+              <p className="mt-2 min-h-5 text-xs text-charcoal-soft" role="status" aria-live="polite">
+                {generationMessage}
+              </p>
 
               {/* Preview */}
               {preview && (
