@@ -1,9 +1,11 @@
 "use client";
 
-import { AlertTriangle, Plus } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { AlertTriangle, Plus, X } from "lucide-react";
 import type { Assignment, Plan, Dish } from "@/lib/storage/types";
 import {
   DAY_SHORT,
+  DAY_NAMES,
   assignmentMacros,
   assignmentName,
   assignmentsFor,
@@ -37,7 +39,10 @@ export default function PlanWeekGrid({
   onOpenMeal: (assignment: Assignment) => void;
   onAddMeal: (day: number, slot: string) => void;
 }) {
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+
   return (
+    <>
     <div className="scroll-slim -mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
       <div className="grid min-w-[52rem] grid-cols-7 gap-2">
         {DAY_SHORT.map((dayName, dayIndex) => {
@@ -121,7 +126,13 @@ export default function PlanWeekGrid({
                 })}
               </div>
 
-              <div className="mt-2 border-t border-cream-deep pt-1.5 text-center">
+              <button
+                type="button"
+                onClick={() => setSelectedDay(dayIndex)}
+                aria-pressed={selectedDay === dayIndex}
+                aria-label={`View summary for ${DAY_NAMES[dayIndex]}, ${formatShortDate(date)}`}
+                className="mt-2 w-full rounded-lg border-t border-cream-deep pt-1.5 text-center outline-none transition-colors hover:bg-cream focus-visible:ring-2 focus-visible:ring-tomato aria-pressed:bg-tomato-soft/10"
+              >
                 <div className="font-display text-sm font-700 text-charcoal">
                   {round0(totals.energy_kcal)}
                 </div>
@@ -135,13 +146,80 @@ export default function PlanWeekGrid({
                 )}
                 {plan.targets && adherence && (
                   <div className="mt-2 text-left">
-                    <TargetAdherence actual={totals} targets={plan.targets} diagnostics={adherence} targetSource="Explicit" compact />
+                    <TargetAdherence actual={totals} targets={plan.targets} diagnostics={adherence} presentation="summary" />
                   </div>
                 )}
-              </div>
+              </button>
             </div>
           );
         })}
+      </div>
+    </div>
+    {selectedDay !== null && (
+      <DailySummary
+        plan={plan}
+        week={week}
+        day={selectedDay}
+        dishes={dishes}
+        onClose={() => setSelectedDay(null)}
+      />
+    )}
+    </>
+  );
+}
+
+function DailySummary({ plan, week, day, dishes, onClose }: {
+  plan: Plan;
+  week: number;
+  day: number;
+  dishes: Map<string, Dish>;
+  onClose: () => void;
+}) {
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const totals = dayTotals(plan, week, day, dishes);
+  const price = dayPrice(plan, week, day, dishes);
+  const date = dateFor(plan, week, day);
+  const adherence = plan.targets ? diagnoseDailyAdherence(totals, plan.targets, {
+    complete: plan.mealSlots.every((slot) => assignmentsFor(plan, week, day, slot).length > 0),
+  }) : null;
+
+  useEffect(() => {
+    restoreFocusRef.current = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      restoreFocusRef.current?.focus();
+    };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-end bg-charcoal/40 lg:items-stretch lg:justify-end" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={onClose}>
+      <div ref={panelRef} tabIndex={-1} onClick={(event) => event.stopPropagation()} className="scroll-slim max-h-[90vh] w-full overflow-y-auto rounded-t-xl2 bg-cream p-5 shadow-card outline-none lg:h-full lg:max-h-none lg:max-w-md lg:rounded-none">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-700 uppercase tracking-wide text-charcoal-soft">Daily summary</p>
+            <h2 id={titleId} className="font-display text-xl font-700 text-charcoal">{DAY_NAMES[day]}, {formatShortDate(date)}</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close daily summary" className="rounded-lg p-2 text-charcoal-soft hover:bg-cream-deep focus-visible:ring-2 focus-visible:ring-tomato"><X size={18} /></button>
+        </div>
+        <dl className="mt-5 grid grid-cols-2 gap-2 rounded-xl2 bg-white/70 p-3 text-sm">
+          <div><dt className="text-charcoal-soft">Calories</dt><dd className="font-700 tabular-nums">{round0(totals.energy_kcal)} kcal</dd></div>
+          <div><dt className="text-charcoal-soft">Protein</dt><dd className="font-700 tabular-nums">{round0(totals.protein_g)} g</dd></div>
+          <div><dt className="text-charcoal-soft">Carbohydrates</dt><dd className="font-700 tabular-nums">{round0(totals.carbs_g)} g</dd></div>
+          <div><dt className="text-charcoal-soft">Fat</dt><dd className="font-700 tabular-nums">{round0(totals.fat_g)} g</dd></div>
+          <div className="col-span-2 border-t border-cream-deep pt-2"><dt className="text-charcoal-soft">Price</dt><dd className="font-700 tabular-nums">{formatPrice(price)}</dd></div>
+        </dl>
+        {plan.targets && adherence ? (
+          <div className="mt-4">
+            <TargetAdherence actual={totals} targets={plan.targets} diagnostics={adherence} targetSource="Explicit" />
+          </div>
+        ) : (
+          <p className="mt-4 rounded-lg bg-white/70 p-3 text-sm text-charcoal-soft">Set daily targets to see target values, deviations, and an adherence explanation.</p>
+        )}
       </div>
     </div>
   );
