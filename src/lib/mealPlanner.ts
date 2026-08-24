@@ -540,6 +540,11 @@ interface CompleteDay {
   diagnostics: DailyAdherenceDiagnostics;
 }
 
+interface ForcedCandidate {
+  candidate: Candidate;
+  slotIndex: number;
+}
+
 function searchCompleteDays(
   fillable: SlotPlan[],
   target: MacroTargets,
@@ -548,12 +553,16 @@ function searchCompleteDays(
   budget: number | null,
   complete: boolean,
   allowRepeats = false,
-  forcedFirst?: Candidate
+  forced?: ForcedCandidate
 ): CompleteDay[] {
+  if (forced && (forced.slotIndex < 0 || forced.slotIndex >= fillable.length)) return [];
   const suffix: MacroRange[] = new Array(fillable.length + 1);
   suffix[fillable.length] = emptyRange();
   for (let index = fillable.length - 1; index >= 0; index -= 1) {
-    suffix[index] = addRange(fillable[index].reach, suffix[index + 1]);
+    const reach = forced?.slotIndex === index
+      ? rangeOver([forced.candidate])
+      : fillable[index].reach;
+    suffix[index] = addRange(reach, suffix[index + 1]);
   }
 
   let beam: DayState[] = [{
@@ -565,18 +574,19 @@ function searchCompleteDays(
     const plan = fillable[index];
     const remainingWeight = fillable.slice(index).reduce((sum, item) => sum + item.weight, 0);
     const share = remainingWeight > 0 ? plan.weight / remainingWeight : 1;
-    const searchPlan = index === 0 && forcedFirst
-      ? { ...plan, ready: [forcedFirst], reach: rangeOver([forcedFirst]) }
+    const forcedDepth = forced?.slotIndex === index;
+    const searchPlan = forcedDepth
+      ? { ...plan, ready: [forced.candidate], reach: rangeOver([forced.candidate]) }
       : plan;
     const expanded = expandDepth(beam, searchPlan, index, fillable.length, share, suffix[index + 1],
-      target, { ...options, includeComposed: index === 0 && forcedFirst ? false : options.includeComposed },
+      target, { ...options, includeComposed: forcedDepth ? false : options.includeComposed },
       preferences, budget, allowRepeats);
     // A duplicate ban must never leave a slot unfillable. When nothing survives
     // it, the depth is replayed with repeats allowed — the explicit fallback,
     // not the normal path.
     beam = retainBeam(expanded.length ? expanded
       : expandDepth(beam, searchPlan, index, fillable.length, share, suffix[index + 1],
-        target, { ...options, includeComposed: index === 0 && forcedFirst ? false : options.includeComposed },
+        target, { ...options, includeComposed: forcedDepth ? false : options.includeComposed },
         preferences, budget, true), index,
       preferences.proteinLean.length > 0);
     if (!beam.length) return [];
@@ -1119,6 +1129,99 @@ export class InvalidMacroTargetError extends Error {
   }
 }
 
+const FORCED_REPRESENTATIVE_MIN = 6;
+const FORCED_REPRESENTATIVE_MAX = 12;
+
+function slotNeedsRecovery(days: CompleteDay[], slotIndex: number): boolean {
+  if (!days.length) return true;
+  const candidates = days.map((day) => day.picks[slotIndex]).filter(Boolean);
+  if (!candidates.length) return true;
+  const shapes = new Set(candidates.map((candidate) => candidate.dishShape));
+  const styles = new Set(candidates.map((candidate) => candidate.dishStyle));
+  const counts = new Map<string, number>();
+  for (const candidate of candidates) {
+    counts.set(candidate.id, (counts.get(candidate.id) ?? 0) + 1);
+  }
+  const largestShare = Math.max(...counts.values()) / candidates.length;
+  return shapes.size === 1 || styles.size === 1 || largestShare > 0.7;
+}
+
+/**
+ * A small, portion-independent cross-section of a slot's explored catalog.
+ * Breakfast keeps its historical emphasis on style; the same greedy coverage
+ * then gives every slot independent family and cuisine representation.
+ */
+function forcedRepresentatives(
+  plan: SlotPlan,
+  target: MacroTargets,
+  slotShare: number
+): Candidate[] {
+  const shareEnergy = target.energy_kcal * slotShare;
+  const candidates = [...plan.ready,
+    ...[...plan.composed.values()].flatMap((entry) => entry.candidates)]
+    .sort((a, b) => Math.abs(a.macros.energy_kcal - shareEnergy) -
+      Math.abs(b.macros.energy_kcal - shareEnergy) || (a.id < b.id ? -1 : 1));
+
+  const byShape = new Map<string, Candidate>();
+  for (const candidate of candidates) {
+    if (!byShape.has(candidate.dishShape)) byShape.set(candidate.dishShape, candidate);
+  }
+  let available = [...byShape.values()];
+  if (slotKindOf(plan.slot) === "breakfast") {
+    const perStyle = new Map<string, number>();
+    available = available.filter((candidate) => {
+      const count = perStyle.get(candidate.dishStyle) ?? 0;
+      if (count >= 3) return false;
+      perStyle.set(candidate.dishStyle, count + 1);
+      return true;
+    });
+  }
+
+  const selected: Candidate[] = [];
+  const covered = new Set<string>();
+  while (available.length && selected.length < FORCED_REPRESENTATIVE_MAX) {
+    let bestIndex = 0;
+    let bestNovelty = -1;
+    for (let index = 0; index < available.length; index += 1) {
+      const candidate = available[index];
+      const dimensions = [
+        `shape:${candidate.dishShape}`,
+        `style:${candidate.dishStyle}`,
+        `protein:${candidate.proteinFamily}`,
+        `carb:${candidate.carbFamily}`,
+        `cuisine:${candidate.cuisineFamily}`,
+      ];
+      let novelty = dimensions.filter((value) => !covered.has(value)).length;
+      if (slotKindOf(plan.slot) === "breakfast" && !covered.has(dimensions[1])) novelty += 2;
+      if (novelty > bestNovelty) {
+        bestNovelty = novelty;
+        bestIndex = index;
+      }
+    }
+    const [candidate] = available.splice(bestIndex, 1);
+    selected.push(candidate);
+    covered.add(`shape:${candidate.dishShape}`);
+    covered.add(`style:${candidate.dishStyle}`);
+    covered.add(`protein:${candidate.proteinFamily}`);
+    covered.add(`carb:${candidate.carbFamily}`);
+    covered.add(`cuisine:${candidate.cuisineFamily}`);
+    if (bestNovelty <= 1 && selected.length >= FORCED_REPRESENTATIVE_MIN) break;
+  }
+  return selected;
+}
+
+function bestEquivalentDays(days: CompleteDay[]): CompleteDay[] {
+  if (!days.length) return [];
+  const bestRank = Math.min(...days.map((day) =>
+    ADHERENCE_RANK[day.diagnostics.classification]));
+  const ranked = days.filter((day) =>
+    ADHERENCE_RANK[day.diagnostics.classification] === bestRank);
+  if (bestRank <= ADHERENCE_RANK["Within tolerance"]) return ranked;
+  const bestError = Math.min(...ranked.map((day) => day.diagnostics.normalizedError));
+  return ranked.filter((day) =>
+    day.diagnostics.normalizedError <= bestError + COMPLETE_DAY_ERROR_EQUIVALENCE);
+}
+
 export function generatePlanWithTargets(options: GenerateOptions): GeneratedPlan {
   const resolution = resolveTarget({
     targets: options.targets,
@@ -1167,30 +1270,18 @@ export function generatePlanWithTargets(options: GenerateOptions): GeneratedPlan
 
   const slotNames = fillable.map((plan) => plan.slot);
   const ordinaryDays = searchCompleteDays(fillable, target, options, preferences, budget, complete);
-  // Test each published breakfast as a complete-day proposition. A large
-  // breakfast is not infeasible merely because it loses the partial-day beam:
-  // lock it, give lunch/dinner/snack the real residual, and let only the final
-  // adherence class decide whether that breakfast survives.
-  const breakfastPlan = target.energy_kcal >= 3000 && fillable[0] &&
-    slotKindOf(fillable[0].slot) === "breakfast"
-    ? fillable[0] : undefined;
-  const generatedBreakfastRepresentatives = breakfastPlan
-    ? [...breakfastPlan.composed.values()].flatMap((entry) => entry.candidates)
-      .sort((a, b) => Math.abs(a.macros.energy_kcal - target.energy_kcal * 0.25) -
-        Math.abs(b.macros.energy_kcal - target.energy_kcal * 0.25))
-      .filter((candidate, index, all) => all.slice(0, index)
-        .filter((other) => other.dishStyle === candidate.dishStyle).length < 3)
-    : [];
-  const lockedBreakfastDays = breakfastPlan
-    ? [...new Map([
-        ...breakfastPlan.ready.map((candidate) => [candidate.dishShape, candidate] as const),
-        ...generatedBreakfastRepresentatives
-          .map((candidate) => [`generated:${candidate.id}`, candidate] as const),
-      ]).values()]
-      .flatMap((candidate) => searchCompleteDays(fillable, target, options, preferences,
-        budget, complete, false, candidate))
-    : [];
-  let pool = selectDayPool([...ordinaryDays, ...lockedBreakfastDays], slotNames);
+  const ordinaryBestRank = ordinaryDays.length
+    ? Math.min(...ordinaryDays.map((day) => ADHERENCE_RANK[day.diagnostics.classification]))
+    : Number.POSITIVE_INFINITY;
+  const ordinaryBestDays = ordinaryDays.filter((day) =>
+    ADHERENCE_RANK[day.diagnostics.classification] === ordinaryBestRank);
+  const recoveredDays = fillable.flatMap((plan, slotIndex) =>
+    slotNeedsRecovery(ordinaryBestDays, slotIndex)
+      ? forcedRepresentatives(plan, target, plan.weight / weightTotal).flatMap((candidate) =>
+        searchCompleteDays(fillable, target, options, preferences, budget, complete, false,
+          { candidate, slotIndex }))
+      : []);
+  let pool = selectDayPool(bestEquivalentDays([...ordinaryDays, ...recoveredDays]), slotNames);
   // The explicit fallback. Normal generation never serves the same dish twice in
   // a day, but a ban is not worth an infeasible day: when nothing compliant can
   // be built without repeating, the search is rerun with repeats permitted and
