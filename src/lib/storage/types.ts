@@ -73,6 +73,9 @@ export type MacroStyle =
   | "low_carb"
   | "high_carb";
 
+/** How the resolved targets were chosen. A preset exists only in preset mode. */
+export type TargetMode = "preset" | "custom";
+
 export type ProteinSource =
   | "chicken"
   | "beef"
@@ -87,7 +90,8 @@ export type ProteinSource =
  * because a dislike or allergy is not a preference.
  */
 export interface ClientPreferences {
-  macroStyle: MacroStyle;
+  /** @deprecated Target selection now lives on Plan.targetMode/targetPreset. */
+  macroStyle?: MacroStyle;
   proteinLean: ProteinSource[];
   avoidIngredientIds: string[];
 }
@@ -115,6 +119,10 @@ export interface Plan extends Entity {
   notes?: string;
   /** Optional daily goals; adherence UI only appears when this is set. */
   targets: MacroTargets | null;
+  /** Authoritative target-selection mode; never inferred from target completeness. */
+  targetMode: TargetMode;
+  /** Present only while targetMode is "preset". */
+  targetPreset?: MacroStyle;
   /** Tastes, remembered between generations. */
   preferences?: ClientPreferences;
   /** Editable meal slot names, e.g. ["Breakfast", "Lunch", "Dinner"]. */

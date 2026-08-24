@@ -315,7 +315,9 @@ export default function WeekPlanner() {
     generated: GeneratedDay[],
     replace: boolean,
     preferences: ClientPreferences,
-    resolvedTarget: MacroTargets
+    resolvedTarget: MacroTargets,
+    targetMode: Plan["targetMode"],
+    targetPreset?: Plan["targetPreset"]
   ): Promise<boolean> {
     if (!plan) return false;
     const kept = replace
@@ -348,6 +350,7 @@ export default function WeekPlanner() {
     // target and the preferences, all at once. The dialog stays open if it
     // fails, so the generated week is still in hand rather than lost.
     const saved = await persist({ ...plan, preferences, targets: resolvedTarget,
+      targetMode, ...(targetMode === "preset" ? { targetPreset } : { targetPreset: undefined }),
       assignments: [...kept, ...additions] });
     if (saved) setGenerateOpen(false);
     return saved;

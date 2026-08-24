@@ -5,6 +5,14 @@ const macroEnergy = (target: ReturnType<typeof resolveTarget>["target"]) =>
   target.protein_g * 4 + target.carbs_g * 4 + target.fat_g * 9;
 
 describe("resolveTarget", () => {
+  it("uses the stored mode instead of inferring precedence from four values", () => {
+    const complete = { energy_kcal: 2000, protein_g: 1, carbs_g: 2, fat_g: 3 };
+    expect(resolveTarget({ targets: complete, mode: "preset", preset: "low_carb" }))
+      .toMatchObject({ source: "derived", selectedStyle: "Low carb / high fat" });
+    expect(resolveTarget({ targets: complete, mode: "custom", preset: "low_carb" }))
+      .toMatchObject({ target: complete, source: "explicit", selectedStyle: "Explicit" });
+  });
+
   it("preserves a complete explicit target exactly, even if its macro energy differs", () => {
     const explicit = { energy_kcal: 2101, protein_g: 151, carbs_g: 199, fat_g: 64 };
     expect(resolveTarget({ targets: explicit, style: "low_carb" })).toMatchObject({
@@ -14,7 +22,7 @@ describe("resolveTarget", () => {
 
   it.each([
     ["High protein", [0.35, 0.35, 0.3]], ["Balanced", [0.25, 0.45, 0.3]],
-    ["Low carb", [0.3, 0.15, 0.55]], ["High carb", [0.2, 0.55, 0.25]],
+    ["Low carb / high fat", [0.3, 0.15, 0.55]], ["High carb", [0.2, 0.55, 0.25]],
   ] as const)("derives and reconciles %s", (style, split) => {
     const result = resolveTarget({ targets: { energy_kcal: 2123 }, style });
     expect(result.source).toBe("derived");

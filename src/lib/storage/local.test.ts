@@ -60,6 +60,7 @@ describe("a guest's plan on this device", () => {
     id: "primary", createdAt: "2026-04-01T00:00:00.000Z",
     updatedAt: "2026-04-01T00:00:00.000Z", ownerUid: "", title: "My week",
     targets: { energy_kcal: 2000, protein_g: 125, carbs_g: 225, fat_g: 66.7 },
+    targetMode: "custom",
     mealSlots: ["Breakfast", "Lunch", "Dinner"], programStartDate: "2026-03-30",
     weekCount: 4, status: "draft", submittedWeeks: [],
     assignments: Array.from({ length: 21 }, (_, index) => ({

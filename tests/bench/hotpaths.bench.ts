@@ -39,6 +39,7 @@ function fullPlan(): Plan {
   return {
     id: "p1", createdAt: "", updatedAt: "", ownerUid: "u1",
     title: "My week", targets: { energy_kcal: 2200, protein_g: 160, carbs_g: 220, fat_g: 70 },
+    targetMode: "custom",
     mealSlots: SLOTS, programStartDate: "2026-08-24", weekCount: 6,
     assignments, status: "draft", submittedWeeks: [],
   };

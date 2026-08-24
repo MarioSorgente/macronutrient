@@ -20,6 +20,7 @@ const plan: Plan = {
   submittedWeeks: [],
   mealSlots: ["Lunch"],
   targets: { energy_kcal: 600, protein_g: 35, carbs_g: 70, fat_g: 20 },
+  targetMode: "custom",
   assignments: [{
     id: "meal-1",
     week: 1,

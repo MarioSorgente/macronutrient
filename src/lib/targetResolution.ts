@@ -1,12 +1,16 @@
-import type { MacroStyle, MacroTargets } from "@/lib/storage/types";
+import type { MacroStyle, MacroTargets, TargetMode as StoredTargetMode } from "@/lib/storage/types";
 
 /** Modes accepted by target resolution. Explicit is selected automatically for a complete target. */
-export type TargetMode = "Explicit" | "High protein" | "Balanced" | "Low carb" | "High carb" | "Auto";
+export type TargetMode = "Explicit" | "High protein" | "Balanced" | "Low carb / high fat" | "High carb" | "Auto";
 export type DerivationStyle = Exclude<TargetMode, "Explicit">;
 
 export interface TargetResolutionInput {
   /** A complete target is authoritative and is never normalised to its calories. */
   targets?: Partial<MacroTargets> | null;
+  /** Explicit persisted mode. When omitted, legacy behavior is used for callers. */
+  mode?: StoredTargetMode | null;
+  /** Active preset, used only in preset mode. */
+  preset?: MacroStyle | null;
   /** Auto (or an omitted style) resolves to Balanced. */
   style?: DerivationStyle | MacroStyle | null;
   /** Used only when targets does not contain a usable calorie value. */
@@ -65,7 +69,7 @@ export const DEFAULT_DERIVED_ENERGY_KCAL = 2000;
 const RULES = {
   "High protein": { protein: 0.35, carbs: 0.35, fat: 0.3 },
   Balanced: { protein: 0.25, carbs: 0.45, fat: 0.3 },
-  "Low carb": { protein: 0.3, carbs: 0.15, fat: 0.55 },
+  "Low carb / high fat": { protein: 0.3, carbs: 0.15, fat: 0.55 },
   "High carb": { protein: 0.2, carbs: 0.55, fat: 0.25 },
 } as const;
 
@@ -74,7 +78,7 @@ type ConcreteStyle = keyof typeof RULES;
 const STYLE_NAMES: Record<MacroStyle, ConcreteStyle> = {
   high_protein: "High protein",
   balanced: "Balanced",
-  low_carb: "Low carb",
+  low_carb: "Low carb / high fat",
   high_carb: "High carb",
 };
 
@@ -93,15 +97,21 @@ function concreteStyle(style: TargetResolutionInput["style"]): ConcreteStyle {
  * Resolve the planner's single source of truth for daily targets.
  *
  * Style rules are energy shares (P/C/F respectively): High protein 35/35/30,
- * Balanced 25/45/30, Low carb 30/15/55, and High carb 20/55/25. Protein and
+ * Balanced 25/45/30, Low carb / high fat 30/15/55, and High carb 20/55/25. Protein and
  * carbohydrate use 4 kcal/g and fat uses 9 kcal/g. Gram values deliberately
  * retain precision: rounding each macro independently would make their energy
  * disagree with the requested calories.
  */
 export function resolveTarget(input: TargetResolutionInput = {}): TargetResolution {
-  if (complete(input.targets)) {
+  const explicitMode = input.mode === "custom";
+  const presetMode = input.mode === "preset";
+  if (explicitMode || (!presetMode && complete(input.targets))) {
+    const target = complete(input.targets)
+      ? { ...input.targets }
+      : resolveTarget({ targets: input.targets, mode: "preset", preset: "balanced",
+          defaultEnergyKcal: input.defaultEnergyKcal }).target;
     return {
-      target: { ...input.targets },
+      target,
       source: "explicit",
       selectedStyle: "Explicit",
       energySource: "supplied",
@@ -109,7 +119,7 @@ export function resolveTarget(input: TargetResolutionInput = {}): TargetResoluti
     };
   }
 
-  const style = concreteStyle(input.style);
+  const style = concreteStyle(input.preset ?? input.style);
   const split = RULES[style];
   const suppliedEnergy = input.targets?.energy_kcal;
   // Auto resolves deterministically to Balanced at the documented default

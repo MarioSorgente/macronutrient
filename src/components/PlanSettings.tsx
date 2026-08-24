@@ -9,7 +9,6 @@ import {
 } from "@/lib/storage/types";
 import { TARGET_FIELDS } from "@/lib/clients";
 import { resolveTarget, scaleTargetEnergy, validateMacroTarget } from "@/lib/targetResolution";
-import { targetsFromStyle } from "@/lib/preferences";
 import Modal from "@/components/ui/Modal";
 import Field from "@/components/ui/Field";
 
@@ -36,7 +35,8 @@ export default function PlanSettings({
   const [targets, setTargets] = useState<MacroTargets>(
     resolveTarget({
       targets: plan.targets,
-      style: plan.preferences?.macroStyle,
+      mode: plan.targetMode,
+      preset: plan.targetPreset,
     }).target
   );
   const targetValidation = validateMacroTarget(targets);
@@ -62,6 +62,8 @@ export default function PlanSettings({
       weekCount,
       mealSlots: cleanSlots.length ? cleanSlots : plan.mealSlots,
       targets: targetsOn ? targets : null,
+      targetMode: "custom",
+      targetPreset: undefined,
     });
   }
 
@@ -232,9 +234,7 @@ export default function PlanSettings({
                     onChange={(e) => {
                       const value = Math.max(0, Number(e.target.value) || 0);
                       if (field.key === "energy_kcal") {
-                        setTargets(plan.preferences?.macroStyle
-                          ? targetsFromStyle(value, plan.preferences.macroStyle)
-                          : scaleTargetEnergy(targets, value));
+                        setTargets(scaleTargetEnergy(targets, value));
                       } else {
                         setTargets({ ...targets, [field.key]: value });
                       }
@@ -256,4 +256,3 @@ export default function PlanSettings({
     </Modal>
   );
 }
-

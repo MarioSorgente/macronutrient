@@ -16,6 +16,7 @@ import type {
   Dish,
   MacroStyle,
   MacroTargets,
+  TargetMode,
   ProteinSource,
 } from "@/lib/storage/types";
 import { DEFAULT_PREFERENCES } from "@/lib/storage/types";
@@ -29,7 +30,7 @@ import { getIngredient } from "@/lib/database";
 import { generatePlanWithTargets, type GeneratedPlan } from "@/lib/mealPlanner";
 import { formatIdr, formatPrice } from "@/lib/pricing";
 import { round0, round1 } from "@/lib/format";
-import { resolveTarget, scaleTargetEnergy, validateMacroTarget } from "@/lib/targetResolution";
+import { resolveTarget, validateMacroTarget } from "@/lib/targetResolution";
 import IngredientTypeahead from "@/components/IngredientTypeahead";
 import Modal from "@/components/ui/Modal";
 import TargetAdherence from "@/components/TargetAdherence";
@@ -56,8 +57,10 @@ export default function GeneratePlanDialog({
     days: GeneratedPlan["days"],
     replace: boolean,
     preferences: ClientPreferences,
-    /** The target generation actually used, so the plan can remember it. */
-    resolvedTarget: MacroTargets
+    /** The target generation actually used, plus its explicit selection mode. */
+    resolvedTarget: MacroTargets,
+    targetMode: TargetMode,
+    targetPreset?: MacroStyle
   ) => Promise<boolean> | void;
   onClose: () => void;
 }) {
@@ -68,10 +71,14 @@ export default function GeneratePlanDialog({
   );
   const initialResolution = resolveTarget({
     targets: plan.targets,
-    style: plan.preferences?.macroStyle,
+    mode: plan.targetMode,
+    preset: plan.targetPreset,
   });
   const [targets, setTargets] = useState<MacroTargets>(initialResolution.target);
-  const [targetsExplicit, setTargetsExplicit] = useState(Boolean(plan.targets));
+  const [targetMode, setTargetMode] = useState<TargetMode>(plan.targetMode);
+  const [targetPreset, setTargetPreset] = useState<MacroStyle | undefined>(
+    plan.targetMode === "preset" ? plan.targetPreset ?? "balanced" : undefined
+  );
 
   const [includeMenu, setIncludeMenu] = useState(true);
   const [includeSaved, setIncludeSaved] = useState(true);
@@ -84,11 +91,14 @@ export default function GeneratePlanDialog({
 
   const days = useMemo(() => [0, 1, 2, 3, 4, 5, 6], []);
 
-  /** Picking a style restates the targets; the numbers stay editable after. */
+  /** Presets always restate every macro; replacing custom values is explicit. */
   function chooseStyle(macroStyle: MacroStyle) {
-    setPreferences({ ...preferences, macroStyle });
+    if (targetMode === "custom" && !window.confirm(
+      "Use this preset? It will recalculate and replace all of your custom macro targets."
+    )) return;
+    setTargetMode("preset");
+    setTargetPreset(macroStyle);
     setTargets(targetsFromStyle(targets.energy_kcal, macroStyle));
-    setTargetsExplicit(false);
     setPreview(null);
   }
 
@@ -105,8 +115,9 @@ export default function GeneratePlanDialog({
 
 
   const targetResolution = resolveTarget({
-    targets: targetsExplicit ? targets : { energy_kcal: targets.energy_kcal },
-    style: preferences.macroStyle,
+    targets,
+    mode: targetMode,
+    preset: targetPreset,
   });
   const targetValidation = validateMacroTarget(targetResolution.target);
 
@@ -115,7 +126,7 @@ export default function GeneratePlanDialog({
     setPreview(
       generatePlanWithTargets({
         targets: targetResolution.target,
-        targetStyle: preferences.macroStyle,
+        targetStyle: targetPreset,
         slots: plan.mealSlots,
         includeMenuDishes: includeMenu,
         includeSavedDishes: includeSaved,
@@ -188,7 +199,7 @@ export default function GeneratePlanDialog({
                 setApplying(true);
                 try {
                   await onApply(preview.days, replace, preferences,
-                    preview.resolvedTarget);
+                    preview.resolvedTarget, targetMode, targetPreset);
                 } finally {
                   setApplying(false);
                 }
@@ -203,43 +214,8 @@ export default function GeneratePlanDialog({
     >
           {step === 1 ? (
             <>
-              {/* Macro style */}
-              <h4 className="mb-2 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
-                Macro style
-              </h4>
-              <div className="grid grid-cols-2 gap-2">
-                {MACRO_STYLES.map((style) => {
-                  const active = preferences.macroStyle === style.id;
-                  return (
-                    <button
-                      key={style.id}
-                      type="button"
-                      onClick={() => chooseStyle(style.id)}
-                      className={
-                        "rounded-xl border px-3 py-2 text-left transition-colors " +
-                        (active
-                          ? "border-tomato bg-tomato/5"
-                          : "border-cream-deep bg-white hover:border-tomato-soft")
-                      }
-                    >
-                      <div className="text-sm font-700 text-charcoal">
-                        {style.label}
-                      </div>
-                      <div className="text-[11px] text-charcoal-soft">
-                        {style.description}
-                      </div>
-                      <div className="mt-0.5 text-[10px] tabular-nums text-charcoal-soft">
-                        P {Math.round(style.split.protein * 100)}% · C{" "}
-                        {Math.round(style.split.carbs * 100)}% · F{" "}
-                        {Math.round(style.split.fat * 100)}%
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
               {/* Protein lean */}
-              <h4 className="mb-1 mt-5 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
+              <h4 className="mb-1 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
                 More of…
               </h4>
               <p className="mb-2 text-[11px] text-charcoal-soft">
@@ -322,6 +298,31 @@ export default function GeneratePlanDialog({
               <h4 className="mb-2 text-[11px] font-700 uppercase tracking-wide text-charcoal-soft">
                 Daily targets
               </h4>
+              <div className="mb-3 grid grid-cols-2 gap-2" role="group" aria-label="Target mode">
+                {([['preset', 'Use a preset'], ['custom', 'Set my own macros']] as const).map(([mode, label]) => (
+                  <button key={mode} type="button" onClick={() => {
+                    if (mode === "preset") chooseStyle(targetPreset ?? "balanced");
+                    else { setTargetMode("custom"); setTargetPreset(undefined); setPreview(null); }
+                  }} className={"rounded-xl border px-3 py-2 text-sm font-700 " +
+                    (targetMode === mode ? "border-tomato bg-tomato/5 text-charcoal" : "border-cream-deep bg-white text-charcoal-soft")}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {targetMode === "preset" && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    {MACRO_STYLES.map((style) => <button key={style.id} type="button"
+                      onClick={() => chooseStyle(style.id)}
+                      className={"rounded-xl border px-3 py-2 text-left " + (targetPreset === style.id ? "border-tomato bg-tomato/5" : "border-cream-deep bg-white")}>
+                      <div className="text-sm font-700">{style.label}</div>
+                      <div className="text-[11px] text-charcoal-soft">{style.description}</div>
+                      <div className="text-[10px] text-charcoal-soft">P {style.split.protein * 100}% · C {style.split.carbs * 100}% · F {style.split.fat * 100}%</div>
+                    </button>)}
+                  </div>
+                  <p className="mt-2 text-xs text-charcoal-soft">Choosing a preset recalculates all macro targets.</p>
+                </>
+              )}
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {TARGET_FIELDS.map((field) => (
                   <label key={field.key} className="text-xs">
@@ -331,19 +332,19 @@ export default function GeneratePlanDialog({
                     <input
                       type="number"
                       min={0}
-                      value={targetResolution.target[field.key]}
+                      value={targetMode === "preset" && field.key !== "energy_kcal" ? Math.round(targetResolution.target[field.key]) : targets[field.key]}
+                      readOnly={targetMode === "preset" && field.key !== "energy_kcal"}
                       onChange={(e) => {
                         const value = Math.max(0, Number(e.target.value) || 0);
                         // Changing calories restates the split; changing a macro
                         // is taken as a deliberate override and left alone.
-                        setTargetsExplicit(field.key !== "energy_kcal");
-                        setTargets(
-                          field.key === "energy_kcal"
-                            ? (preferences.macroStyle
-                              ? targetsFromStyle(value, preferences.macroStyle)
-                              : scaleTargetEnergy(targets, value))
-                            : { ...targets, [field.key]: value }
-                        );
+                        if (field.key !== "energy_kcal") {
+                          setTargetMode("custom");
+                          setTargetPreset(undefined);
+                        }
+                        setTargets(field.key === "energy_kcal" && targetMode === "preset"
+                          ? targetsFromStyle(value, targetPreset ?? "balanced")
+                          : { ...targets, [field.key]: value });
                         setPreview(null);
                       }}
                       className="no-spin w-full rounded-lg border border-cream-deep bg-white px-2 py-1.5 text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
@@ -363,9 +364,7 @@ export default function GeneratePlanDialog({
                 data-testid="resolved-target"
               >
                 <div className="font-700 text-charcoal">
-                  Resolved target · {targetResolution.source === "explicit"
-                    ? "Explicit"
-                    : `Derived · ${targetResolution.selectedStyle === "Balanced" && !preferences.macroStyle ? "Auto → Balanced" : targetResolution.selectedStyle}`}
+                  Resolved target · {targetMode === "custom" ? "Custom" : `Preset · ${targetResolution.selectedStyle}`}
                 </div>
                 <div className="mt-0.5 tabular-nums">
                   {round0(targetResolution.target.energy_kcal)} kcal · P{" "}

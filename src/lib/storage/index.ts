@@ -85,7 +85,15 @@ function createRepository<T extends Entity>(
   const repository = cloudPath
     ? createLazyFirestoreRepository<T>(cloudPath)
     : createLocalRepository<T>(localKey, migrate);
-  return instrumentRepository(kind, repository);
+  if (!migrate || !cloudPath) return instrumentRepository(kind, repository);
+  const migrated: Repository<T> = {
+    list: async () => (await repository.list()).map(migrate).filter((x): x is T => x !== null),
+    latest: async () => migrate(await repository.latest()),
+    get: async (id) => migrate(await repository.get(id)),
+    save: (entity) => repository.save(entity),
+    remove: (id) => repository.remove(id),
+  };
+  return instrumentRepository(kind, migrated);
 }
 
 // --- Dishes -----------------------------------------------------------------
@@ -121,7 +129,7 @@ function migrateDish(raw: unknown): Dish | null {
  * pre-account shape: what used to be a coach's `Client` (with `name` and
  * `plan`) becomes the owner's own `Plan` (with `title` and `assignments`).
  */
-function migratePlan(raw: unknown): Plan | null {
+export function migratePlan(raw: unknown): Plan | null {
   if (!raw || typeof raw !== "object") return null;
   const legacy = raw as Partial<Plan> & { name?: string; plan?: unknown };
   if (!legacy.id) return null;
@@ -140,6 +148,12 @@ function migratePlan(raw: unknown): Plan | null {
   // honest default: it says "older than anything real", which is what an
   // undated record is.
   const epoch = new Date(0).toISOString();
+  const targetMode = legacy.targetMode === "preset" || legacy.targetMode === "custom"
+    ? legacy.targetMode
+    // Old complete targets may have been edited while a style card stayed
+    // selected, so custom is the only migration that never claims a preset.
+    : legacy.targets ? "custom" : "preset";
+  const legacyPreset = legacy.targetPreset ?? legacy.preferences?.macroStyle ?? "balanced";
   return {
     ...(legacy as Plan),
     createdAt: legacy.createdAt ?? epoch,
@@ -147,6 +161,8 @@ function migratePlan(raw: unknown): Plan | null {
     ownerUid: legacy.ownerUid ?? "",
     title: legacy.title ?? legacy.name ?? "My week",
     targets: legacy.targets ?? null,
+    targetMode,
+    ...(targetMode === "preset" ? { targetPreset: legacyPreset } : { targetPreset: undefined }),
     mealSlots:
       Array.isArray(legacy.mealSlots) && legacy.mealSlots.length
         ? legacy.mealSlots
