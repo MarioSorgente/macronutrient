@@ -540,6 +540,9 @@ interface CompleteDay {
   diagnostics: DailyAdherenceDiagnostics;
 }
 
+/** Internal input shape exported only to support bounded day-pool unit tests. */
+export type TestingCompleteDay = CompleteDay;
+
 interface ForcedCandidate {
   candidate: Candidate;
   slotIndex: number;
@@ -1004,6 +1007,9 @@ function selectDayPool(days: CompleteDay[], slots: string[]): DayPlan[] {
   fill(DAY_POOL_SIZE, ordered, false);
   return pool;
 }
+
+/** Test seam for exercising pool retention without running the full planner. */
+export const __selectDayPoolForTests = selectDayPool;
 
 function rankDayPlan(plan: DayPlan): number {
   return plan.diagnostics.normalizedError + plan.softScore * 0.01;
