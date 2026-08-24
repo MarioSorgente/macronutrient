@@ -16,7 +16,7 @@ import {
   isOrphaned,
 } from "@/lib/clients";
 import { formatPrice } from "@/lib/pricing";
-import { round0 } from "@/lib/format";
+import { formatMacroGrams, round0 } from "@/lib/format";
 import TargetAdherence from "@/components/TargetAdherence";
 import { diagnoseDailyAdherence } from "@/lib/dailyAdherence";
 
@@ -208,9 +208,9 @@ function DailySummary({ plan, week, day, dishes, onClose }: {
         </div>
         <dl className="mt-5 grid grid-cols-2 gap-2 rounded-xl2 bg-white/70 p-3 text-sm">
           <div><dt className="text-charcoal-soft">Calories</dt><dd className="font-700 tabular-nums">{round0(totals.energy_kcal)} kcal</dd></div>
-          <div><dt className="text-charcoal-soft">Protein</dt><dd className="font-700 tabular-nums">{round0(totals.protein_g)} g</dd></div>
-          <div><dt className="text-charcoal-soft">Carbohydrates</dt><dd className="font-700 tabular-nums">{round0(totals.carbs_g)} g</dd></div>
-          <div><dt className="text-charcoal-soft">Fat</dt><dd className="font-700 tabular-nums">{round0(totals.fat_g)} g</dd></div>
+          <div><dt className="text-charcoal-soft">Protein</dt><dd className="font-700 tabular-nums">{formatMacroGrams(totals.protein_g)} g</dd></div>
+          <div><dt className="text-charcoal-soft">Carbohydrates</dt><dd className="font-700 tabular-nums">{formatMacroGrams(totals.carbs_g)} g</dd></div>
+          <div><dt className="text-charcoal-soft">Fat</dt><dd className="font-700 tabular-nums">{formatMacroGrams(totals.fat_g)} g</dd></div>
           <div className="col-span-2 border-t border-cream-deep pt-2"><dt className="text-charcoal-soft">Price</dt><dd className="font-700 tabular-nums">{formatPrice(price)}</dd></div>
         </dl>
         {plan.targets && adherence ? (

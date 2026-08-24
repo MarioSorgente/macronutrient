@@ -5,7 +5,7 @@ import { categoryLabel, isEstimated, hasHouseOverride } from "@/lib/database";
 import { categoryStyle } from "@/lib/categoryStyle";
 import { macroEnergySplit } from "@/lib/calc";
 import { findUnit } from "@/lib/units";
-import { round0, round1 } from "@/lib/format";
+import { formatMacroGrams, round0 } from "@/lib/format";
 
 /** Splits text on the query so matches can be visually emphasised. */
 function highlight(text: string, tokens: string[]) {
@@ -80,9 +80,9 @@ export default function IngredientRow({
           <span className="tabular-nums">
             <b className="font-700 text-tomato">{round0(m.energy_kcal)}</b> kcal
           </span>
-          <span className="tabular-nums">P {round1(m.protein_g)}</span>
-          <span className="tabular-nums">C {round1(m.carbs_g)}</span>
-          <span className="tabular-nums">F {round1(m.fat_g)}</span>
+          <span className="tabular-nums">P {formatMacroGrams(m.protein_g)}</span>
+          <span className="tabular-nums">C {formatMacroGrams(m.carbs_g)}</span>
+          <span className="tabular-nums">F {formatMacroGrams(m.fat_g)}</span>
           <span className="opacity-60">/100 g</span>
           {showsUnit && (
             <span className="rounded bg-cream-deep px-1.5 py-0.5 font-600 text-charcoal-soft">

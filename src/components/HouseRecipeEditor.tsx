@@ -7,7 +7,7 @@ import { getIngredient } from "@/lib/database";
 import { houseRecipeMacrosPer100g } from "@/lib/calc";
 import { useHouseRecipes } from "@/store/houseRecipes";
 import type { HouseRecipe, HouseRecipeComponent } from "@/lib/storage/types";
-import { round0, round1 } from "@/lib/format";
+import { formatMacroGrams, round0 } from "@/lib/format";
 import MacroChips from "@/components/MacroChips";
 import IngredientTypeahead from "@/components/IngredientTypeahead";
 import Modal from "@/components/ui/Modal";
@@ -226,9 +226,9 @@ export default function HouseRecipeEditor({
               />
               <p className="mt-2 text-[11px] text-charcoal-soft">
                 Replaces the shipped estimate of {round0(ingredient.macros_per_100g.energy_kcal)} kcal
-                / P {round1(ingredient.macros_per_100g.protein_g)} / C{" "}
-                {round1(ingredient.macros_per_100g.carbs_g)} / F{" "}
-                {round1(ingredient.macros_per_100g.fat_g)}.
+                / P {formatMacroGrams(ingredient.macros_per_100g.protein_g)} / C{" "}
+                {formatMacroGrams(ingredient.macros_per_100g.carbs_g)} / F{" "}
+                {formatMacroGrams(ingredient.macros_per_100g.fat_g)}.
               </p>
             </div>
           )}

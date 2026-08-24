@@ -13,7 +13,7 @@ import {
 import { getIngredient } from "@/lib/database";
 import { perItemMacros } from "@/lib/calc";
 import { formatIdr, formatPrice } from "@/lib/pricing";
-import { round0, round1 } from "@/lib/format";
+import { formatMacroGrams, round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import Modal from "@/components/ui/Modal";
 
@@ -173,13 +173,13 @@ export default function MealDetailDialog({
                           {contributed ? round0(contributed.energy_kcal) : "—"}
                         </td>
                         <td className="py-1.5 px-2 text-right tabular-nums text-charcoal-soft">
-                          {contributed ? round1(contributed.protein_g) : "—"}
+                          {contributed ? formatMacroGrams(contributed.protein_g) : "—"}
                         </td>
                         <td className="py-1.5 px-2 text-right tabular-nums text-charcoal-soft">
-                          {contributed ? round1(contributed.carbs_g) : "—"}
+                          {contributed ? formatMacroGrams(contributed.carbs_g) : "—"}
                         </td>
                         <td className="py-1.5 pl-2 text-right tabular-nums text-charcoal-soft">
-                          {contributed ? round1(contributed.fat_g) : "—"}
+                          {contributed ? formatMacroGrams(contributed.fat_g) : "—"}
                         </td>
                       </tr>
                     );
