@@ -48,6 +48,11 @@ jobs:
 
       # Builds the app itself as part of the Playwright webServer.
       - name: End-to-end tests
+        env:
+          # Inherited by Playwright's Admin SDK seeding helper. Keeping these
+          # explicit prevents it from ever falling back to production.
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+          FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
         run: npm run e2e
 
       - name: Upload Playwright report

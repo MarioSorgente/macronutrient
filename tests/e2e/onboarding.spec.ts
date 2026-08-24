@@ -3,6 +3,7 @@ import {
   OWNER_EMAIL,
   clearAuthAccounts,
   clearFirestoreData,
+  seedAdminProfileByEmail,
   signIn,
   signUp,
   uniqueEmail,
@@ -31,6 +32,7 @@ test.beforeEach(async ({}, testInfo) => {
 async function onboardOwner(page: Page) {
   await signUp(page, OWNER_EMAIL, "Mario Sorgente");
   await verifyEmail(OWNER_EMAIL);
+  await seedAdminProfileByEmail(OWNER_EMAIL);
   await signOut(page);
   await signIn(page, OWNER_EMAIL);
   await expect(
