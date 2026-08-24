@@ -5,16 +5,13 @@ import { GripVertical, Plus, Trash2 } from "lucide-react";
 import {
   MAX_PROGRAM_WEEKS,
   type Plan,
-  type MacroTargets,
 } from "@/lib/storage/types";
-import { TARGET_FIELDS } from "@/lib/clients";
-import { resolveTarget, scaleTargetEnergy, validateMacroTarget } from "@/lib/targetResolution";
 import Modal from "@/components/ui/Modal";
 import Field from "@/components/ui/Field";
 
 /**
  * Plan program settings: name, start date, program length, editable meal slot
- * names, and optional daily macro targets.
+ * names, while daily targets live in their dedicated editor.
  */
 export default function PlanSettings({
   plan,
@@ -31,15 +28,7 @@ export default function PlanSettings({
   const [weekCount, setWeekCount] = useState(plan.weekCount);
   const [slots, setSlots] = useState<string[]>([...plan.mealSlots]);
   const [newSlot, setNewSlot] = useState("");
-  const [targetsOn, setTargetsOn] = useState(Boolean(plan.targets));
-  const [targets, setTargets] = useState<MacroTargets>(
-    resolveTarget({
-      targets: plan.targets,
-      mode: plan.targetMode,
-      preset: plan.targetPreset,
-    }).target
-  );
-  const targetValidation = validateMacroTarget(targets);
+
 
   function addSlot() {
     const trimmed = newSlot.trim();
@@ -61,9 +50,6 @@ export default function PlanSettings({
       programStartDate: startDate,
       weekCount,
       mealSlots: cleanSlots.length ? cleanSlots : plan.mealSlots,
-      targets: targetsOn ? targets : null,
-      targetMode: "custom",
-      targetPreset: undefined,
     });
   }
 
@@ -84,7 +70,6 @@ export default function PlanSettings({
           <button
             type="button"
             onClick={save}
-            disabled={targetsOn && !targetValidation.valid}
             className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
           >
             Save settings
@@ -203,56 +188,6 @@ export default function PlanSettings({
           </div>
         </div>
 
-        {/* Targets */}
-        <div className="rounded-xl border border-cream-deep bg-white p-3">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={targetsOn}
-              onChange={(e) => setTargetsOn(e.target.checked)}
-              className="h-4 w-4 accent-tomato"
-            />
-            <span className="text-sm font-600 text-charcoal">
-              Track daily macro targets
-            </span>
-          </label>
-          <p className="mt-1 text-xs text-charcoal-soft">
-            Optional. When off, the planner just shows totals.
-          </p>
-
-          {targetsOn && (
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {TARGET_FIELDS.map((field) => (
-                <label key={field.key} className="text-xs">
-                  <span className="mb-1 block font-600 text-charcoal-soft">
-                    {field.label} ({field.unit})
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={targets[field.key]}
-                    onChange={(e) => {
-                      const value = Math.max(0, Number(e.target.value) || 0);
-                      if (field.key === "energy_kcal") {
-                        setTargets(scaleTargetEnergy(targets, value));
-                      } else {
-                        setTargets({ ...targets, [field.key]: value });
-                      }
-                    }}
-                    className="no-spin w-full rounded-lg border border-cream-deep px-2 py-1.5 text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
-                  />
-                </label>
-              ))}
-            </div>
-          )}
-          {targetsOn && !targetValidation.valid && (
-            <p role="alert" className="mt-2 text-xs font-600 text-tomato-dark">
-              Macro grams represent {Math.round(targetValidation.macroEnergyKcal)} kcal,
-              which does not match the calorie target. Adjust the macros or change calories
-              to recalculate a coherent target before saving.
-            </p>
-          )}
-        </div>
     </Modal>
   );
 }
