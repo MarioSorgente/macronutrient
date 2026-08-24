@@ -29,7 +29,7 @@ import { getIngredient } from "@/lib/database";
 import { generatePlanWithTargets, type GeneratedPlan } from "@/lib/mealPlanner";
 import { formatIdr, formatPrice } from "@/lib/pricing";
 import { round0, round1 } from "@/lib/format";
-import { resolveTarget } from "@/lib/targetResolution";
+import { resolveTarget, scaleTargetEnergy, validateMacroTarget } from "@/lib/targetResolution";
 import IngredientTypeahead from "@/components/IngredientTypeahead";
 import Modal from "@/components/ui/Modal";
 import TargetAdherence from "@/components/TargetAdherence";
@@ -108,6 +108,7 @@ export default function GeneratePlanDialog({
     targets: targetsExplicit ? targets : { energy_kcal: targets.energy_kcal },
     style: preferences.macroStyle,
   });
+  const targetValidation = validateMacroTarget(targetResolution.target);
 
   function run(nextSeed: number) {
     setSeed(nextSeed);
@@ -338,7 +339,9 @@ export default function GeneratePlanDialog({
                         setTargetsExplicit(field.key !== "energy_kcal");
                         setTargets(
                           field.key === "energy_kcal"
-                            ? targetsFromStyle(value, preferences.macroStyle)
+                            ? (preferences.macroStyle
+                              ? targetsFromStyle(value, preferences.macroStyle)
+                              : scaleTargetEnergy(targets, value))
                             : { ...targets, [field.key]: value }
                         );
                         setPreview(null);
@@ -348,6 +351,13 @@ export default function GeneratePlanDialog({
                   </label>
                 ))}
               </div>
+              {!targetValidation.valid && (
+                <p role="alert" className="mt-2 rounded-lg bg-tomato-soft/30 px-3 py-2 text-xs font-600 text-tomato-dark">
+                  Macro grams represent {round0(targetValidation.macroEnergyKcal)} kcal,
+                  not {round0(targetResolution.target.energy_kcal)} kcal. Adjust the macros,
+                  or change calories to recalculate them, before generating.
+                </p>
+              )}
               <div
                 className="mt-2 rounded-xl border border-cream-deep bg-cream/50 px-3 py-2 text-xs text-charcoal-soft"
                 data-testid="resolved-target"
@@ -457,7 +467,8 @@ export default function GeneratePlanDialog({
                 <button
                   type="button"
                   onClick={() => run(seed)}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-tomato px-4 py-2.5 font-700 text-cream hover:bg-tomato-dark"
+                  disabled={!targetValidation.valid}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-tomato px-4 py-2.5 font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
                 >
                   <Sparkles size={16} /> {preview ? "Regenerate" : "Generate"}
                 </button>

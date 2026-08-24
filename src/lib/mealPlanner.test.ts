@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createWeeklyVarietyUsage, generatePlan, recordWeeklyVariety } from "@/lib/mealPlanner";
+import { createWeeklyVarietyUsage, generatePlan, generatePlanWithTargets,
+  InvalidMacroTargetError, recordWeeklyVariety } from "@/lib/mealPlanner";
 import { DEFAULT_PREFERENCES } from "@/lib/storage/types";
 import { menuRecipes } from "@/lib/database";
 import { generatedDiyCandidate, negritaMenuCandidate, savedDishCandidate } from "@/lib/plannerCandidates";
@@ -15,6 +16,21 @@ const boundedOptions = (targets: MacroTargets, candidateFixtures = compensatingD
   includeSavedDishes: false, includeMenuDishes: false, includeComposed: false,
   candidateFixtures, dailyBudgetIdr: null, preferences: DEFAULT_PREFERENCES, seed: 1,
 }) as Parameters<typeof generatePlan>[0];
+
+it("refuses contradictory calorie and macro targets before searching", () => {
+  const targets = { energy_kcal: 4000, protein_g: 175, carbs_g: 175, fat_g: 66.7 };
+  expect(() => generatePlanWithTargets({ ...boundedOptions(targets), targets }))
+    .toThrowError(InvalidMacroTargetError);
+  try {
+    generatePlanWithTargets({ ...boundedOptions(targets), targets });
+  } catch (error) {
+    expect(error).toMatchObject({
+      code: "INVALID_TARGET_MACRO_ENERGY_MISMATCH",
+      requestedEnergyKcal: 4000,
+    });
+    expect((error as InvalidMacroTargetError).macroEnergyKcal).toBeCloseTo(2000.3, 5);
+  }
+});
 
 function expectCompleteDayWithinTolerance(day: ReturnType<typeof generatePlan>[number],
   target: MacroTargets): void {

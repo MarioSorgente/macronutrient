@@ -51,6 +51,10 @@ const BALANCED: MacroTargets = {
   energy_kcal: 2000, protein_g: 125, carbs_g: 225, fat_g: 66.7,
 };
 
+const BALANCED_4000: MacroTargets = {
+  energy_kcal: 4000, protein_g: 250, carbs_g: 450, fat_g: 4000 * 0.3 / 9,
+};
+
 describe("weekly variety on the real menu", () => {
   it("produces seven visibly different days", () => {
     const days = week(HIGH_PROTEIN);
@@ -300,6 +304,20 @@ describe("seed behaviour", () => {
 });
 
 describe("derived targets", () => {
+  it("scales a coherent 4000 kcal week and retains substantial breakfasts", () => {
+    const days = week(BALANCED_4000);
+    const average = days.reduce((sum, day) => sum + day.macros.energy_kcal, 0) / days.length;
+    const breakfasts = inSlot(days, 0);
+    expect(average).toBeGreaterThan(3400);
+    expect(distinct(breakfasts), breakfasts.join(", ")).toBeGreaterThanOrEqual(2);
+    expect(breakfasts.some((name) => /pancake|waffle|oatmeal|banana bread/i.test(name)),
+      breakfasts.join(", ")).toBe(true);
+    for (const day of days) {
+      expect(day.adherence.macros.energy_kcal.target).toBe(4000);
+      expect(day.macros.energy_kcal).toBeGreaterThan(3000);
+    }
+  });
+
   it("resolves Auto to the documented default and reports what it used", () => {
     const generated = generatePlanWithTargets({
       days: [0], slots: SLOTS, targets: null, savedDishes: [],
