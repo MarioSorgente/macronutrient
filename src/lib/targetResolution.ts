@@ -1,4 +1,5 @@
 import type { MacroStyle, MacroTargets, TargetMode as StoredTargetMode } from "@/lib/storage/types";
+import { formatPercentageShare } from "@/lib/format";
 
 /** Modes accepted by target resolution. Explicit is selected automatically for a complete target. */
 export type TargetMode = "Explicit" | "High protein" | "Balanced" | "Low carb / high fat" | "High carb" | "Auto";
@@ -137,7 +138,7 @@ export function resolveTarget(input: TargetResolutionInput = {}): TargetResoluti
     carbs_g: (energy * split.carbs) / 4,
     fat_g: (energy * split.fat) / 9,
   };
-  const percentages = `${split.protein * 100}% protein, ${split.carbs * 100}% carbohydrate, and ${split.fat * 100}% fat`;
+  const percentages = `${formatPercentageShare(split.protein)} protein, ${formatPercentageShare(split.carbs)} carbohydrate, and ${formatPercentageShare(split.fat)} fat`;
   return {
     target,
     source: "derived",

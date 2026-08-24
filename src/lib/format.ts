@@ -12,6 +12,11 @@ export function formatMacroGrams(n: number): string {
   return String(Object.is(rounded, -0) ? 0 : rounded);
 }
 
+/** Format a fractional share as a whole percentage for user-facing text. */
+export function formatPercentageShare(n: number): string {
+  return `${Math.round(n * 100)}%`;
+}
+
 /** Normalize a calorie or macro-gram input at the persistence boundary. */
 export function wholeNonNegative(n: number): number {
   return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
