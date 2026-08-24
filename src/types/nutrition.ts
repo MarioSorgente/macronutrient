@@ -22,6 +22,7 @@ export type PlannerCandidateSource =
 export type ProteinFamily =
   | "chicken"
   | "beef"
+  | "pork"
   | "fish"
   | "eggs"
   | "vegetarian"
@@ -33,6 +34,8 @@ export type CarbFamily =
   | "potato"
   | "bread"
   | "wrap"
+  | "legume"
+  | "quinoa"
   | "other";
 export type MacroConfidence = "published" | "calculated" | "estimated" | "incomplete";
 

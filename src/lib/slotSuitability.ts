@@ -121,6 +121,20 @@ const NOT_A_SNACK = new Set([
   "paratha_wholewheat",
 ]);
 
+/**
+ * The hard ingredient rule, exposed on its own so composed meals can be checked
+ * against it directly. A composed meal carries its archetype's classified slots,
+ * which would otherwise short-circuit `mealSlotEligibility` before the
+ * ingredient rules ran and let a dinner-only cut through on the template alone.
+ */
+export function isDinnerOnlyIngredient(ingredientId: string): boolean {
+  return DINNER_ONLY.has(ingredientId);
+}
+
+export function isNotASnackIngredient(ingredientId: string): boolean {
+  return NOT_A_SNACK.has(ingredientId);
+}
+
 const BREAKFAST_MAIN_WORDS =
   /chicken breast|chicken plate|steak plate|peri.?peri chicken|teriyaki chicken|kebab|kofta|wagyu|curry|rendang|satay/i;
 const SNACK_WORDS = /snack|shake|smoothie|yogurt|fruit|banana|toast|bread/i;

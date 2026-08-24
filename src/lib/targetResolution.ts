@@ -17,6 +17,11 @@ export interface TargetResolution {
   target: MacroTargets;
   source: "explicit" | "derived";
   selectedStyle: TargetMode;
+  /**
+   * Whether the calorie figure was supplied or is the documented default. Auto
+   * is a fixed, predictable fallback — never a guess at what this person needs.
+   */
+  energySource: "supplied" | "default";
   explanation: string;
 }
 
@@ -64,6 +69,7 @@ export function resolveTarget(input: TargetResolutionInput = {}): TargetResoluti
       target: { ...input.targets },
       source: "explicit",
       selectedStyle: "Explicit",
+      energySource: "supplied",
       explanation: "Complete calorie, protein, carbohydrate, and fat targets were supplied; all four values are preserved exactly.",
     };
   }
@@ -71,7 +77,13 @@ export function resolveTarget(input: TargetResolutionInput = {}): TargetResoluti
   const style = concreteStyle(input.style);
   const split = RULES[style];
   const suppliedEnergy = input.targets?.energy_kcal;
-  const energy = typeof suppliedEnergy === "number" && Number.isFinite(suppliedEnergy) && suppliedEnergy >= 0
+  // Auto resolves deterministically to Balanced at the documented default
+  // calorie figure. There is no height, weight, age or activity data here, so
+  // there is nothing to personalise from and nothing is invented: the number is
+  // a stated default a person can then edit, not an estimate of their needs.
+  const hasSuppliedEnergy = typeof suppliedEnergy === "number" &&
+    Number.isFinite(suppliedEnergy) && suppliedEnergy >= 0;
+  const energy = hasSuppliedEnergy
     ? suppliedEnergy
     : input.defaultEnergyKcal ?? DEFAULT_DERIVED_ENERGY_KCAL;
   const target = {
@@ -85,6 +97,8 @@ export function resolveTarget(input: TargetResolutionInput = {}): TargetResoluti
     target,
     source: "derived",
     selectedStyle: style,
-    explanation: `${style} derives ${percentages} at 4/4/9 kcal per gram; unrounded grams reconcile exactly to ${energy} kcal.`,
+    energySource: hasSuppliedEnergy ? "supplied" : "default",
+    explanation: `${style} derives ${percentages} at 4/4/9 kcal per gram; unrounded grams reconcile exactly to ${energy} kcal${
+      hasSuppliedEnergy ? "" : ", the default used when no calorie target is given"}.`,
   };
 }

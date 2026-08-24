@@ -115,6 +115,10 @@ const EXPLICIT_FAMILIES: Record<string, Partial<Record<MealComponentRole, string
   corn_sweet_cooked: { vegetable: "corn" }, hummus: { fat: "hummus", sauce: "hummus" },
   tzatziki_proxy: { fat: "yogurt", sauce: "tzatziki" }, greek_yogurt_nonfat: { fat: "yogurt", sauce: "yogurt" },
   anchovy_garlic_butter: { fat: "butter", sauce: "butter" }, avocado_raw: { fat: "avocado" },
+  // Garnishes. A 25 g roe and a 30 g salted anchovy are seasoning, not the
+  // protein a meal is built on, and no archetype accepts the family — which is
+  // what stops "250 g of tobiko" from being proposed because the macros fit.
+  tobiko: { protein: "garnish" }, anchovy_spanish: { protein: "garnish" },
 };
 
 /** Family inference plus explicit metadata for ambiguous restaurant ingredients. */
@@ -146,6 +150,27 @@ export function templatesForSlot(slot: string): readonly MealTemplate[] {
 export function roleForSection(section: DiySection): MealComponentRole {
   return section === "protein" ? "protein" : section === "carbs" ? "carb" :
     section === "veg" ? "vegetable" : "fat";
+}
+
+/**
+ * Which DIY menu sections can fill a role. Sauces and fats share the
+ * condiments section, so a template that wants a sauce and one that wants a fat
+ * shop from the same shelf and are told apart by `compatibleFamilies`.
+ */
+export function sectionsForRole(role: MealComponentRole): DiySection[] {
+  if (role === "protein") return ["protein"];
+  if (role === "carb") return ["carbs"];
+  if (role === "vegetable") return ["veg"];
+  return ["fats"];
+}
+
+/** Every role a template can use, required first so callers can rank them. */
+export function templateRoles(value: MealTemplate): MealComponentRole[] {
+  return [...value.requiredRoles, ...value.optionalRoles];
+}
+
+export function roleIsRequired(value: MealTemplate, role: MealComponentRole): boolean {
+  return value.requiredRoles.includes(role);
 }
 
 export function componentFitsTemplate(template: MealTemplate, ingredient: Ingredient,

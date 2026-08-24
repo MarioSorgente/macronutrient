@@ -21,6 +21,7 @@ import {
   type ClientPreferences,
   type Dish,
   type DishItem,
+  type MacroTargets,
 } from "@/lib/storage/types";
 import {
   byId,
@@ -262,7 +263,8 @@ export default function WeekPlanner() {
   function applyGenerated(
     generated: GeneratedDay[],
     replace: boolean,
-    preferences: ClientPreferences
+    preferences: ClientPreferences,
+    resolvedTarget: MacroTargets
   ) {
     if (!plan) return;
     const kept = replace
@@ -287,8 +289,12 @@ export default function WeekPlanner() {
     }
 
     // Tastes are remembered with the plan, so the next generation starts from
-    // what you already told the generator.
-    persist({ ...plan, preferences, assignments: [...kept, ...additions] });
+    // what you already told the generator — and so is the target the week was
+    // actually generated against. Without it a plan generated from a derived
+    // "Auto → Balanced 2000 kcal" target saved with no target at all, and the
+    // adherence bars afterwards measured the week against nothing.
+    persist({ ...plan, preferences, targets: resolvedTarget,
+      assignments: [...kept, ...additions] });
     setGenerateOpen(false);
   }
 

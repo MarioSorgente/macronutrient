@@ -42,6 +42,14 @@ export default defineConfig({
           environment: "node", // per-file `@vitest-environment jsdom` opts in
           include: ["src/**/*.test.{ts,tsx}"],
           globals: false,
+          // The planner suites are CPU-bound — a seven-day search over the real
+          // catalog is a few hundred milliseconds each, and several of them run
+          // in parallel with a cold `require("firebase-admin")`. The 5 s default
+          // measures machine load rather than correctness here. Still bounded,
+          // so a genuinely hung test fails rather than hanging the run. The
+          // planner's own speed budget is asserted directly, in the bounded
+          // search matrix test.
+          testTimeout: 20_000,
         },
       },
       {
