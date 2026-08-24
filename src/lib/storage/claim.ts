@@ -60,12 +60,20 @@ export async function claimGuestData(uid: string): Promise<ClaimResult> {
     if (isEmpty(guest)) continue;
 
     const collision = planById.get(guest.id);
-    const target =
-      !collision || isEmpty(collision)
-        ? guest.id // free, or an empty placeholder we can replace
-        : newId(); // a real plan lives here — keep both
+    const takesPrimary = !collision || isEmpty(collision);
+    const target = takesPrimary
+      ? guest.id // free, or an empty placeholder we can replace
+      : newId(); // a real plan lives here — keep both
 
-    writes.push(plans.save(touch({ ...guest, id: target, ownerUid: uid })));
+    // Filing a guest week alongside a real account plan must not promote it.
+    // `touch()` here stamped the older week as the newest thing in the
+    // collection, so the next load — which picks by `updatedAt` — opened the
+    // guest's week instead of the account's own. Keep its real age; only stamp
+    // when it has none, or when it is genuinely taking over the primary id.
+    const claimed = { ...guest, id: target, ownerUid: uid };
+    writes.push(plans.save(
+      takesPrimary || !claimed.updatedAt ? touch(claimed) : claimed
+    ));
     claimedPlans += 1;
   }
 

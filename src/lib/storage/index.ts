@@ -132,8 +132,18 @@ function migratePlan(raw: unknown): Plan | null {
     ? (legacy.plan as Plan["assignments"])
     : [];
 
+  // Timestamps are not cosmetic here: `latest()` orders on `updatedAt`, and a
+  // record without one is either invisible to the Firestore query or poisons
+  // the local reduce (every `value > undefined` comparison is false, so the
+  // first such record wins forever). A legacy roster record is exactly the case
+  // this function exists for, so it must not leave them unset. The epoch is the
+  // honest default: it says "older than anything real", which is what an
+  // undated record is.
+  const epoch = new Date(0).toISOString();
   return {
     ...(legacy as Plan),
+    createdAt: legacy.createdAt ?? epoch,
+    updatedAt: legacy.updatedAt ?? legacy.createdAt ?? epoch,
     ownerUid: legacy.ownerUid ?? "",
     title: legacy.title ?? legacy.name ?? "My week",
     targets: legacy.targets ?? null,

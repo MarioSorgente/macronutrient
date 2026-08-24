@@ -77,6 +77,42 @@ function cuisineFamily(name: string, items: PlannerCandidateIngredient[]): strin
   return "neutral";
 }
 
+/**
+ * Culinary style for a dish nobody curated — a saved or custom one. Named the
+ * way a person would: what is on the plate, not which archetype it satisfies.
+ * Ready Negrita dishes carry a hand-written style instead, and composed meals
+ * derive theirs from the template they were built from.
+ */
+const stylePatterns: [string, RegExp][] = [
+  ["pancake", /pancake|syrniki|crepe/],
+  ["waffle", /waffle/],
+  ["oatmeal", /oat|porridge|granola|muesli/],
+  ["bakery", /banana bread|muffin|croissant|brioche|scone|pastry/],
+  ["cheesecake", /cheese ?cake|dessert/],
+  ["fruit-and-toast", /fruit|banana|berry|smoothie|acai/],
+  ["eggs-savoury", /egg|omelet|omelette|scrambl|benedict|frittata/],
+  ["cured-meat-savoury", /bacon|ham|sausage|prosciutto/],
+  ["smoked-fish", /smoked salmon|lox|smoked fish/],
+  ["yogurt-bowl", /yogurt|skyr|cottage/],
+  ["burger", /burger/],
+  ["kebab-plate", /kebab|kofta|gyro|pita|shawarma/],
+  ["salad", /salad/],
+  ["wrap", /wrap|burrito|tortilla/],
+  ["rice-bowl", /rice bowl|donburi|poke/],
+  ["noodles", /noodle|pasta|ramen|pho/],
+  ["soup", /soup|broth|stew/],
+];
+
+function dishStyle(name: string, items: PlannerCandidateIngredient[],
+  archetype: string): string {
+  const text = `${name} ${ingredientText(items)}`.toLowerCase();
+  const matched = stylePatterns.find(([, pattern]) => pattern.test(text))?.[0];
+  // Falling back to the archetype keeps every candidate comparable: an
+  // unrecognised dish is still counted against other dishes of its own kind
+  // rather than dropping out of style accounting entirely.
+  return matched ?? archetype;
+}
+
 function mealMetadata(name: string, section = ""): { archetype: string; eligible: string[] } {
   const text = `${name} ${section}`.toLowerCase();
   if (/breakfast|oat|pancake|waffle|toast|egg/.test(text)) {
@@ -131,13 +167,16 @@ function publishedConfidence(recipe: MenuRecipe): MacroConfidence {
 }
 
 function finish(base: Omit<PlannerCandidate, "proteinFamily" | "carbFamily" | "cuisineFamily" |
-  "mealArchetype" | "eligibleMealTypes" | "modificationOptions" | "dietaryTags" |
-  "allergenTags" | "sauceFamilies" | "readyMadePriority">, section = ""): PlannerCandidate {
+  "mealArchetype" | "dishStyle" | "eligibleMealTypes" | "modificationOptions" |
+  "dietaryTags" | "allergenTags" | "sauceFamilies" | "readyMadePriority">,
+  section = ""): PlannerCandidate {
   const families = normalizedFamilies(base.breakdown);
   const meal = mealMetadata(base.displayName, section);
   const classified = tags(base.breakdown);
   return { ...base, ...families, cuisineFamily: cuisineFamily(base.displayName, base.breakdown),
-    mealArchetype: meal.archetype, eligibleMealTypes: meal.eligible,
+    mealArchetype: meal.archetype,
+    dishStyle: dishStyle(base.displayName, base.breakdown, meal.archetype),
+    eligibleMealTypes: meal.eligible,
     modificationOptions: [], readyMadePriority: "normal",
     dietaryTags: classified.dietary, allergenTags: classified.allergens,
     sauceFamilies: classified.sauces };

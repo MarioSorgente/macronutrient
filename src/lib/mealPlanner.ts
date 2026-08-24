@@ -17,6 +17,7 @@ import { resolveTarget, type DerivationStyle, type TargetMode } from "@/lib/targ
 import { candidateIsLeaned, readyPlannerCatalog } from "@/lib/plannerCandidates";
 import { composeCandidatesForResidual } from "@/lib/plannerComposer";
 import {
+  BREAKFAST_STYLE_MULTIPLIER,
   DAY_REPEAT_PENALTY,
   GLOBAL_REPEAT_PENALTY,
   HEAVY_BREAKFAST_FAMILIES,
@@ -84,6 +85,8 @@ export interface GeneratedMeal {
   /** Set when the meal is an existing saved dish or menu recipe. */
   sourceDishId?: string;
   kind: "composed" | "ready";
+  /** Normalized culinary style, carried through so callers can group by it. */
+  dishStyle: string;
 }
 
 export interface GeneratedDay {
@@ -228,7 +231,8 @@ const ADHERENCE_TIEBREAK_WEIGHT = 0.25;
 
 /** Repeating a family twice inside one day, before the week is considered. */
 const SAME_DAY_PENALTY: Partial<Record<VarietyDimension, number>> = {
-  proteinFamily: 0.35, carbFamily: 0.25, cuisineFamily: 0.2, mealArchetype: 0.15,
+  dishStyle: 0.4, proteinFamily: 0.35, carbFamily: 0.25, cuisineFamily: 0.2,
+  mealArchetype: 0.15,
 };
 
 function pricePenalty(priceIdr: number): number {
@@ -654,8 +658,21 @@ function retainBeam(expanded: DayState[], depth: number,
       (state) => state.pathKey, (state) => String(state.leaned));
   }
 
+  // Coverage groups by *style*, not by exact dish.
+  //
+  // Grouping by dish spreads the budget over eighty composed breakfasts that are
+  // mostly portion variations of the same few plates, leaving each of them a
+  // single surviving continuation — and a single continuation usually cannot
+  // find a compliant day. Grouping by style spends the same budget on ten real
+  // alternatives with enough paths each to finish, which is what actually
+  // reaches the weekly pass.
   for (let slot = 0; slot <= depth && kept.length < BEAM_WIDTH; slot += 1) {
     const limit = Math.min(BEAM_WIDTH, kept.length + quota);
+    coverageFill(ordered, kept, taken, limit,
+      (state) => state.pathKey, (state) => state.picks[slot].dishStyle);
+  }
+  for (let slot = 0; slot <= depth && kept.length < BEAM_WIDTH; slot += 1) {
+    const limit = Math.min(BEAM_WIDTH, kept.length + Math.ceil(quota / 2));
     coverageFill(ordered, kept, taken, limit,
       (state) => state.pathKey, (state) => state.picks[slot].dishShape);
   }
@@ -674,6 +691,11 @@ function retainBeam(expanded: DayState[], depth: number,
  * Round-robin over groups, best member first, until `limit` is reached. Every
  * group gets one before any group gets two, which is what makes the kept set
  * independent of the order the candidates were generated in.
+ *
+ * Groups already represented in `kept` go last. Sorting by name alone was
+ * enough while each call filled a large slice in one go, but not when the
+ * caller cycles slots a couple of entries at a time: the alphabetically first
+ * group won every call, and the pool filled up with one breakfast again.
  */
 function coverageFill<T>(
   ordered: readonly T[],
@@ -690,7 +712,14 @@ function coverageFill<T>(
     const bucket = groups.get(key);
     if (bucket) bucket.push(item); else groups.set(key, [item]);
   }
-  const keys = [...groups.keys()].sort();
+  const represented = new Map<string, number>();
+  for (const item of kept) {
+    const key = group(item);
+    represented.set(key, (represented.get(key) ?? 0) + 1);
+  }
+  const keys = [...groups.keys()].sort((a, b) =>
+    ((represented.get(a) ?? 0) - (represented.get(b) ?? 0)) ||
+    (a < b ? -1 : a > b ? 1 : 0));
   const pointers = new Map<string, number>();
   let progressed = true;
   while (kept.length < limit && progressed) {
@@ -758,9 +787,11 @@ function repeatKeysFor(picks: Candidate[], slots: string[]): RepeatKey[] {
   const keys: RepeatKey[] = [];
   picks.forEach((candidate, index) => {
     const slot = slots[index];
-    const heavyBreakfast = slotKindOf(slot) === "breakfast" &&
+    const breakfast = slotKindOf(slot) === "breakfast";
+    const heavyBreakfast = breakfast &&
       HEAVY_BREAKFAST_FAMILIES.has(candidate.proteinFamily)
       ? HEAVY_BREAKFAST_MULTIPLIER : 1;
+    const styleMultiplier = breakfast ? BREAKFAST_STYLE_MULTIPLIER : 1;
     for (const dimension of Object.keys(GLOBAL_REPEAT_PENALTY) as VarietyDimension[]) {
       const relief = dimension === "proteinFamily" && candidate.leaned ? LEAN_REPEAT_RELIEF : 1;
       const weight = GLOBAL_REPEAT_PENALTY[dimension] * relief;
@@ -770,6 +801,8 @@ function repeatKeysFor(picks: Candidate[], slots: string[]): RepeatKey[] {
     }
     keys.push({ key: `s|${slot}|dish|${candidate.dishShape}`,
       weight: SLOT_REPEAT_PENALTY.exactDishIdentity * heavyBreakfast });
+    keys.push({ key: `s|${slot}|style|${candidate.dishStyle}`,
+      weight: SLOT_REPEAT_PENALTY.dishStyle * styleMultiplier });
     keys.push({ key: `s|${slot}|protein|${candidate.proteinFamily}`,
       weight: SLOT_REPEAT_PENALTY.proteinFamily * heavyBreakfast *
         (candidate.leaned ? LEAN_REPEAT_RELIEF : 1) });
@@ -852,47 +885,108 @@ function selectDayPool(days: CompleteDay[], slots: string[]): DayPlan[] {
     (a.exactSignature < b.exactSignature ? -1 : 1));
   if (ordered.length <= DAY_POOL_CORE) return ordered;
 
-  const pool = ordered.slice(0, DAY_POOL_CORE);
-  const taken = new Set(pool.map((plan) => plan.exactSignature));
+  // How often one choice may occupy a slot in the pool.
+  //
+  // Coverage alone was not enough. Guaranteeing that every distinct breakfast
+  // appears *somewhere* still let rank fill the rest of the pool with a single
+  // one — forty-eight days, thirty-eight of them the same breakfast — and a
+  // weekly solver cannot rotate between days it was never given. A share is
+  // reserved per choice instead, so no slot can be monopolised while genuine
+  // alternatives are sitting unused.
   const stages = Math.max(1, slots.length);
-  const quota = Math.max(1, Math.floor((DAY_POOL_SIZE - DAY_POOL_CORE -
-    DAY_POOL_PREFERENCE_SLICE - DAY_POOL_AFFORDABLE_SLICE) / stages));
+  const caps = Array.from({ length: stages }, (_, slot) => {
+    const distinct = new Set(ordered.map((plan) => plan.picks[slot]?.dishShape ?? "")).size;
+    return Math.max(2, Math.ceil(DAY_POOL_SIZE / Math.max(1, distinct)));
+  });
 
-  // One pass per slot, so every distinct choice the search found for breakfast
-  // (and for lunch, and for dinner) is represented by at least one day.
-  for (let slot = 0; slot < stages && pool.length < DAY_POOL_SIZE; slot += 1) {
-    coverageFill(ordered, pool, taken, Math.min(DAY_POOL_SIZE, pool.length + quota),
-      (plan) => plan.exactSignature,
-      (plan) => plan.picks[slot]?.dishShape ?? String(slot));
-  }
-  if (ordered.some((plan) => plan.leanedMeals > 0)) {
-    takeSlice(ordered, pool, taken, DAY_POOL_PREFERENCE_SLICE,
-      (a, b) => (b.leanedMeals - a.leanedMeals) || (rankDayPlan(a) - rankDayPlan(b)));
-  }
-  takeSlice(ordered, pool, taken, DAY_POOL_AFFORDABLE_SLICE,
-    (a, b) => (a.priceIdr - b.priceIdr) || (rankDayPlan(a) - rankDayPlan(b)));
-  coverageFill(ordered, pool, taken, DAY_POOL_SIZE,
-    (plan) => plan.exactSignature, (plan) => plan.familySignature);
-  return pool;
-}
+  const pool: DayPlan[] = [];
+  const taken = new Set<string>();
+  const used = Array.from({ length: stages }, () => new Map<string, number>());
 
-/** Adds up to `count` further days, best first by the caller's own ordering. */
-function takeSlice(
-  ordered: readonly DayPlan[],
-  pool: DayPlan[],
-  taken: Set<string>,
-  count: number,
-  order: (a: DayPlan, b: DayPlan) => number
-): void {
-  const limit = Math.min(DAY_POOL_SIZE, pool.length + count);
-  const sorted = [...ordered].sort((a, b) => order(a, b) ||
-    (a.exactSignature < b.exactSignature ? -1 : 1));
-  for (const plan of sorted) {
-    if (pool.length >= limit) break;
-    if (taken.has(plan.exactSignature)) continue;
+  const add = (plan: DayPlan, enforceCaps: boolean): boolean => {
+    if (taken.has(plan.exactSignature)) return false;
+    if (enforceCaps && plan.picks.some((candidate, slot) =>
+      (used[slot]?.get(candidate.dishShape) ?? 0) >= (caps[slot] ?? DAY_POOL_SIZE))) {
+      return false;
+    }
     taken.add(plan.exactSignature);
     pool.push(plan);
+    plan.picks.forEach((candidate, slot) => {
+      used[slot]?.set(candidate.dishShape, (used[slot]?.get(candidate.dishShape) ?? 0) + 1);
+    });
+    return true;
+  };
+
+  const fill = (limit: number, order: readonly DayPlan[], enforceCaps = true): void => {
+    for (const plan of order) {
+      if (pool.length >= limit) break;
+      add(plan, enforceCaps);
+    }
+  };
+
+  /**
+   * Round-robin over one slot's distinct choices, best day per choice.
+   *
+   * Caps stop a slot being monopolised; this is what gets the alternatives in
+   * at all. Rank order alone reaches the second-best breakfast only after every
+   * variation of the best one, and a cap on lunch or dinner then rejects it —
+   * so the scarce slot is filled first, on its own terms.
+   */
+  const breadth = (slot: number, limit: number): void => {
+    const groups = new Map<string, DayPlan[]>();
+    for (const plan of ordered) {
+      if (taken.has(plan.exactSignature)) continue;
+      const key = plan.picks[slot]?.dishShape ?? "";
+      const bucket = groups.get(key);
+      if (bucket) bucket.push(plan); else groups.set(key, [plan]);
+    }
+    const keys = [...groups.keys()].sort((a, b) =>
+      ((used[slot]?.get(a) ?? 0) - (used[slot]?.get(b) ?? 0)) ||
+      (a < b ? -1 : a > b ? 1 : 0));
+    const cursors = new Map<string, number>();
+    let progressed = true;
+    while (pool.length < limit && progressed) {
+      progressed = false;
+      for (const key of keys) {
+        if (pool.length >= limit) break;
+        const bucket = groups.get(key)!;
+        let index = cursors.get(key) ?? 0;
+        while (index < bucket.length && taken.has(bucket[index].exactSignature)) index += 1;
+        cursors.set(key, index + 1);
+        if (index >= bucket.length) continue;
+        add(bucket[index], false);
+        progressed = true;
+      }
+    }
+  };
+
+  // Best-adhering days first, then the days that best match the protein lean,
+  // then the cheapest — each capped, so none of them can crowd out a slot.
+  fill(DAY_POOL_CORE, ordered);
+
+  // Scarcest slot first: breakfast has the fewest genuinely different options,
+  // so it is the one that loses its alternatives if another slot spends the
+  // room first.
+  const share = Math.max(2, Math.ceil((DAY_POOL_SIZE - DAY_POOL_CORE) / stages));
+  const byScarcity = Array.from({ length: stages }, (_, slot) => slot).sort((a, b) =>
+    (new Set(ordered.map((plan) => plan.picks[a]?.dishShape ?? "")).size -
+      new Set(ordered.map((plan) => plan.picks[b]?.dishShape ?? "")).size) || (a - b));
+  for (const slot of byScarcity) {
+    breadth(slot, Math.min(DAY_POOL_SIZE, pool.length + share));
   }
+  if (ordered.some((plan) => plan.leanedMeals > 0)) {
+    fill(pool.length + DAY_POOL_PREFERENCE_SLICE, [...ordered].sort((a, b) =>
+      (b.leanedMeals - a.leanedMeals) || (rankDayPlan(a) - rankDayPlan(b)) ||
+      (a.exactSignature < b.exactSignature ? -1 : 1)));
+  }
+  fill(pool.length + DAY_POOL_AFFORDABLE_SLICE, [...ordered].sort((a, b) =>
+    (a.priceIdr - b.priceIdr) || (rankDayPlan(a) - rankDayPlan(b)) ||
+    (a.exactSignature < b.exactSignature ? -1 : 1)));
+  fill(DAY_POOL_SIZE, ordered);
+  // Relax the caps only once every capped day is already in: a small pool of
+  // near-identical days still beats a pool that is short.
+  fill(DAY_POOL_SIZE, ordered, false);
+  return pool;
 }
 
 function rankDayPlan(plan: DayPlan): number {
@@ -1088,6 +1182,7 @@ export function generatePlanWithTargets(options: GenerateOptions): GeneratedPlan
         price: mealPrice,
         kind: candidate.kind,
         sourceDishId: candidate.sourceDishId,
+        dishStyle: candidate.dishStyle,
       });
       price = addPrices(price, mealPrice);
     });

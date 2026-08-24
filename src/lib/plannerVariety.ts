@@ -21,15 +21,25 @@ import type { PlannerCandidate } from "@/types/nutrition";
 export const GLOBAL_REPEAT_PENALTY = {
   exactDishIdentity: 1.1,
   proteinFamily: 0.3,
+  dishStyle: 0.28,
   carbFamily: 0.22,
   cuisineFamily: 0.18,
   sauceFamilies: 0.15,
   mealArchetype: 0.12,
 } as const;
 
-/** Penalties per repeat in the *same* slot, which is what reads as robotic. */
+/**
+ * Penalties per repeat in the *same* slot, which is what reads as robotic.
+ *
+ * `dishStyle` sits just under the exact dish on purpose. Swapping one oatmeal
+ * bowl for the other oatmeal bowl satisfies an exact-dish counter and changes
+ * nothing about the week, and the same is true of a third savoury egg plate
+ * under a different template. Style has to cost nearly as much as the dish
+ * itself or "rotate the styles" is not something the optimizer can be asked for.
+ */
 export const SLOT_REPEAT_PENALTY = {
   exactDishIdentity: 1.6,
+  dishStyle: 1.3,
   proteinFamily: 0.5,
   carbFamily: 0.3,
   mealArchetype: 0.25,
@@ -68,6 +78,14 @@ export const HEAVY_BREAKFAST_FAMILIES: ReadonlySet<string> =
 export const HEAVY_BREAKFAST_MULTIPLIER = 1.9;
 
 /**
+ * Breakfast is the slot people notice repeating, and the one with the fewest
+ * genuinely different options — so style repetition there is charged harder
+ * than anywhere else. This is what keeps any single breakfast from becoming the
+ * default once the previous one has been penalised out of the way.
+ */
+export const BREAKFAST_STYLE_MULTIPLIER = 1.6;
+
+/**
  * Asking for "more fish" should tolerate seeing fish more often, otherwise the
  * repeat penalty cancels the lean after a single use — which matters here
  * because the DIY menu has only two fish items big enough to anchor a meal.
@@ -91,7 +109,7 @@ export function dishShapeIdentity(candidate: PlannerCandidate): string {
 }
 
 export function familySignatureOf(candidate: PlannerCandidate): string {
-  return [candidate.mealArchetype, candidate.proteinFamily, candidate.carbFamily,
+  return [candidate.dishStyle, candidate.proteinFamily, candidate.carbFamily,
     candidate.cuisineFamily].join("/");
 }
 
@@ -135,9 +153,9 @@ const DIMENSIONS = Object.keys(GLOBAL_REPEAT_PENALTY) as VarietyDimension[];
 
 export function createWeeklyVarietyUsage(): WeeklyVarietyUsage {
   return {
-    exactDishIdentity: new Map(), proteinFamily: new Map(), carbFamily: new Map(),
-    cuisineFamily: new Map(), sauceFamilies: new Map(), mealArchetype: new Map(),
-    bySlot: new Map(), daySignatures: new Map(),
+    exactDishIdentity: new Map(), proteinFamily: new Map(), dishStyle: new Map(),
+    carbFamily: new Map(), cuisineFamily: new Map(), sauceFamilies: new Map(),
+    mealArchetype: new Map(), bySlot: new Map(), daySignatures: new Map(),
   };
 }
 

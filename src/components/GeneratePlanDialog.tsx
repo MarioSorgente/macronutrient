@@ -48,13 +48,17 @@ export default function GeneratePlanDialog({
   plan: Plan;
   week: number;
   savedDishes: Dish[];
+  /**
+   * Applies the week and resolves once it is actually saved. The dialog stays
+   * open on failure, so a rejected write costs the generated week nothing.
+   */
   onApply: (
     days: GeneratedPlan["days"],
     replace: boolean,
     preferences: ClientPreferences,
     /** The target generation actually used, so the plan can remember it. */
     resolvedTarget: MacroTargets
-  ) => void;
+  ) => Promise<boolean> | void;
   onClose: () => void;
 }) {
   const [step, setStep] = useState<1 | 2>(1);
@@ -76,6 +80,7 @@ export default function GeneratePlanDialog({
   const [replace, setReplace] = useState(true);
   const [seed, setSeed] = useState(1);
   const [preview, setPreview] = useState<GeneratedPlan | null>(null);
+  const [applying, setApplying] = useState(false);
 
   const days = useMemo(() => [0, 1, 2, 3, 4, 5, 6], []);
 
@@ -176,14 +181,20 @@ export default function GeneratePlanDialog({
           ) : (
             <button
               type="button"
-              disabled={!preview}
-              onClick={() =>
-                preview &&
-                onApply(preview.days, replace, preferences, preview.resolvedTarget)
-              }
+              disabled={!preview || applying}
+              onClick={async () => {
+                if (!preview) return;
+                setApplying(true);
+                try {
+                  await onApply(preview.days, replace, preferences,
+                    preview.resolvedTarget);
+                } finally {
+                  setApplying(false);
+                }
+              }}
               className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
             >
-              Apply to week {week}
+              {applying ? "Saving your week…" : `Apply to week ${week}`}
             </button>
           )}
         </>
