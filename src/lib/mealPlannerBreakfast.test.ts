@@ -3,6 +3,7 @@ import {
   __dayPoolForTests,
   generateDayWithLockedMeal,
   generatePlan,
+  UNREACHABLE_DAY_ERROR_EQUIVALENCE,
   type GeneratedDay,
 } from "@/lib/mealPlanner";
 import { menuRecipes } from "@/lib/database";
@@ -196,6 +197,55 @@ describe("the week rotates rather than settling on one answer", () => {
         expect(day.unfilledSlots).toEqual([]);
         expect(day.skippedSlots.filter((slot) => slot !== "Snack")).toEqual([]);
       }
+    }
+  });
+});
+
+/**
+ * Above roughly 3,600 kcal on four slots the menu simply runs out: composed
+ * meals cap at about 1,100 kcal each, so no combination reaches the target and
+ * the largest breakfast lands closest every single time. That is honest, and it
+ * used to produce seven identical mornings — the difference between the best
+ * failing day and the next one is a fraction of a shortfall neither closes.
+ */
+describe("a target the menu cannot reach", () => {
+  const OVER_CEILING: MacroTargets = {
+    energy_kcal: 3700, protein_g: 231.25, carbs_g: 416.25, fat_g: (3700 * 0.3) / 9,
+  };
+
+  it("rotates breakfast between the days that come closest", () => {
+    const days = week(OVER_CEILING);
+    const meals = breakfastsOf(days);
+    const names = meals.map((meal) => meal.name);
+    const errors = days.map((day) => day.adherence.normalizedError);
+
+    // Nothing here complies, and the planner says so rather than pretending.
+    for (const day of days) {
+      expect(day.adherence.classification).toBe("Best effort");
+      expect(day.unfilledSlots).toEqual([]);
+    }
+    expect(distinct(names), names.join(", ")).toBeGreaterThanOrEqual(2);
+    expect(mostRepeated(names), names.join(", ")).toBeLessThanOrEqual(5);
+
+    // The window is what buys that variety, so it has to stay a window: every
+    // day is still within it of the best one available.
+    expect(Math.max(...errors) - Math.min(...errors))
+      .toBeLessThanOrEqual(UNREACHABLE_DAY_ERROR_EQUIVALENCE);
+  });
+
+  it("does not reach for a breakfast that is not in the running", () => {
+    // Locked at this target, these land five to nine tolerance units behind the
+    // pancake — not a near-miss, and never worth a morning.
+    const names = breakfastsOf(week(OVER_CEILING)).map((meal) => meal.name);
+    expect(names.filter((name) =>
+      /before cardio|burrito|banana bread/i.test(name)), names.join(", ")).toEqual([]);
+  });
+
+  it("leaves a reachable target alone", () => {
+    // The same code path, one tolerance-unit tighter, because here it matters:
+    // every day complies and the window never opens.
+    for (const day of week(BALANCED)) {
+      expect(day.adherence.compliant).toBe(true);
     }
   });
 });

@@ -19,7 +19,7 @@ const plan: Plan = {
 };
 
 function generated(): GeneratedPlan {
-  return { days: [{ day: 0, meals: [], unfilledSlots: ["Lunch"],
+  return { days: [{ day: 0, meals: [], unfilledSlots: ["Lunch"], skippedSlots: [],
     macros: { ...targets, fiber_g: 0 }, price: { totalIdr: 0, complete: true, unpricedCount: 0 },
     adherence: { classification: "Exact", compliant: true, fields: {} } as never }],
     resolvedTarget: targets, targetSource: "explicit", targetStyle: "Explicit", targetExplanation: "" };

@@ -14,7 +14,7 @@ function plan(id: string, price = 50, classification = "Exact"): GeneratedPlan {
   const priceResult = { totalIdr: price, unpricedCount: 0, complete: true };
   return {
     resolvedTarget: generation.targets!, targetSource: "explicit", targetStyle: "Explicit", targetExplanation: "test",
-    days: [{ day: 0, unfilledSlots: [], macros, price: priceResult,
+    days: [{ day: 0, unfilledSlots: [], skippedSlots: [], macros, price: priceResult,
       adherence: { classification, compliant: true, fields: {} } as never,
       meals: [{ slot: "Lunch", name: `${id} 150 g`, sourceDishId: id, kind: "ready", dishStyle: id,
         items: [{ ingredientId: id, name: id, grams: 150, unitId: "g", quantity: 150 }],

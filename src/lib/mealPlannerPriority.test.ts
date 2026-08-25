@@ -223,5 +223,8 @@ describe("candidate order independence", () => {
     expect(Math.abs(reversed.worstError - forward.worstError)).toBeLessThan(0.5);
     expect(reversed.distinctDishes)
       .toBeGreaterThanOrEqual(Math.floor(forward.distinctDishes * 0.7));
-  }, 30_000);
+    // Two full weeks against the real catalog, each with the module graph reset
+    // in between. Sized to survive running beside the rest of a CPU-bound suite
+    // rather than to police the search's speed, which `npm run bench` does.
+  }, 120_000);
 });

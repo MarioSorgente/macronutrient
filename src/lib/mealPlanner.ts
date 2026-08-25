@@ -166,6 +166,22 @@ export interface GenerateOptions {
  */
 export const COMPLETE_DAY_ERROR_EQUIVALENCE = 0.1;
 
+/**
+ * The same, for a week where nothing can comply.
+ *
+ * When a compliant day exists, a tenth of a tolerance unit is a real difference
+ * and the tighter window applies. When the target is simply beyond what the
+ * menu can assemble, every candidate day fails the same way and the gap between
+ * them is a fraction of a shortfall none of them closes — at 4,000 kcal here
+ * the best day is 250 kcal short, and refusing to rotate breakfast because one
+ * option is 30 kcal shorter still buys nothing and costs the week its variety.
+ *
+ * Wide enough to hold the near-misses together (a 1,095 kcal pancake and a
+ * 1,085 kcal oatmeal bowl), narrow enough to leave out the breakfasts that are
+ * not in the running at all — those sit five to nine tolerance units back.
+ */
+export const UNREACHABLE_DAY_ERROR_EQUIVALENCE = 0.75;
+
 /** Partial days retained at each depth, and how many go on macro fit alone. */
 const BEAM_WIDTH = 220;
 const BEAM_MACRO_CORE = 96;
@@ -566,8 +582,19 @@ interface ComposedCache {
   limit: number;
 }
 
-function composedCache(limit = MAX_RESIDUAL_BUCKETS_PER_SLOT): ComposedCache {
-  return { store: new Map(), limit };
+/**
+ * A cache of its own, starting from what another search already built.
+ *
+ * Seeding matters as much as separating: two searches asking for the same
+ * quantized residual want the same meals, and composing is where the time goes.
+ * What a locked search must not do is inherit the *ceiling* as well — that is
+ * how it ends up with nothing but meals built for a day it is not solving.
+ */
+function composedCache(
+  limit = MAX_RESIDUAL_BUCKETS_PER_SLOT,
+  seed?: ComposedCache
+): ComposedCache {
+  return { store: new Map(seed?.store), limit };
 }
 
 interface DayState {
@@ -1048,7 +1075,7 @@ function selectDayPool(days: CompleteDay[], slots: string[]): DayPlan[] {
   const bestError = bestClass.reduce((best, day) =>
     Math.min(best, day.diagnostics.normalizedError), Number.POSITIVE_INFINITY);
   const eligible = compliant ? bestClass : bestClass.filter((day) =>
-    day.diagnostics.normalizedError <= bestError + COMPLETE_DAY_ERROR_EQUIVALENCE);
+    day.diagnostics.normalizedError <= bestError + UNREACHABLE_DAY_ERROR_EQUIVALENCE);
 
   const unique = new Map<string, DayPlan>();
   for (const day of eligible) {
@@ -1328,6 +1355,7 @@ const FORCED_REPRESENTATIVE_MAX = 12;
  * ordinary search already covers costs nothing at all.
  */
 const ANCHORED_CHOICES_PER_SLOT = 12;
+
 /**
  * Residuals the locked pass composes for, per slot.
  *
@@ -1427,20 +1455,30 @@ function forcedRepresentatives(plan: SlotPlan): Candidate[] {
   return selected;
 }
 
+/** Ready choices in one slot that a compliant day has already produced. */
+function provenReady(
+  fillable: SlotPlan[],
+  slotIndex: number,
+  explored: CompleteDay[]
+): Set<string> {
+  const proven = new Set<string>();
+  for (const day of explored) {
+    if (!day.diagnostics.compliant) continue;
+    const pick = day.picks[slotIndex];
+    if (pick) proven.add(pick.dishShape);
+  }
+  return proven;
+}
+
 /** The ready choices in one slot that no compliant day has produced yet. */
 function unprovenReady(
   fillable: SlotPlan[],
   slotIndex: number,
-  explored: CompleteDay[],
+  proven: Set<string>,
   target: MacroTargets
 ): Candidate[] {
   const plan = fillable[slotIndex];
-  const seen = new Set<string>();
-  for (const day of explored) {
-    if (!day.diagnostics.compliant) continue;
-    const pick = day.picks[slotIndex];
-    if (pick) seen.add(pick.dishShape);
-  }
+  const seen = new Set(proven);
   const elsewhere = subtractRange(
     fillable.reduce((sum, entry) => addRange(sum, entry.reach), emptyRange()), plan.reach);
 
@@ -1474,7 +1512,7 @@ function bestEquivalentDays(days: CompleteDay[]): CompleteDay[] {
   if (bestRank <= ADHERENCE_RANK["Within tolerance"]) return ranked;
   const bestError = Math.min(...ranked.map((day) => day.diagnostics.normalizedError));
   return ranked.filter((day) =>
-    day.diagnostics.normalizedError <= bestError + COMPLETE_DAY_ERROR_EQUIVALENCE);
+    day.diagnostics.normalizedError <= bestError + UNREACHABLE_DAY_ERROR_EQUIVALENCE);
 }
 
 /** Everything a day search needs, resolved once and shared by every pass. */
@@ -1556,15 +1594,27 @@ function buildDayPool(search: DaySearch, options: GenerateOptions): DayPlan[] {
   const { fillable, target, preferences, budget, complete, slotNames } = search;
   const ordinaryDays = searchCompleteDays(fillable, target, options, preferences,
     budget, complete);
-  // One locked search per slot, over everything that slot offers whole and has
-  // not already proved itself. Each gets composed meals built for the day it
-  // actually leaves behind, which is the difference between asking whether a
-  // large dish can work and assuming it cannot.
-  const lockedCaches = fillable.map(() => composedCache(ANCHORED_RESIDUAL_BUCKETS));
-  const anchoredDays = fillable.flatMap((_, slotIndex) =>
+  // A locked search over everything a slot offers whole and has not already
+  // proved itself, given composed meals built for the day that choice actually
+  // leaves behind — the difference between asking whether a large dish can work
+  // and assuming it cannot. Least-covered slots first, and only as many as the
+  // budget allows.
+  const proven = fillable.map((_, slotIndex) =>
+    provenReady(fillable, slotIndex, ordinaryDays));
+  const unproven = fillable.map((_, slotIndex) =>
+    unprovenReady(fillable, slotIndex, proven[slotIndex], target));
+  // Least-covered slot first, and never one with nothing left to prove: the
+  // snack slot holds no ready dish at all on this menu, and a search with an
+  // empty pool is pure cost.
+  const lockedSlots = fillable
+    .map((_, slotIndex) => slotIndex)
+    .filter((slotIndex) => unproven[slotIndex].length > 0)
+    .sort((a, b) => (proven[a].size - proven[b].size) || (a - b));
+  const lockedCaches = fillable.map((plan) =>
+    composedCache(ANCHORED_RESIDUAL_BUCKETS, plan.composed));
+  const anchoredDays = lockedSlots.flatMap((slotIndex) =>
     searchCompleteDays(fillable, target, options, preferences, budget, complete, false,
-      { slotIndex, candidates: unprovenReady(fillable, slotIndex, ordinaryDays, target) },
-      lockedCaches));
+      { slotIndex, candidates: unproven[slotIndex] }, lockedCaches));
 
   const explored = [...ordinaryDays, ...anchoredDays];
   const bestRank = explored.length

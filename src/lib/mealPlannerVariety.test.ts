@@ -89,7 +89,11 @@ describe("weekly variety on the real menu", () => {
           .toBe(day.meals.length);
       }
     }
-  });
+    // Nine whole weeks against the real catalog, each a full search. The
+    // project's 20 s default is sized for a single generation; here it would be
+    // measuring how busy the machine is rather than whether shuffling holds its
+    // constraints.
+  }, 120_000);
 
   it("produces seven visibly different days", () => {
     const days = week(HIGH_PROTEIN);

@@ -43,13 +43,15 @@ export default defineConfig({
           include: ["src/**/*.test.{ts,tsx}"],
           globals: false,
           // The planner suites are CPU-bound — a seven-day search over the real
-          // catalog is a few hundred milliseconds each, and several of them run
-          // in parallel with a cold `require("firebase-admin")`. The 5 s default
-          // measures machine load rather than correctness here. Still bounded,
-          // so a genuinely hung test fails rather than hanging the run. The
-          // planner's own speed budget is asserted directly, in the bounded
-          // search matrix test.
-          testTimeout: 20_000,
+          // catalog now runs to a second or two, several tests generate a
+          // handful of weeks each, and they all run in parallel with a cold
+          // `require("firebase-admin")`. The default measures machine load
+          // rather than correctness here, and 20 s stopped covering it once the
+          // search began proving large ready dishes by solving whole days around
+          // them. Still bounded, so a genuinely hung test fails rather than
+          // hanging the run; the planner's own speed budget is asserted
+          // directly, in the bounded search matrix test and in `npm run bench`.
+          testTimeout: 60_000,
         },
       },
       {

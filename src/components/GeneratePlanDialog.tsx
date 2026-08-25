@@ -183,6 +183,23 @@ export default function GeneratePlanDialog({
   }
 
   const previewDays = preview?.days ?? [];
+  /**
+   * A week where not one day adheres is not seven bad answers — it is a target
+   * the menu cannot assemble, and saying so once is worth more than seven
+   * identical-looking days that never explain themselves.
+   */
+  const unreachable = previewDays.length > 0 &&
+    previewDays.every((day) => !day.adherence.compliant)
+    ? {
+      closestKcal: Math.max(...previewDays.map((day) => day.macros.energy_kcal)),
+      // The same wording the day's own adherence panel uses, so the summary
+      // cannot drift from the detail underneath it.
+      reasons: [...new Set(previewDays.flatMap((day) => day.adherence.reasons
+        .filter((reason) =>
+          /^(energy|protein|carbs|fat)_(below|above)_tolerance$/.test(reason.code))
+        .map((reason) => reason.message)))],
+    }
+    : null;
   const weekCost = previewDays.reduce((s, d) => s + d.price.totalIdr, 0);
   const avgKcal = previewDays.length
     ? previewDays.reduce((s, d) => s + d.macros.energy_kcal, 0) / previewDays.length
@@ -499,6 +516,23 @@ export default function GeneratePlanDialog({
                       Some slots could not be filled without going far off target
                       {budgetOn ? " within this budget" : ""}, so they were left
                       empty rather than padded.
+                    </p>
+                  )}
+
+                  {unreachable && (
+                    <p
+                      className="mb-2 rounded-lg bg-gold/10 px-3 py-2 text-xs text-charcoal"
+                      data-testid="target-unreachable"
+                    >
+                      <b>No day on this menu reaches your target.</b> The closest
+                      it gets is {round0(unreachable.closestKcal)} kcal against{" "}
+                      {round0(preview.resolvedTarget.energy_kcal)}
+                      {unreachable.reasons.length > 0
+                        ? `. ${unreachable.reasons.join(" ")}`
+                        : "."}{" "}
+                      Adding a meal slot, or lowering the target, is what closes
+                      the gap — the days below are the nearest the kitchen can
+                      assemble.
                     </p>
                   )}
 
