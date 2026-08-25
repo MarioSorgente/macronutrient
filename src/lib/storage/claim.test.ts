@@ -60,6 +60,7 @@ function makePlan(id: string, assignments: number): Plan {
     ownerUid: "",
     title: "My week",
     targets: null,
+    targetMode: "preset",
     mealSlots: ["Lunch"],
     programStartDate: "2026-08-24",
     weekCount: 4,

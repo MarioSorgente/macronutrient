@@ -47,7 +47,7 @@ export default function PlanDayView({
 }) {
   const totals = dayTotals(plan, week, day, dishes);
   const price = dayPrice(plan, week, day, dishes);
-  const targetResolution = resolveTarget({ targets: plan.targets, style: plan.preferences?.macroStyle });
+  const targetResolution = resolveTarget({ targets: plan.targets, mode: plan.targetMode, preset: plan.targetPreset });
 
   return (
     <div>

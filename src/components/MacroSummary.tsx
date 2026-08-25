@@ -1,6 +1,6 @@
 import type { Macros } from "@/types/nutrition";
 import { macroEnergySplit } from "@/lib/calc";
-import { round0, round1 } from "@/lib/format";
+import { formatMacroGrams, round0 } from "@/lib/format";
 
 const MACRO_META: {
   key: keyof Macros;
@@ -17,7 +17,7 @@ const MACRO_META: {
 ];
 
 function value(macros: Macros, key: keyof Macros, decimals: 0 | 1) {
-  return decimals === 0 ? round0(macros[key]) : round1(macros[key]);
+  return decimals === 0 ? round0(macros[key]) : formatMacroGrams(macros[key]);
 }
 
 export default function MacroSummary({

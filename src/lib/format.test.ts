@@ -10,7 +10,9 @@ import {
   formatBaliDateTime,
   formatBaliDay,
   formatDate,
+  formatMacroGrams,
   grams,
+  wholeNonNegative,
   round0,
   round1,
 } from "@/lib/format";
@@ -25,6 +27,22 @@ describe("round0", () => {
   it("rounds to a whole number with thousands separators", () => {
     expect(round0(1234.6)).toBe("1,235");
     expect(round0(0.4)).toBe("0");
+  });
+});
+
+describe("macro presentation and input boundaries", () => {
+  it("formats macro grams as whole numbers without negative zero", () => {
+    expect(formatMacroGrams(66.7)).toBe("67");
+    expect(formatMacroGrams(37.49)).toBe("37");
+    expect(formatMacroGrams(-0.4)).toBe("0");
+    expect(round0(-0.4)).toBe("0");
+  });
+
+  it("normalizes saved calorie and macro values to finite non-negative integers", () => {
+    expect(wholeNonNegative(66.7)).toBe(67);
+    expect(wholeNonNegative(-12)).toBe(0);
+    expect(wholeNonNegative(Number.POSITIVE_INFINITY)).toBe(0);
+    expect(wholeNonNegative(Number.NaN)).toBe(0);
   });
 });
 

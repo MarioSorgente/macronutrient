@@ -86,11 +86,12 @@ const generated: GeneratedDay[] = Array.from({ length: 7 }, (_, day) => ({
 vi.mock("@/components/GeneratePlanDialog", () => ({
   default: ({ onApply }: {
     onApply: (days: GeneratedDay[], replace: boolean,
-      preferences: unknown, resolvedTarget: MacroTargets) => Promise<boolean> | void;
+      preferences: unknown, resolvedTarget: MacroTargets,
+      targetMode: "preset", targetPreset: "balanced") => Promise<boolean> | void;
   }) => (
     <button type="button" onClick={() =>
       void onApply(generated, true, { macroStyle: "balanced", proteinLean: [],
-        avoidIngredientIds: [] }, RESOLVED)}>
+        avoidIngredientIds: [] }, RESOLVED, "preset", "balanced")}>
       apply generated week
     </button>
   ),
@@ -102,6 +103,7 @@ const planWithoutTargets = (): Plan => ({
   id: "primary", ownerUid: "", title: "August plan",
   createdAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-01T00:00:00.000Z",
   targets: null, mealSlots: SLOTS, programStartDate: "2026-08-17",
+  targetMode: "preset", targetPreset: "balanced",
   weekCount: 1, status: "draft", submittedWeeks: [],
   assignments: [{
     id: "week-2-keeper", week: 2, day: 0, slot: "Lunch", servings: 1,
@@ -139,6 +141,7 @@ describe("applying a generated week", () => {
     expect(saved).toBeDefined();
     expect(saved.targets).toEqual(RESOLVED);
     expect(saved.preferences).toMatchObject({ macroStyle: "balanced" });
+    expect(saved).toMatchObject({ targetMode: "preset", targetPreset: "balanced" });
 
     const applied = saved.assignments.filter((a) => a.week === 1);
     expect(applied).toHaveLength(21);

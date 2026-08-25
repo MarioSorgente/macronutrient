@@ -33,7 +33,7 @@ export const MACRO_STYLES: MacroStyleSpec[] = [
   },
   {
     id: "low_carb",
-    label: "Low carb",
+    label: "Low carb / high fat",
     description: "Fat-led, carbs kept down",
     split: { protein: 0.3, carbs: 0.15, fat: 0.55 },
   },
@@ -51,7 +51,7 @@ export function macroStyleSpec(style: MacroStyle): MacroStyleSpec {
 
 /**
  * Turn a calorie figure plus a style into gram targets, so someone can choose
- * "low carb" instead of typing four numbers. The numbers stay editable after.
+ * "low carb / high fat" instead of typing four numbers.
  */
 export function targetsFromStyle(
   energyKcal: number,

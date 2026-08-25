@@ -2,7 +2,24 @@
 
 /** Round to a whole number (used for kcal and grams display). */
 export function round0(n: number): string {
-  return Math.round(n).toLocaleString("en-US");
+  const rounded = Math.round(n);
+  return (Object.is(rounded, -0) ? 0 : rounded).toLocaleString("en-US");
+}
+
+/** Format user-facing macro grams as a whole number. Never renders negative zero. */
+export function formatMacroGrams(n: number): string {
+  const rounded = Math.round(n);
+  return String(Object.is(rounded, -0) ? 0 : rounded);
+}
+
+/** Format a fractional share as a whole percentage for user-facing text. */
+export function formatPercentageShare(n: number): string {
+  return `${Math.round(n * 100)}%`;
+}
+
+/** Normalize a calorie or macro-gram input at the persistence boundary. */
+export function wholeNonNegative(n: number): number {
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
 }
 
 /** Round to one decimal place, trimming a trailing ".0" (used for macros). */

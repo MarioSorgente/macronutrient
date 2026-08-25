@@ -71,6 +71,26 @@ const BALANCED_4000: MacroTargets = {
 };
 
 describe("weekly variety on the real menu", () => {
+  it("preserves hard constraints and adherence across many shuffle seeds", () => {
+    const avoidIngredientIds = ["chicken_breast_raw"];
+    const preferences = { ...DEFAULT_PREFERENCES, avoidIngredientIds };
+    const baseline = week(BALANCED, { seed: 20, preferences, dailyBudgetIdr: 400_000 });
+    const classifications = baseline.map((day) => day.adherence.classification);
+
+    for (let seed = 21; seed <= 28; seed += 1) {
+      const shuffled = week(BALANCED, { seed, preferences, dailyBudgetIdr: 400_000 });
+      expect(shuffled.map((day) => day.adherence.classification), `seed ${seed} adherence`)
+        .toEqual(classifications);
+      for (const day of shuffled) {
+        expect(day.price.totalIdr, `seed ${seed}, day ${day.day} budget`).toBeLessThanOrEqual(400_000);
+        expect(day.meals.flatMap((meal) => meal.items).some((item) =>
+          avoidIngredientIds.includes(item.ingredientId)), `seed ${seed} exclusion`).toBe(false);
+        expect(new Set(day.meals.map((meal) => meal.slot)).size, `seed ${seed} slot suitability`)
+          .toBe(day.meals.length);
+      }
+    }
+  });
+
   it("produces seven visibly different days", () => {
     const days = week(HIGH_PROTEIN);
     const signatures = days.map((day) => day.meals.map((meal) => meal.name).join(" | "));

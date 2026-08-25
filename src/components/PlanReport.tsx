@@ -20,7 +20,7 @@ import {
   weekTotals,
 } from "@/lib/clients";
 import { formatIdr, formatPrice } from "@/lib/pricing";
-import { round0, round1 } from "@/lib/format";
+import { formatMacroGrams, round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import TargetAdherence from "@/components/TargetAdherence";
 import ReportShell, { ReportMessage } from "@/components/ReportShell";
@@ -134,8 +134,8 @@ export default function PlanReport() {
                       <b className="text-charcoal">
                         {round0(average.energy_kcal)} kcal
                       </b>{" "}
-                      · P {round1(average.protein_g)} g · C{" "}
-                      {round1(average.carbs_g)} g · F {round1(average.fat_g)} g
+                      · P {formatMacroGrams(average.protein_g)} g · C{" "}
+                      {formatMacroGrams(average.carbs_g)} g · F {formatMacroGrams(average.fat_g)} g
                     </p>
 
                     {/* Cost */}
@@ -205,9 +205,9 @@ export default function PlanReport() {
                                 <b className="text-tomato">
                                   {round0(dTotals.energy_kcal)}
                                 </b>{" "}
-                                kcal · P {round1(dTotals.protein_g)} · C{" "}
-                                {round1(dTotals.carbs_g)} · F{" "}
-                                {round1(dTotals.fat_g)} ·{" "}
+                                kcal · P {formatMacroGrams(dTotals.protein_g)} · C{" "}
+                                {formatMacroGrams(dTotals.carbs_g)} · F{" "}
+                                {formatMacroGrams(dTotals.fat_g)} ·{" "}
                                 {formatPrice(
                                   dayPrice(plan, week, dayIndex, dishMap)
                                 )}
@@ -247,7 +247,7 @@ export default function PlanReport() {
                                         <b className="text-tomato">
                                           {round0(macros.energy_kcal)}
                                         </b>{" "}
-                                        kcal · P {round1(macros.protein_g)} · C {round1(macros.carbs_g)} · F {round1(macros.fat_g)}
+                                        kcal · P {formatMacroGrams(macros.protein_g)} · C {formatMacroGrams(macros.carbs_g)} · F {formatMacroGrams(macros.fat_g)}
                                         <span className="ml-2">
                                           {formatPrice(
                                             assignmentPrice(a, dishMap)

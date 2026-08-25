@@ -43,6 +43,8 @@ import { round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import AssignDishDialog from "@/components/AssignDishDialog";
 import PlanSettings from "@/components/PlanSettings";
+import MacroTargetDialog from "@/components/MacroTargetDialog";
+import { TargetSummary } from "@/components/MacroTargetEditor";
 import TargetAdherence from "@/components/TargetAdherence";
 import SegmentedToggle from "@/components/SegmentedToggle";
 import GeneratePlanDialog from "@/components/GeneratePlanDialog";
@@ -68,6 +70,7 @@ export default function WeekPlanner() {
   const [week, setWeek] = useState(1);
   const [day, setDay] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [targetsOpen, setTargetsOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [openMealId, setOpenMealId] = useState<string | null>(null);
   const [planView, setPlanView] = usePlanView();
@@ -315,7 +318,9 @@ export default function WeekPlanner() {
     generated: GeneratedDay[],
     replace: boolean,
     preferences: ClientPreferences,
-    resolvedTarget: MacroTargets
+    resolvedTarget: MacroTargets,
+    targetMode: Plan["targetMode"],
+    targetPreset?: Plan["targetPreset"]
   ): Promise<boolean> {
     if (!plan) return false;
     const kept = replace
@@ -348,6 +353,7 @@ export default function WeekPlanner() {
     // target and the preferences, all at once. The dialog stays open if it
     // fails, so the generated week is still in hand rather than lost.
     const saved = await persist({ ...plan, preferences, targets: resolvedTarget,
+      targetMode, ...(targetMode === "preset" ? { targetPreset } : { targetPreset: undefined }),
       assignments: [...kept, ...additions] });
     if (saved) setGenerateOpen(false);
     return saved;
@@ -469,18 +475,22 @@ export default function WeekPlanner() {
         </div>
       </div>
 
+      {/* Daily goals are a primary planner control, including an intentional onboarding state. */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-tomato/30 bg-white p-4 shadow-sm">
+        <div>
+          <div className="mb-1 text-xs font-700 uppercase tracking-wide text-tomato-dark">Daily targets</div>
+          {plan.targets ? <TargetSummary selection={{ targets: plan.targets, mode: plan.targetMode, preset: plan.targetPreset }} /> : <>
+            <div className="font-display text-lg font-700 text-charcoal">Set daily targets</div>
+            <p className="text-xs text-charcoal-soft">Add calories and macro goals to guide auto-fill and track each day.</p>
+          </>}
+        </div>
+        <button type="button" onClick={() => setTargetsOpen(true)} className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark">
+          {plan.targets ? "Edit targets" : "Set daily targets"}
+        </button>
+      </div>
+
       {/* Week summary — one line, not three stacked blocks */}
       <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-basil/30 bg-basil/5 px-3 py-2 text-sm">
-        <span className="text-charcoal-soft">
-          Target{" "}
-          <b className="tabular-nums text-charcoal">
-            {plan.targets
-              ? `${round0(plan.targets.energy_kcal)} kcal · P ${round0(
-                  plan.targets.protein_g
-                )}`
-              : "not set"}
-          </b>
-        </span>
         <span className="text-charcoal-soft">
           Week {currentWeek}{" "}
           <b className="tabular-nums text-charcoal">{formatPrice(cost)}</b>
@@ -651,8 +661,20 @@ export default function WeekPlanner() {
           week={currentWeek}
           savedDishes={dishes}
           onApply={applyGenerated}
+          onTargetsSave={async (selection) => {
+            await persist({ ...plan, targets: selection.targets, targetMode: selection.mode,
+              ...(selection.mode === "preset" ? { targetPreset: selection.preset } : { targetPreset: undefined }) });
+          }}
           onClose={() => setGenerateOpen(false)}
         />
+      )}
+
+      {targetsOpen && (
+        <MacroTargetDialog plan={plan} onSave={async (selection) => {
+          await persist({ ...plan, targets: selection.targets, targetMode: selection.mode,
+            ...(selection.mode === "preset" ? { targetPreset: selection.preset } : { targetPreset: undefined }) });
+          setTargetsOpen(false);
+        }} onClose={() => setTargetsOpen(false)} />
       )}
 
       {settingsOpen && (

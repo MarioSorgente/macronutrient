@@ -54,6 +54,7 @@ function plan(assignments: Assignment[]): Plan {
   return {
     id: "p1", createdAt: "", updatedAt: "", ownerUid: "u1",
     title: "My week", targets: null, mealSlots: ["Breakfast", "Lunch"],
+    targetMode: "preset", targetPreset: "balanced",
     programStartDate: "2026-08-24", weekCount: 2, assignments,
     status: "draft", submittedWeeks: [],
   };

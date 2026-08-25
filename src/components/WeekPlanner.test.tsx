@@ -67,6 +67,7 @@ describe("WeekPlanner", () => {
       createdAt: "2026-08-01T00:00:00.000Z",
       updatedAt: "2026-08-01T00:00:00.000Z",
       targets: null,
+      targetMode: "preset",
       mealSlots: ["Lunch"],
       programStartDate: "2026-08-17",
       weekCount: 1,
