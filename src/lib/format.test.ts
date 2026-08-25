@@ -12,7 +12,7 @@ import {
   formatDate,
   formatMacroGrams,
   grams,
-  wholeNonNegative,
+  roundedToTenth,
   round0,
   round1,
 } from "@/lib/format";
@@ -38,11 +38,13 @@ describe("macro presentation and input boundaries", () => {
     expect(round0(-0.4)).toBe("0");
   });
 
-  it("normalizes saved calorie and macro values to finite non-negative integers", () => {
-    expect(wholeNonNegative(66.7)).toBe(67);
-    expect(wholeNonNegative(-12)).toBe(0);
-    expect(wholeNonNegative(Number.POSITIVE_INFINITY)).toBe(0);
-    expect(wholeNonNegative(Number.NaN)).toBe(0);
+  it("keeps an edited value to one decimal without losing it to rounding", () => {
+    // What replaced `wholeNonNegative`: a balanced 2,000 kcal day is 66.7 g of
+    // fat, and rounding every edit to a whole gram changed targets nobody
+    // touched.
+    expect(roundedToTenth(66.66666)).toBe(66.7);
+    expect(roundedToTenth(180)).toBe(180);
+    expect(roundedToTenth(Number.NaN)).toBe(0);
   });
 });
 

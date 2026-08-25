@@ -45,7 +45,12 @@ export function validateMacroTarget(target: MacroTargets): MacroTargetValidation
     ? Math.abs(differenceKcal) / target.energy_kcal * 100
     : (macroEnergyKcal === 0 ? 0 : Number.POSITIVE_INFINITY);
   return {
-    valid: Math.abs(differenceKcal) <= Math.max(50, target.energy_kcal * 0.05),
+    // A day has to be worth eating. Zero calories is arithmetically consistent
+    // with zero grams of everything, so the coherence check alone called it
+    // valid — leaving Save enabled on an empty target and the planner searching
+    // for a day that adds up to nothing.
+    valid: target.energy_kcal > 0 &&
+      Math.abs(differenceKcal) <= Math.max(50, target.energy_kcal * 0.05),
     macroEnergyKcal,
     differenceKcal,
     differencePercent,

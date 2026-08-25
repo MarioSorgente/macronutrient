@@ -98,6 +98,9 @@ export default function DishItemRow({
               onKeyDown={(e) => {
                 if (e.key === "Enter") (e.target as HTMLInputElement).blur();
               }}
+              // A focused number input treats a scroll as an increment, so
+              // scrolling the page over one silently retyped it.
+              onWheel={(e) => e.currentTarget.blur()}
               aria-label={`Amount of ${ingredient.name}`}
             />
             <button

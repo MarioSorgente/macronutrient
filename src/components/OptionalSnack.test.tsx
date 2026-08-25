@@ -112,6 +112,31 @@ describe("the week grid", () => {
   });
 });
 
+describe("the day summary behind a grid cell", () => {
+  it("agrees with the week about what a complete day is", () => {
+    render(
+      <PlanWeekGrid
+        plan={plan()}
+        week={1}
+        dishes={new Map<string, Dish>()}
+        showPrices={false}
+        onOpenMeal={() => {}}
+        onAddMeal={() => {}}
+      />
+    );
+    // Monday reaches its target in three meals. Opening it used to contradict
+    // the grid it was opened from, because the panel kept its own idea of
+    // completeness and counted the empty Snack against the day.
+    fireEvent.click(screen.getByRole("button", { name: /view summary for monday/i }));
+
+    // The cell shows the compact pill, the panel the full wording; both now
+    // read the day as complete rather than one contradicting the other.
+    expect(screen.getByText("Within target")).toBeTruthy();
+    expect(screen.getByText("Within tolerance")).toBeTruthy();
+    expect(screen.queryByText("No plan")).toBeNull();
+  });
+});
+
 describe("the generator preview", () => {
   const generate = async (days: GeneratedDay[]) => {
     vi.useFakeTimers();

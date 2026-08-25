@@ -52,6 +52,18 @@ describe("target integrity", () => {
     expect(validateMacroTarget(result).valid).toBe(true);
   });
 
+  it("rejects a target of nothing", () => {
+    // Zero grams of everything is arithmetically consistent with zero calories,
+    // so the coherence check alone called an emptied form valid — Save enabled,
+    // and a planner asked to assemble a day that adds up to nothing.
+    expect(validateMacroTarget({
+      energy_kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0,
+    }).valid).toBe(false);
+    expect(validateMacroTarget({
+      energy_kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0,
+    }).valid).toBe(true);
+  });
+
   it("rejects the reported contradictory 4000 kcal target", () => {
     const validation = validateMacroTarget({
       energy_kcal: 4000, protein_g: 175, carbs_g: 175, fat_g: 66.7,

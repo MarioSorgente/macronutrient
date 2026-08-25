@@ -10,6 +10,7 @@ import type { HouseRecipe, HouseRecipeComponent } from "@/lib/storage/types";
 import { formatMacroGrams, round0 } from "@/lib/format";
 import MacroChips from "@/components/MacroChips";
 import IngredientTypeahead from "@/components/IngredientTypeahead";
+import NumberField from "@/components/ui/NumberField";
 import Modal from "@/components/ui/Modal";
 
 /**
@@ -137,20 +138,20 @@ export default function HouseRecipeEditor({
                   <span className="min-w-0 flex-1 truncate text-sm font-600 text-charcoal">
                     {ing?.name ?? component.ingredientId}
                   </span>
-                  <input
-                    type="number"
+                  <NumberField
+                    decimals
                     min={0}
                     value={component.grams}
-                    onChange={(e) =>
+                    onChange={(gramsTyped) =>
                       setComponents(
                         components.map((c) =>
                           c.ingredientId === component.ingredientId
-                            ? { ...c, grams: Math.max(0, parseFloat(e.target.value) || 0) }
+                            ? { ...c, grams: gramsTyped }
                             : c
                         )
                       )
                     }
-                    className="no-spin w-20 rounded-lg border border-cream-deep px-2 py-1 text-right text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
+                    className="w-20 rounded-lg border border-cream-deep px-2 py-1 text-right text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
                     aria-label={`Grams of ${ing?.name ?? component.ingredientId}`}
                   />
                   <span className="text-xs font-600 text-charcoal-soft">g</span>
@@ -194,6 +195,7 @@ export default function HouseRecipeEditor({
                 min={0}
                 value={yieldGrams}
                 onChange={(e) => setYieldGrams(e.target.value)}
+                onWheel={(e) => e.currentTarget.blur()}
                 placeholder={String(Math.round(rawWeight) || 1000)}
                 className="no-spin w-28 rounded-lg border border-cream-deep px-2 py-1.5 text-right text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
               />

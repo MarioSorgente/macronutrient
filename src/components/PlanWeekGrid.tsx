@@ -20,6 +20,7 @@ import { formatMacroGrams, round0 } from "@/lib/format";
 import TargetAdherence from "@/components/TargetAdherence";
 import { diagnoseDailyAdherence } from "@/lib/dailyAdherence";
 import { dayIsComplete } from "@/lib/slotSuitability";
+import { useBackdropClose } from "@/components/ui/useBackdropClose";
 
 /**
  * Seven-day overview. Kept deliberately sparse: a meal shows its name and
@@ -187,8 +188,14 @@ function DailySummary({ plan, week, day, dishes, onClose }: {
   const price = dayPrice(plan, week, day, dishes);
   const date = dateFor(plan, week, day);
   const adherence = plan.targets ? diagnoseDailyAdherence(totals, plan.targets, {
-    complete: plan.mealSlots.every((slot) => assignmentsFor(plan, week, day, slot).length > 0),
+    // The same rule the grid behind this panel uses: a snack the day went
+    // without is not a hole in it. These two disagreeing meant one day read
+    // "Within target" in the week and "Incomplete day" once you opened it.
+    complete: dayIsComplete(plan.mealSlots, (slot) =>
+      assignmentsFor(plan, week, day, slot).length > 0),
   }) : null;
+
+  const backdrop = useBackdropClose(onClose);
 
   useEffect(() => {
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
@@ -202,7 +209,7 @@ function DailySummary({ plan, week, day, dishes, onClose }: {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end bg-charcoal/40 lg:items-stretch lg:justify-end" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-end bg-charcoal/40 lg:items-stretch lg:justify-end" role="dialog" aria-modal="true" aria-labelledby={titleId} {...backdrop}>
       <div ref={panelRef} tabIndex={-1} onClick={(event) => event.stopPropagation()} className="scroll-slim max-h-[90vh] w-full overflow-y-auto rounded-t-xl2 bg-cream p-5 shadow-card outline-none lg:h-full lg:max-h-none lg:max-w-md lg:rounded-none">
         <div className="flex items-start justify-between gap-4">
           <div>

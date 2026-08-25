@@ -32,6 +32,7 @@ import { formatMacroGrams, round0 } from "@/lib/format";
 import { resolveTarget, validateMacroTarget } from "@/lib/targetResolution";
 import MacroTargetEditor, { TargetSummary, type MacroTargetSelection } from "@/components/MacroTargetEditor";
 import IngredientTypeahead from "@/components/IngredientTypeahead";
+import NumberField from "@/components/ui/NumberField";
 import Modal from "@/components/ui/Modal";
 import TargetAdherence from "@/components/TargetAdherence";
 
@@ -416,17 +417,16 @@ export default function GeneratePlanDialog({
                   </span>
                   {budgetOn && (
                     <span className="flex items-center gap-1.5">
-                      <input
-                        type="number"
+                      <NumberField
                         disabled={generating}
                         min={0}
                         step={10000}
                         value={budget}
-                        onChange={(e) => {
-                          setBudget(Number(e.target.value) || 0);
+                        onChange={(amount) => {
+                          setBudget(amount);
                           setPreview(null);
                         }}
-                        className="no-spin w-28 rounded-lg border border-cream-deep px-2 py-1 text-right text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
+                        className="w-28 rounded-lg border border-cream-deep px-2 py-1 text-right text-sm font-600 tabular-nums outline-none focus:border-tomato-soft"
                       />
                       <span className="text-xs text-charcoal-soft">
                         {formatIdr(budget)}

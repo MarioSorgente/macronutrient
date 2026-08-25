@@ -16,6 +16,14 @@ export default function Input({
     <input
       {...rest}
       aria-invalid={invalid || undefined}
+      // A focused number input treats a scroll as an increment, so a page
+      // scrolled with the pointer resting on one quietly rewrote it.
+      onWheel={rest.type === "number"
+        ? (event) => {
+          event.currentTarget.blur();
+          rest.onWheel?.(event);
+        }
+        : rest.onWheel}
       className={cn(
         CONTROL_CLASS,
         // Number fields keep the app-wide spinner removal from globals.css.

@@ -5,7 +5,8 @@ import type { MacroStyle, MacroTargets, TargetMode } from "@/lib/storage/types";
 import { TARGET_FIELDS } from "@/lib/clients";
 import { MACRO_STYLES, targetsFromStyle } from "@/lib/preferences";
 import { resolveTarget, validateMacroTarget } from "@/lib/targetResolution";
-import { formatMacroGrams, formatPercentageShare, round0, wholeNonNegative } from "@/lib/format";
+import { formatMacroGrams, formatPercentageShare, round0, roundedToTenth } from "@/lib/format";
+import NumberField from "@/components/ui/NumberField";
 
 export interface MacroTargetSelection {
   targets: MacroTargets;
@@ -89,18 +90,22 @@ export default function MacroTargetEditor({ value, onChange }: {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {TARGET_FIELDS.map((field) => <label key={field.key} className="text-xs">
           <span className="mb-1 block font-600 text-charcoal-soft">{field.label} ({field.unit})</span>
-          <input type="number" min={0} step={1} inputMode="numeric"
-            value={value.mode === "preset" && field.key !== "energy_kcal" ? Math.round(resolved.target[field.key]) : value.targets[field.key]}
+          <NumberField
+            // Grams carry a decimal because the presets do: a balanced 2,000
+            // kcal day is 66.7 g of fat, and rounding it to 67 on the first
+            // keystroke changed a target nobody asked to change.
+            decimals={field.key !== "energy_kcal"}
+            min={0}
+            value={value.mode === "preset" && field.key !== "energy_kcal" ? roundedToTenth(resolved.target[field.key]) : value.targets[field.key]}
             readOnly={value.mode === "preset" && field.key !== "energy_kcal"}
-            onChange={(event) => {
-              const amount = wholeNonNegative(Number(event.target.value));
+            onChange={(amount) => {
               if (field.key === "energy_kcal" && value.mode === "preset") {
                 onChange({ ...value, targets: targetsFromStyle(amount, value.preset ?? "balanced") });
               } else {
                 onChange({ targets: { ...value.targets, [field.key]: amount }, mode: field.key === "energy_kcal" ? value.mode : "custom", preset: field.key === "energy_kcal" ? value.preset : undefined });
               }
             }}
-            className="no-spin w-full rounded-lg border border-cream-deep bg-white px-2 py-1.5 text-sm font-600 tabular-nums outline-none focus:border-tomato-soft" />
+            className="w-full rounded-lg border border-cream-deep bg-white px-2 py-1.5 text-sm font-600 tabular-nums outline-none focus:border-tomato-soft" />
         </label>)}
       </div>
       {!validation.valid && <p role="alert" className="rounded-lg bg-tomato-soft/30 px-3 py-2 text-xs font-600 text-tomato-dark">

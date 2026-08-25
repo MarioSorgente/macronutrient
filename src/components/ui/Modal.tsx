@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { IconButton } from "@/components/ui/Button";
+import { useBackdropClose } from "@/components/ui/useBackdropClose";
 
 const SIZES = {
   md: "max-w-md",
@@ -72,6 +73,10 @@ export default function Modal({
     };
   }, []);
 
+  // Only a press that starts and ends on the backdrop is a click away from the
+  // panel; a drag out of an input is not.
+  const backdrop = useBackdropClose(onClose);
+
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -108,7 +113,7 @@ export default function Modal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      onClick={onClose}
+      {...backdrop}
       onKeyDown={onKeyDown}
     >
       <div

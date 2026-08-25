@@ -50,6 +50,24 @@ export default function IngredientTypeahead({
         autoFocus={autoFocus}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(event) => {
+          // Escape belongs to the suggestions while they are showing. Letting it
+          // through closed the whole dialog — and with it the meal being built —
+          // when all that was wanted was the list out of the way.
+          if (event.key === "Escape" && (results.length > 0 || query)) {
+            event.stopPropagation();
+            event.preventDefault();
+            setQuery("");
+            return;
+          }
+          // Enter takes the obvious one, so a search can be finished from the
+          // keyboard instead of reaching for the mouse.
+          if (event.key === "Enter" && results.length > 0) {
+            event.preventDefault();
+            onSelect(results[0]);
+            setQuery("");
+          }
+        }}
         placeholder={placeholder}
         aria-label={placeholder}
         className="w-full rounded-xl border border-cream-deep bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-tomato-soft focus:ring-2 focus:ring-tomato-soft/40"

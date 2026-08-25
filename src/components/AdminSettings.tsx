@@ -17,7 +17,9 @@ import { roleLabel } from "@/lib/roles";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import Field from "@/components/ui/Field";
-import Input, { Select } from "@/components/ui/Input";
+import Input, { CONTROL_CLASS, Select } from "@/components/ui/Input";
+import NumberField from "@/components/ui/NumberField";
+import { cn } from "@/components/ui/cn";
 import Button, { IconButton } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 
@@ -267,15 +269,12 @@ export default function AdminSettings() {
           hint="Percentage added to component cost to reach the menu price"
         >
           {(id) => (
-            <Input
+            <NumberField
               id={id}
-              type="number"
               min={0}
               value={config.markupPct}
-              onChange={(e) =>
-                patch({ markupPct: Math.max(0, Number(e.target.value) || 0) })
-              }
-              className="w-32"
+              onChange={(markupPct) => patch({ markupPct })}
+              className={cn(CONTROL_CLASS, "tabular-nums w-32")}
             />
           )}
         </Field>

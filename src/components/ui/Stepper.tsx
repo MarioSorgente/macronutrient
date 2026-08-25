@@ -69,6 +69,9 @@ export default function Stepper({
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
+        // A focused number input treats a scroll as an increment, so scrolling
+        // the page over one silently retyped it.
+        onWheel={(e) => e.currentTarget.blur()}
         aria-label={label}
         className="no-spin w-14 border-x border-cream-deep bg-white py-1 text-center text-sm font-600 tabular-nums text-charcoal outline-none"
       />

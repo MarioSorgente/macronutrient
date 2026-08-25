@@ -12,6 +12,7 @@ import { formatPrice, priceItems } from "@/lib/pricing";
 import { round0 } from "@/lib/format";
 import DishItemRow from "@/components/DishItemRow";
 import MenuDishList from "@/components/MenuDishList";
+import { useBackdropClose } from "@/components/ui/useBackdropClose";
 import SegmentedToggle from "@/components/SegmentedToggle";
 import MacroChips from "@/components/MacroChips";
 import IngredientTypeahead from "@/components/IngredientTypeahead";
@@ -55,6 +56,7 @@ export default function AssignDishDialog({
   ) => void;
   onClose: () => void;
 }) {
+  const backdrop = useBackdropClose(onClose);
   const [tab, setTab] = useState<Tab>("menu");
   const [query, setQuery] = useState("");
   const [servings, setServings] = useState(1);
@@ -103,7 +105,7 @@ export default function AssignDishDialog({
       className="fixed inset-0 z-40 flex items-end justify-center bg-charcoal/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
+      {...backdrop}
     >
       <div
         className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-t-xl2 bg-cream shadow-card sm:rounded-xl2"
