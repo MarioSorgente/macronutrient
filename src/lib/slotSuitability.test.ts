@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  dayIsComplete,
   ingredientSlotPenalty,
   mealSlotEligibility,
   mealSlotPenalty,
   namedDishSlotPenalty,
+  optionalSlots,
   slotKindOf,
 } from "@/lib/slotSuitability";
 
@@ -121,5 +123,29 @@ describe("named dishes", () => {
     expect(penalty).toBeLessThan(
       namedDishSlotPenalty("Peri Peri Chicken Plate", "Breakfast")
     );
+  });
+});
+
+describe("which slots a day can go without", () => {
+  const DEFAULT_SLOTS = ["Breakfast", "Lunch", "Dinner", "Snack"];
+
+  it("treats snacks and shakes as optional and meals as not", () => {
+    expect([...optionalSlots(DEFAULT_SLOTS)]).toEqual(["Snack"]);
+    expect([...optionalSlots(["Breakfast", "Lunch", "Dinner", "Pre-workout", "Dessert"])])
+      .toEqual(["Pre-workout", "Dessert"]);
+  });
+
+  it("makes nothing optional when the day is only snacks", () => {
+    // Five snacks are what that day is made of, not five things it can skip.
+    expect([...optionalSlots(["Snack", "Shake"])]).toEqual([]);
+    expect(dayIsComplete(["Snack", "Shake"], (slot) => slot === "Snack")).toBe(false);
+  });
+
+  it("calls a day complete once every slot it needs is filled", () => {
+    const filledExcept = (missing: string) => (slot: string) => slot !== missing;
+
+    expect(dayIsComplete(DEFAULT_SLOTS, filledExcept("Snack"))).toBe(true);
+    expect(dayIsComplete(DEFAULT_SLOTS, filledExcept("Dinner"))).toBe(false);
+    expect(dayIsComplete(DEFAULT_SLOTS, () => true)).toBe(true);
   });
 });

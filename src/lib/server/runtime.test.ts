@@ -65,7 +65,11 @@ describe("the server bundle on Vercel", () => {
         `returns 500 on Vercel. Most likely the "overrides" block pinning jose ` +
         `for jwks-rsa was removed from package.json.\n\n${result.stderr}`
     ).toBe(0);
-  });
+    // Alone this takes well under a second. It spawns a cold Node and loads the
+    // whole Admin SDK, though, and it runs beside the CPU-bound planner suites —
+    // so what the project's 20 s default measures here is how busy the machine
+    // is, which is the one thing this test is not about.
+  }, 120_000);
 
   it("resolves a jose build that CommonJS can require", () => {
     const jwksRsa = require_.resolve("jwks-rsa/package.json");

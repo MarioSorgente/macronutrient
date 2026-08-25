@@ -17,6 +17,7 @@ import { formatPrice } from "@/lib/pricing";
 import { round0 } from "@/lib/format";
 import TargetAdherence from "@/components/TargetAdherence";
 import { diagnoseDailyAdherence } from "@/lib/dailyAdherence";
+import { dayIsComplete } from "@/lib/slotSuitability";
 
 /**
  * Seven-day overview. Kept deliberately sparse: a meal shows its name and
@@ -44,8 +45,12 @@ export default function PlanWeekGrid({
           const totals = dayTotals(plan, week, dayIndex, dishes);
           const price = dayPrice(plan, week, dayIndex, dishes);
           const date = dateFor(plan, week, dayIndex);
+          // A snack is optional: a day that reaches its macros in three meals is
+          // a complete day, and reading an empty Snack as a hole is what made a
+          // generated three-meal day come back as "Impossible" once it was saved.
           const adherence = plan.targets ? diagnoseDailyAdherence(totals, plan.targets, {
-            complete: plan.mealSlots.every((slot) => assignmentsFor(plan, week, dayIndex, slot).length > 0),
+            complete: dayIsComplete(plan.mealSlots, (slot) =>
+              assignmentsFor(plan, week, dayIndex, slot).length > 0),
           }) : null;
 
           return (

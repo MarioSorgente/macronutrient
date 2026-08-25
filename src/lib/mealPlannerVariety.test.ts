@@ -37,14 +37,20 @@ function week(targets: MacroTargets, overrides: Record<string, unknown> = {}): G
   return days;
 }
 
-const inSlot = (days: GeneratedDay[], index: number) =>
-  days.map((day) => day.meals[index]?.name ?? "");
+/**
+ * What each day put in one slot, by name — empty for a day that deliberately
+ * went without an optional slot, so the seven entries stay aligned to the seven
+ * days and "the same dish two days running" still means what it says.
+ */
+const inSlot = (days: GeneratedDay[], slot: string) =>
+  days.map((day) => day.meals.find((meal) => meal.slot === slot)?.name ?? "");
+const filled = (values: string[]) => values.filter(Boolean);
 const distinct = (values: string[]) => new Set(values).size;
 const mostRepeated = (values: string[]) =>
   Math.max(...[...new Set(values)].map((value) =>
     values.filter((other) => other === value).length));
 const consecutive = (values: string[]) =>
-  values.filter((value, index) => index > 0 && values[index - 1] === value);
+  values.filter((value, index) => Boolean(value) && index > 0 && values[index - 1] === value);
 const hasThreeConsecutive = (values: string[]) => values.some((value, index) =>
   index >= 2 && values[index - 1] === value && values[index - 2] === value);
 
@@ -74,20 +80,39 @@ describe("weekly variety on the real menu", () => {
     expect(distinct(signatures), "no two identical days").toBe(7);
     expect(distinct(everything)).toBeGreaterThanOrEqual(12);
     for (const day of days) {
-      expect(day.meals).toHaveLength(SLOTS.length);
+      // Every slot the day needs is filled; a snack it chose to go without is
+      // reported as skipped rather than missing, and leaves the day complete.
+      expect(day.meals.map((meal) => meal.slot))
+        .toEqual(SLOTS.filter((slot) => !day.skippedSlots.includes(slot)));
+      expect(day.skippedSlots.filter((slot) => slot !== "Snack")).toEqual([]);
+      expect(day.unfilledSlots).toEqual([]);
       expect(day.adherence.classification).not.toBe("Impossible");
     }
   });
 
-  it.each([0, 1, 2, 3])("varies slot %i across the week and never repeats it on adjacent days", (index) => {
-    const names = inSlot(week(HIGH_PROTEIN), index);
-    expect(distinct(names), `distinct choices for ${SLOTS[index]}`).toBeGreaterThanOrEqual(4);
-    expect(mostRepeated(names), `most repeated ${SLOTS[index]}`).toBeLessThanOrEqual(3);
-    expect(consecutive(names), `${SLOTS[index]} repeated on consecutive days`).toEqual([]);
+  it.each(SLOTS)("varies %s across the week and never repeats it on adjacent days", (slot) => {
+    const names = inSlot(week(HIGH_PROTEIN), slot);
+    expect(distinct(filled(names)), `distinct choices for ${slot}`).toBeGreaterThanOrEqual(4);
+    expect(mostRepeated(filled(names)), `most repeated ${slot}`).toBeLessThanOrEqual(3);
+    expect(consecutive(names), `${slot} repeated on consecutive days`).toEqual([]);
+  });
+
+  it("keeps a snack on most days, and leaves one out without leaving the day short", () => {
+    const days = week(HIGH_PROTEIN);
+    const withSnack = days.filter((day) => day.meals.some((meal) => meal.slot === "Snack"));
+
+    // Skipping is variety, not the new default: the repeat machinery charges
+    // "no snack" like any other repeated choice, so it stays occasional.
+    expect(withSnack.length, "days carrying a snack").toBeGreaterThanOrEqual(5);
+    for (const day of days) {
+      if (withSnack.includes(day)) continue;
+      expect(day.skippedSlots).toEqual(["Snack"]);
+      expect(day.adherence.compliant, "a skipped snack still leaves a complete day").toBe(true);
+    }
   });
 
   it("does not let the Breakfast Protein Burrito become the default breakfast", () => {
-    const breakfasts = inSlot(week(HIGH_PROTEIN), 0);
+    const breakfasts = inSlot(week(HIGH_PROTEIN), "Breakfast");
     const burrito = breakfasts.filter((name) => /Breakfast Protein Burrito/i.test(name));
 
     // It is a real breakfast on the menu, so it is not banned — only stopped
@@ -176,36 +201,12 @@ describe("breakfast rotates by style, not just by dish", () => {
     }
   });
 
-  it("reaches for a pancake, waffle or oatmeal breakfast where a compliant day has one", () => {
-    // At HIGH_PROTEIN none of them fit: the sweet breakfasts are 1085-1175 kcal
-    // with 38-54 g of fat, which leaves the other three meals 12-29 g of fat to
-    // work with, and a single 150 g chicken portion is already 5 g. Rather than
-    // skip the assertion, prove it — then assert the rotation does appear at a
-    // target where those days genuinely exist.
-    const sweet = /pancake|waffle|oatmeal/i;
-    const compliantWithSweet = (targets: MacroTargets) => generatePlan({
-      days: [0], slots: SLOTS, targets, savedDishes: [], includeSavedDishes: false,
-      includeMenuDishes: true, includeComposed: true, dailyBudgetIdr: null,
-      preferences: DEFAULT_PREFERENCES, seed: 1,
-    } as Parameters<typeof generatePlan>[0])[0];
-
-    expect(compliantWithSweet(HIGH_PROTEIN).adherence.classification).toBe("Within tolerance");
-    expect(breakfastsOf(week(HIGH_PROTEIN)).some((meal) => sweet.test(meal.name)))
-      .toBe(false);
-
-    const roomForSweet: MacroTargets = {
-      energy_kcal: 2600, protein_g: 130, carbs_g: 330, fat_g: 80,
-    };
-    const sweetWeek = week(roomForSweet);
-    const names = breakfastsOf(sweetWeek).map((meal) => meal.name);
-    expect(names.some((name) => sweet.test(name)),
-      `expected a sweet breakfast among ${names.join(", ")}`).toBe(true);
-    expect(distinct(names)).toBeGreaterThanOrEqual(3);
-    expect(consecutive(names)).toEqual([]);
-    for (const day of sweetWeek) {
-      expect(day.adherence.classification).toBe("Within tolerance");
-    }
-  });
+  // Whether a 1,085-1,175 kcal pancake, waffle or oatmeal bowl can be part of a
+  // day that adheres is a question about the whole day, not about this week, and
+  // it is asked directly in mealPlannerBreakfast.test.ts: the dish is locked into
+  // the slot and the rest of the day solved around it. Inferring the answer from
+  // whether a week happened to contain one — which is what used to be asserted
+  // here — is how they came to be written off as impossible.
 
   it("gives every ready breakfast its own style", () => {
     const styles = Object.entries(NEGRITA_PLANNER_METADATA)
@@ -254,7 +255,7 @@ describe("ready Negrita dishes stay first-class", () => {
   });
 
   it("keeps dinner mains out of breakfast", () => {
-    const breakfasts = inSlot(week(BALANCED), 0);
+    const breakfasts = inSlot(week(BALANCED), "Breakfast");
     const dinnerFood = /peri.?peri chicken|teriyaki chicken|mushroom sauce|steak|wagyu|kofta|kebab|unagi|thai boy|ritual burger/i;
     expect(breakfasts.filter((name) => dinnerFood.test(name))).toEqual([]);
   });
@@ -318,7 +319,7 @@ describe("derived targets", () => {
     // A one-day request establishes the strongest class the catalog can reach
     // without weekly variety influencing the selection.
     const achievable = bestClass(week(BALANCED_4000, { days: [0] }));
-    const namesBySlot = SLOTS.map((_, index) => inSlot(days, index));
+    const namesBySlot = SLOTS.map((slot) => inSlot(days, slot));
     const breakfastStyles = days.map((day) => day.meals[0].dishStyle);
     const signatures = days.map((day) => day.meals.map((meal) => meal.name).join(" | "));
 
@@ -391,7 +392,7 @@ describe("derived targets", () => {
     }
     for (const [index, feasible] of feasibleBySlot.entries()) {
       if (feasible.length < 2) continue;
-      const names = inSlot(days, index);
+      const names = inSlot(days, SLOTS[index]);
       const requestedMinimum = [2, 3, 3, 2][index];
       expect(distinct(names),
         `${SLOTS[index]} collapsed despite feasible locks: ${feasible.map((c) => c.displayName)}`)
@@ -399,10 +400,10 @@ describe("derived targets", () => {
       expect(hasThreeConsecutive(names),
         `${SLOTS[index]} repeated three times despite an equally compliant lock`).toBe(false);
     }
-    expect(distinct(inSlot(days, 0))).toBe(2);
-    expect(distinct(inSlot(days, 1))).toBeGreaterThanOrEqual(3);
-    expect(distinct(inSlot(days, 2))).toBeGreaterThanOrEqual(3);
-    expect(distinct(inSlot(days, 3))).toBeGreaterThanOrEqual(2);
+    expect(distinct(inSlot(days, "Breakfast"))).toBe(2);
+    expect(distinct(inSlot(days, "Lunch"))).toBeGreaterThanOrEqual(3);
+    expect(distinct(inSlot(days, "Dinner"))).toBeGreaterThanOrEqual(3);
+    expect(distinct(inSlot(days, "Snack"))).toBeGreaterThanOrEqual(2);
     expect(new Set(days.flatMap((day) => [day.meals[1], day.meals[2]]).map((meal) =>
       meal.name.split(" ").at(-1))).size, "lunch and dinner rotate protein families")
       .toBeGreaterThanOrEqual(2);

@@ -328,3 +328,25 @@ export function namedDishSlotPenalty(name: string, slot: string): number {
   }
   return 0;
 }
+
+/**
+ * Which slots a day is allowed to go without.
+ *
+ * A snack is a convenience, not a requirement: the target belongs to the whole
+ * day, and a day that reaches it in three meals is a complete day. Everything
+ * else must still be filled. If a plan is *only* snacks then they are what the
+ * day is made of, so none of them is optional.
+ */
+export function optionalSlots(slots: string[]): Set<string> {
+  const optional = slots.filter((slot) => slotKindOf(slot) === "snack");
+  return optional.length === slots.length ? new Set() : new Set(optional);
+}
+
+/** Whether every slot a day actually needs has something in it. */
+export function dayIsComplete(
+  slots: string[],
+  filled: (slot: string) => boolean
+): boolean {
+  const optional = optionalSlots(slots);
+  return slots.every((slot) => optional.has(slot) || filled(slot));
+}

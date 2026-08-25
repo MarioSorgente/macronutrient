@@ -41,6 +41,7 @@ import {
   mealSlotPenalty,
   mealSlotEligibility,
   namedDishSlotPenalty,
+  optionalSlots,
   sectionSlotPenalty,
   slotKindOf,
 } from "@/lib/slotSuitability";
@@ -100,6 +101,11 @@ export interface GeneratedDay {
    * kept the day short.
    */
   unfilledSlots: string[];
+  /**
+   * Optional slots the day deliberately went without, because it reaches its
+   * macros without them. Distinct from `unfilledSlots`: nothing was missing.
+   */
+  skippedSlots: string[];
   /** Adherence is assessed once, from the complete day's totals. */
   adherence: DailyAdherenceDiagnostics;
 }
@@ -163,6 +169,17 @@ export const COMPLETE_DAY_ERROR_EQUIVALENCE = 0.1;
 /** Partial days retained at each depth, and how many go on macro fit alone. */
 const BEAM_WIDTH = 220;
 const BEAM_MACRO_CORE = 96;
+/**
+ * The same, for a search whose slot is already decided.
+ *
+ * A locked search starts from a handful of fixed choices rather than the whole
+ * catalog, so it is solving a much smaller problem and does not need the width
+ * the open search does. It is not free to narrow, though: at 96 the pancake
+ * days these searches exist to find stopped surviving to the end, so the width
+ * is set by what still finds them rather than by what is cheapest.
+ */
+const LOCKED_BEAM_WIDTH = 160;
+const LOCKED_BEAM_MACRO_CORE = 72;
 /** Complete days carried into the weekly pass, and how many go on fit alone. */
 const DAY_POOL_SIZE = 48;
 const DAY_POOL_CORE = 8;
@@ -180,6 +197,18 @@ const DAY_POOL_AFFORDABLE_SLICE = 6;
  * all happen to ignore "more fish", leaving the lean bonus nothing to prefer.
  */
 const DAY_POOL_PREFERENCE_SLICE = 8;
+/**
+ * Places reserved for days that exist only because a choice was locked in and
+ * the day solved around it.
+ *
+ * They need reserving for the same reason price and preference do, and more
+ * urgently: a pancake day is the *only* day its breakfast will ever appear in,
+ * it ranks below the composed days that were built to fit the residual, and
+ * with fifty distinct breakfasts in play the coverage pass has room for a dozen
+ * of them. Proving the day exists and then dropping it before the weekly pass
+ * ever sees it is the whole bug.
+ */
+const DAY_POOL_ANCHOR_SLICE = 10;
 /** Weekly assignments retained at each day. */
 const WEEK_BEAM_WIDTH = 96;
 const WEEK_BEAM_CORE = 64;
@@ -239,6 +268,9 @@ function pricePenalty(priceIdr: number): number {
   return PRICE_TIEBREAK_WEIGHT * (priceIdr / PRICE_REFERENCE_IDR);
 }
 
+/** Identifies the pick that stands for "this optional slot was left out". */
+const SKIPPED_MEAL_PREFIX = "skipped:";
+
 /**
  * Share of the day a slot should carry. A snack or pre-workout is not a third
  * of someone's intake, and without this the planner cheerfully composes a
@@ -253,17 +285,19 @@ function slotWeight(slot: string): number {
 // --- deterministic RNG -------------------------------------------------------
 
 /**
- * A stable value in [0,1) for a seed and a candidate solution. Used only to
- * choose between solutions already established as equivalent, so a different
- * seed reshuffles equivalents and can never reach a different adherence class.
+ * Which of a set of equivalent solutions a seed selects.
+ *
+ * Every entry has already been established as equivalent, so this can only
+ * reshuffle equivalents and can never reach a different adherence class. It
+ * steps through them rather than hashing: a minimum over hashed keys is an
+ * independent coin toss per seed, so two consecutive presses of Shuffle landed
+ * on the same week about one time in six — the button visibly doing nothing.
+ * Stepping keeps the same determinism and makes "the next seed is a different
+ * answer" true by construction.
  */
-function seededTieBreak(seed: number, value: string): number {
-  let hash = (seed >>> 0) ^ 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash / 0x100000000;
+function seededChoice<T>(seed: number, equivalents: readonly T[]): T {
+  const count = equivalents.length;
+  return equivalents[((Math.trunc(seed) % count) + count) % count];
 }
 
 // --- candidates --------------------------------------------------------------
@@ -311,6 +345,56 @@ function toCandidate(
     dishShape: dishShapeIdentity(normalized),
     familySignature: familySignatureOf(normalized),
   };
+}
+
+/**
+ * "No snack", as something the search can pick.
+ *
+ * The target belongs to the whole day, not to a fixed number of meals: a day
+ * that reaches its macros in three is finished. Modelling that as a zero-macro
+ * candidate rather than as a nullable pick keeps every pick aligned with its
+ * slot, so repetition accounting, the pool's per-slot caps and materialisation
+ * all keep working unchanged — and it costs nothing, so the beam only keeps it
+ * when the day adheres better without the meal.
+ */
+function skippedCandidate(slot: string): Candidate {
+  const identity = `${SKIPPED_MEAL_PREFIX}${slot}`;
+  return {
+    id: identity,
+    source: "generated_diy",
+    displayName: `No ${slot}`,
+    name: `No ${slot}`,
+    optimizerMacros: { ...EMPTY_MACROS },
+    macros: { ...EMPTY_MACROS },
+    breakdown: [],
+    items: [],
+    price: { totalIdr: 0, complete: true },
+    priceIdr: 0,
+    // An absent meal has no protein, no carb and no cuisine. It carries only its
+    // own identity, so it repeats nothing but itself.
+    proteinFamily: "other",
+    carbFamily: "other",
+    cuisineFamily: identity,
+    mealArchetype: identity,
+    dishStyle: identity,
+    eligibleMealTypes: [],
+    macroConfidence: "published",
+    readyMadePriority: "normal",
+    modificationOptions: [],
+    dietaryTags: [],
+    allergenTags: [],
+    sauceFamilies: [],
+    exactDishIdentity: identity,
+    slotPenalty: 0,
+    leaned: false,
+    kind: "ready",
+    dishShape: identity,
+    familySignature: identity,
+  };
+}
+
+function isSkipped(candidate: { id: string }): boolean {
+  return candidate.id.startsWith(SKIPPED_MEAL_PREFIX);
 }
 
 function menuRecipesSection(recipeId: string): string | null {
@@ -458,9 +542,32 @@ interface SlotPlan {
   slot: string;
   /** Share of the remaining appetite this slot carries. */
   weight: number;
+  /** Whether the day may be finished without this slot at all. */
+  optional: boolean;
   ready: Candidate[];
   reach: MacroRange;
-  composed: Map<string, { coords: number[]; candidates: Candidate[] }>;
+  composed: ComposedCache;
+}
+
+/**
+ * Composed meals already built for one slot, by quantized residual.
+ *
+ * Scoped to a search rather than to the slot, because what a slot should
+ * compose depends entirely on what the rest of the day has left — and a cache
+ * shared between searches hands the second one meals built for the first one's
+ * day. That is not a small inaccuracy: a search that locks a 1,095 kcal
+ * breakfast in place needs lunches for the 900 kcal that remain, and reusing
+ * the nearest bucket from an ordinary day is exactly how a provably compliant
+ * pancake day came back as Best effort.
+ */
+interface ComposedCache {
+  store: Map<string, { coords: number[]; candidates: Candidate[] }>;
+  /** Distinct residuals this cache will compose for before reusing the nearest. */
+  limit: number;
+}
+
+function composedCache(limit = MAX_RESIDUAL_BUCKETS_PER_SLOT): ComposedCache {
+  return { store: new Map(), limit };
 }
 
 interface DayState {
@@ -502,6 +609,7 @@ function bucketCoords(residual: MacroTargets): number[] {
  */
 function composedFor(
   plan: SlotPlan,
+  cache: ComposedCache,
   residual: MacroTargets,
   slotsRemaining: number,
   slotShare: number,
@@ -510,12 +618,12 @@ function composedFor(
 ): Candidate[] {
   const coords = bucketCoords(residual);
   const key = coords.join(",");
-  const hit = plan.composed.get(key);
+  const hit = cache.store.get(key);
   if (hit) return hit.candidates;
-  if (plan.composed.size >= MAX_RESIDUAL_BUCKETS_PER_SLOT) {
+  if (cache.store.size >= cache.limit) {
     let nearest: { coords: number[]; candidates: Candidate[] } | null = null;
     let nearestDistance = Infinity;
-    for (const entry of plan.composed.values()) {
+    for (const entry of cache.store.values()) {
       let distance = 0;
       for (let index = 0; index < coords.length; index += 1) {
         distance += Math.abs(entry.coords[index] - coords[index]);
@@ -529,7 +637,7 @@ function composedFor(
   }
   const candidates = composedCandidates(plan.slot, residual, slotsRemaining,
     slotShare, preferences, budgetRemainingIdr);
-  plan.composed.set(key, { coords, candidates });
+  cache.store.set(key, { coords, candidates });
   return candidates;
 }
 
@@ -538,14 +646,27 @@ interface CompleteDay {
   macros: Macros;
   priceIdr: number;
   diagnostics: DailyAdherenceDiagnostics;
+  /**
+   * Set when the day was found by locking one choice in place. Such a day
+   * exists precisely because the ordinary search was not going to produce it,
+   * which is also why plain rank would drop it again.
+   */
+  anchor?: string;
 }
 
 /** Internal input shape exported only to support bounded day-pool unit tests. */
 export type TestingCompleteDay = CompleteDay;
 
-interface ForcedCandidate {
-  candidate: Candidate;
+/**
+ * One slot's choices, fixed in advance, with the rest of the day solved around
+ * them. Holding several at once rather than one per search is deliberate: the
+ * beam's coverage pass keeps every distinct style alive at every depth, so five
+ * locked breakfasts explored together each get a fair share of the search for
+ * roughly the price of one.
+ */
+interface ForcedSlot {
   slotIndex: number;
+  candidates: Candidate[];
 }
 
 function searchCompleteDays(
@@ -556,14 +677,18 @@ function searchCompleteDays(
   budget: number | null,
   complete: boolean,
   allowRepeats = false,
-  forced?: ForcedCandidate
+  forced?: ForcedSlot,
+  caches?: ComposedCache[]
 ): CompleteDay[] {
   if (forced && (forced.slotIndex < 0 || forced.slotIndex >= fillable.length)) return [];
+  if (forced && !forced.candidates.length) return [];
+  const width = forced ? LOCKED_BEAM_WIDTH : BEAM_WIDTH;
+  const core = forced ? LOCKED_BEAM_MACRO_CORE : BEAM_MACRO_CORE;
   const suffix: MacroRange[] = new Array(fillable.length + 1);
   suffix[fillable.length] = emptyRange();
   for (let index = fillable.length - 1; index >= 0; index -= 1) {
     const reach = forced?.slotIndex === index
-      ? rangeOver([forced.candidate])
+      ? rangeOver(forced.candidates)
       : fillable[index].reach;
     suffix[index] = addRange(reach, suffix[index + 1]);
   }
@@ -579,19 +704,20 @@ function searchCompleteDays(
     const share = remainingWeight > 0 ? plan.weight / remainingWeight : 1;
     const forcedDepth = forced?.slotIndex === index;
     const searchPlan = forcedDepth
-      ? { ...plan, ready: [forced.candidate], reach: rangeOver([forced.candidate]) }
+      ? { ...plan, ready: forced.candidates, reach: rangeOver(forced.candidates) }
       : plan;
-    const expanded = expandDepth(beam, searchPlan, index, fillable.length, share, suffix[index + 1],
-      target, { ...options, includeComposed: forcedDepth ? false : options.includeComposed },
-      preferences, budget, allowRepeats);
+    const cache = caches?.[index] ?? plan.composed;
+    const depthOptions = { ...options,
+      includeComposed: forcedDepth ? false : options.includeComposed };
+    const expanded = expandDepth(beam, searchPlan, cache, index, fillable.length, share,
+      suffix[index + 1], target, depthOptions, preferences, budget, allowRepeats);
     // A duplicate ban must never leave a slot unfillable. When nothing survives
     // it, the depth is replayed with repeats allowed — the explicit fallback,
     // not the normal path.
     beam = retainBeam(expanded.length ? expanded
-      : expandDepth(beam, searchPlan, index, fillable.length, share, suffix[index + 1],
-        target, { ...options, includeComposed: forcedDepth ? false : options.includeComposed },
-        preferences, budget, true), index,
-      preferences.proteinLean.length > 0);
+      : expandDepth(beam, searchPlan, cache, index, fillable.length, share, suffix[index + 1],
+        target, depthOptions, preferences, budget, true), index,
+      preferences.proteinLean.length > 0, width, core);
     if (!beam.length) return [];
   }
 
@@ -600,12 +726,14 @@ function searchCompleteDays(
     macros: state.macros,
     priceIdr: state.priceIdr,
     diagnostics: diagnoseDailyAdherence(state.macros, target, { complete }),
+    ...(forced ? { anchor: `${forced.slotIndex}|${state.picks[forced.slotIndex].dishShape}` } : {}),
   }));
 }
 
 function expandDepth(
   beam: DayState[],
   plan: SlotPlan,
+  cache: ComposedCache,
   index: number,
   slotCount: number,
   share: number,
@@ -626,7 +754,7 @@ function expandDepth(
     // had spent a little more or less.
     const pool = options.includeComposed === false
       ? plan.ready
-      : [...plan.ready, ...composedFor(plan, residual, slotsRemaining, share,
+      : [...plan.ready, ...composedFor(plan, cache, residual, slotsRemaining, share,
         preferences, budget === null ? null : budget - state.priceIdr)];
     for (const candidate of pool) {
       const priceIdr = state.priceIdr + candidate.priceIdr;
@@ -660,20 +788,20 @@ function expandDepth(
  * lunch is not erased at dinner for having a slightly worse partial score.
  */
 function retainBeam(expanded: DayState[], depth: number,
-  preferenceActive: boolean): DayState[] {
+  preferenceActive: boolean, width = BEAM_WIDTH, macroCore = BEAM_MACRO_CORE): DayState[] {
   const ordered = sortStates(expanded);
-  if (ordered.length <= BEAM_MACRO_CORE) return ordered;
-  const kept = ordered.slice(0, BEAM_MACRO_CORE);
+  if (ordered.length <= macroCore) return ordered;
+  const kept = ordered.slice(0, macroCore);
   const taken = new Set(kept.map((state) => state.pathKey));
   const stages = depth + 1 + (preferenceActive ? 1 : 0);
-  const quota = Math.max(1, Math.floor((BEAM_WIDTH - BEAM_MACRO_CORE) / stages));
+  const quota = Math.max(1, Math.floor((width - macroCore) / stages));
 
   // A lean is a preference, so it may not touch how a partial day is *ranked*.
   // It may keep the leaning paths alive through pruning, which is a different
   // thing: without this the beam can discard every fish route on macro grounds
   // alone and leave "more fish" with nothing to prefer later.
   if (preferenceActive) {
-    coverageFill(ordered, kept, taken, Math.min(BEAM_WIDTH, kept.length + quota),
+    coverageFill(ordered, kept, taken, Math.min(width, kept.length + quota),
       (state) => state.pathKey, (state) => String(state.leaned));
   }
 
@@ -685,19 +813,19 @@ function retainBeam(expanded: DayState[], depth: number,
   // find a compliant day. Grouping by style spends the same budget on ten real
   // alternatives with enough paths each to finish, which is what actually
   // reaches the weekly pass.
-  for (let slot = 0; slot <= depth && kept.length < BEAM_WIDTH; slot += 1) {
-    const limit = Math.min(BEAM_WIDTH, kept.length + quota);
+  for (let slot = 0; slot <= depth && kept.length < width; slot += 1) {
+    const limit = Math.min(width, kept.length + quota);
     coverageFill(ordered, kept, taken, limit,
       (state) => state.pathKey, (state) => state.picks[slot].dishStyle);
   }
-  for (let slot = 0; slot <= depth && kept.length < BEAM_WIDTH; slot += 1) {
-    const limit = Math.min(BEAM_WIDTH, kept.length + Math.ceil(quota / 2));
+  for (let slot = 0; slot <= depth && kept.length < width; slot += 1) {
+    const limit = Math.min(width, kept.length + Math.ceil(quota / 2));
     coverageFill(ordered, kept, taken, limit,
       (state) => state.pathKey, (state) => state.picks[slot].dishShape);
   }
-  if (kept.length < BEAM_WIDTH) {
+  if (kept.length < width) {
     for (const state of ordered) {
-      if (kept.length >= BEAM_WIDTH) break;
+      if (kept.length >= width) break;
       if (taken.has(state.pathKey)) continue;
       taken.add(state.pathKey);
       kept.push(state);
@@ -770,6 +898,21 @@ const ADHERENCE_RANK = {
   Exact: 0, "Within tolerance": 1, "Best effort": 2, Impossible: 3,
 } as const;
 
+/**
+ * The standard a day is held to.
+ *
+ * "Exact" is a nicety inside compliance, not a separate standard: a day inside
+ * the stated daily tolerance meets the macro requirement, and filtering it out
+ * because some other day happened to land on the nose discards perfectly good
+ * days — which is how a compliant 1,100 kcal pancake day disappeared while an
+ * exact composed one existed. Ordering still prefers the more accurate day
+ * everywhere below; only the wholesale discard is gone.
+ */
+function adherenceTier(classification: DailyAdherenceDiagnostics["classification"]): number {
+  const rank = ADHERENCE_RANK[classification];
+  return Math.max(rank, ADHERENCE_RANK["Within tolerance"]);
+}
+
 interface DayPlan {
   picks: Candidate[];
   macros: Macros;
@@ -783,6 +926,8 @@ interface DayPlan {
   familySignature: string;
   /** Meals whose protein family is one the plan leans toward. */
   leanedMeals: number;
+  /** The locked choice this day was solved around, when it came from one. */
+  anchor?: string;
 }
 
 function sameDayPenalty(picks: Candidate[]): number {
@@ -791,6 +936,7 @@ function sameDayPenalty(picks: Candidate[]): number {
     const weight = SAME_DAY_PENALTY[dimension]!;
     const seen = new Map<string, number>();
     for (const candidate of picks) {
+      if (isSkipped(candidate)) continue;
       const relief = dimension === "proteinFamily" && candidate.leaned ? LEAN_REPEAT_RELIEF : 1;
       for (const value of varietyValues(candidate, dimension)) {
         const previous = seen.get(value) ?? 0;
@@ -806,6 +952,17 @@ function repeatKeysFor(picks: Candidate[], slots: string[]): RepeatKey[] {
   const keys: RepeatKey[] = [];
   picks.forEach((candidate, index) => {
     const slot = slots[index];
+    // Leaving a slot out is one of the choices for it, and repeats like any
+    // other: free the first time, escalating after that through the machinery
+    // every dish already goes through. It has no families to repeat, so it
+    // carries only its own identity and never lands in a real food's bucket.
+    if (isSkipped(candidate)) {
+      keys.push({ key: `s|${slot}|dish|${candidate.dishShape}`,
+        weight: SLOT_REPEAT_PENALTY.exactDishIdentity });
+      keys.push({ key: `g|dishShape|${candidate.dishShape}`,
+        weight: GLOBAL_REPEAT_PENALTY.exactDishIdentity });
+      return;
+    }
     const breakfast = slotKindOf(slot) === "breakfast";
     const heavyBreakfast = breakfast &&
       HEAVY_BREAKFAST_FAMILIES.has(candidate.proteinFamily)
@@ -867,6 +1024,7 @@ function toDayPlan(day: CompleteDay, slots: string[]): DayPlan {
     exactSignature: day.picks.map((candidate) => candidate.dishShape).join(">"),
     familySignature: day.picks.map((candidate) => candidate.familySignature).join(">"),
     leanedMeals: day.picks.filter((candidate) => candidate.leaned).length,
+    ...(day.anchor ? { anchor: day.anchor } : {}),
   };
 }
 
@@ -883,9 +1041,9 @@ function toDayPlan(day: CompleteDay, slots: string[]): DayPlan {
 function selectDayPool(days: CompleteDay[], slots: string[]): DayPlan[] {
   if (!days.length) return [];
   const bestRank = days.reduce((best, day) =>
-    Math.min(best, ADHERENCE_RANK[day.diagnostics.classification]), Number.POSITIVE_INFINITY);
+    Math.min(best, adherenceTier(day.diagnostics.classification)), Number.POSITIVE_INFINITY);
   const bestClass = days.filter((day) =>
-    ADHERENCE_RANK[day.diagnostics.classification] === bestRank);
+    adherenceTier(day.diagnostics.classification) === bestRank);
   const compliant = bestRank <= ADHERENCE_RANK["Within tolerance"];
   const bestError = bestClass.reduce((best, day) =>
     Math.min(best, day.diagnostics.normalizedError), Number.POSITIVE_INFINITY);
@@ -983,6 +1141,26 @@ function selectDayPool(days: CompleteDay[], slots: string[]): DayPlan[] {
   // then the cheapest — each capped, so none of them can crowd out a slot.
   fill(DAY_POOL_CORE, ordered);
 
+  // One place per distinct locked choice before any of them gets two, so a
+  // single proven dish cannot spend the whole reservation either.
+  const anchored = new Map<string, DayPlan[]>();
+  for (const plan of ordered) {
+    if (!plan.anchor || taken.has(plan.exactSignature)) continue;
+    const bucket = anchored.get(plan.anchor);
+    if (bucket) bucket.push(plan); else anchored.set(plan.anchor, [plan]);
+  }
+  const anchorLimit = Math.min(DAY_POOL_SIZE, pool.length + DAY_POOL_ANCHOR_SLICE);
+  for (let round = 0; pool.length < anchorLimit; round += 1) {
+    let progressed = false;
+    for (const bucket of anchored.values()) {
+      if (pool.length >= anchorLimit) break;
+      const plan = bucket[round];
+      if (!plan) continue;
+      if (add(plan, false)) progressed = true;
+    }
+    if (!progressed) break;
+  }
+
   // Scarcest slot first: breakfast has the fewest genuinely different options,
   // so it is the one that loses its alternatives if another slot spends the
   // room first.
@@ -1076,13 +1254,10 @@ function solveWeek(pool: DayPlan[], dayCount: number, seed: number): DayPlan[] {
     state.cost <= bestCost + WEEK_COST_EQUIVALENCE_PER_DAY * Math.max(1, dayCount));
   const finalists = window.length >= MIN_WEEK_FINALISTS ? window
     : ranked.slice(0, MIN_WEEK_FINALISTS);
-  // Randomness is a final tie-breaker only. Every finalist holds the same
+  // The seed is a final tie-breaker only. Every finalist holds the same
   // adherence classification for every day, so a seed reshuffles equivalents
   // and can never demote a day.
-  const chosen = finalists.reduce((best, state) =>
-    seededTieBreak(seed, state.pathKey) < seededTieBreak(seed, best.pathKey) ? state : best,
-  finalists[0]);
-  return chosen.picks;
+  return seededChoice(seed, finalists).picks;
 }
 
 // --- diagnostics -------------------------------------------------------------
@@ -1138,6 +1313,42 @@ export class InvalidMacroTargetError extends Error {
 const FORCED_REPRESENTATIVE_MIN = 6;
 const FORCED_REPRESENTATIVE_MAX = 12;
 
+/**
+ * How many unproven ready choices one slot may put through a locked search.
+ *
+ * Ready dishes are used whole, on their published macros — the search cannot
+ * resize one to fit what a day has left. A 1,095 kcal pancake therefore has to
+ * survive beam pruning on the strength of a partial day it was never going to
+ * look good in, and it does not: it is dropped long before the lunch and dinner
+ * that would have made the day add up. The only honest way to tell "no day that
+ * adheres can contain this dish" from "the beam lost it before dinner" is to fix
+ * the dish in its slot and solve the whole day around it.
+ *
+ * Only choices no compliant day already contains go through it, so a catalog the
+ * ordinary search already covers costs nothing at all.
+ */
+const ANCHORED_CHOICES_PER_SLOT = 12;
+/**
+ * Residuals the locked pass composes for, per slot.
+ *
+ * Deliberately deeper than the ordinary ceiling, and it is what makes the pass
+ * work at all: a locked 1,095 kcal breakfast leaves a residual no ordinary day
+ * ever produces, so falling back on the nearest already-composed bucket hands
+ * it lunches built for a different day and turns a provably compliant pancake
+ * day into a Best effort one. One cache serves every locked search — they share
+ * residuals, and composing is where the time goes.
+ */
+const ANCHORED_RESIDUAL_BUCKETS = 32;
+
+function subtractRange(a: MacroRange, b: MacroRange): MacroRange {
+  const out = emptyRange();
+  for (const key of DAILY_MACRO_KEYS) {
+    out.min[key] = a.min[key] - b.min[key];
+    out.max[key] = a.max[key] - b.max[key];
+  }
+  return out;
+}
+
 function slotNeedsRecovery(days: CompleteDay[], slotIndex: number): boolean {
   if (!days.length) return true;
   const candidates = days.map((day) => day.picks[slotIndex]).filter(Boolean);
@@ -1156,17 +1367,17 @@ function slotNeedsRecovery(days: CompleteDay[], slotIndex: number): boolean {
  * A small, portion-independent cross-section of a slot's explored catalog.
  * Breakfast keeps its historical emphasis on style; the same greedy coverage
  * then gives every slot independent family and cuisine representation.
+ *
+ * Nothing here consults how large a meal is. Ordering candidates by their
+ * distance from a slot-sized share of the target — which is what this did — was
+ * the last place the planner still assumed breakfast should be breakfast-sized,
+ * and it sorted every oversized ready dish out of the cross-section before the
+ * whole day was ever considered.
  */
-function forcedRepresentatives(
-  plan: SlotPlan,
-  target: MacroTargets,
-  slotShare: number
-): Candidate[] {
-  const shareEnergy = target.energy_kcal * slotShare;
+function forcedRepresentatives(plan: SlotPlan): Candidate[] {
   const candidates = [...plan.ready,
-    ...[...plan.composed.values()].flatMap((entry) => entry.candidates)]
-    .sort((a, b) => Math.abs(a.macros.energy_kcal - shareEnergy) -
-      Math.abs(b.macros.energy_kcal - shareEnergy) || (a.id < b.id ? -1 : 1));
+    ...[...plan.composed.store.values()].flatMap((entry) => entry.candidates)]
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   const byShape = new Map<string, Candidate>();
   for (const candidate of candidates) {
@@ -1216,19 +1427,69 @@ function forcedRepresentatives(
   return selected;
 }
 
+/** The ready choices in one slot that no compliant day has produced yet. */
+function unprovenReady(
+  fillable: SlotPlan[],
+  slotIndex: number,
+  explored: CompleteDay[],
+  target: MacroTargets
+): Candidate[] {
+  const plan = fillable[slotIndex];
+  const seen = new Set<string>();
+  for (const day of explored) {
+    if (!day.diagnostics.compliant) continue;
+    const pick = day.picks[slotIndex];
+    if (pick) seen.add(pick.dishShape);
+  }
+  const elsewhere = subtractRange(
+    fillable.reduce((sum, entry) => addRange(sum, entry.reach), emptyRange()), plan.reach);
+
+  const unproven: Candidate[] = [];
+  for (const candidate of [...plan.ready].sort((a, b) =>
+    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+    if (unproven.length >= ANCHORED_CHOICES_PER_SLOT) break;
+    // Going without commits nothing, so there is nothing to prove: the ordinary
+    // search weighs that choice on exactly the same terms this one would.
+    if (isSkipped(candidate)) continue;
+    if (seen.has(candidate.dishShape)) continue;
+    seen.add(candidate.dishShape);
+    // A sound bound, and only that: `infeasibility` counts tolerance units the
+    // rest of the day provably cannot cover, and a compliant day is allowed one
+    // per macro. Past that, no lunch, dinner or snack could rescue it and the
+    // search would only prove what the arithmetic already says. Nothing here
+    // compares a dish to a share of the target.
+    const residual = remainingTarget(target, candidate.macros);
+    if (estimateCompletion(residual, elsewhere, target).infeasibility > 1) continue;
+    unproven.push(candidate);
+  }
+  return unproven;
+}
+
 function bestEquivalentDays(days: CompleteDay[]): CompleteDay[] {
   if (!days.length) return [];
   const bestRank = Math.min(...days.map((day) =>
-    ADHERENCE_RANK[day.diagnostics.classification]));
+    adherenceTier(day.diagnostics.classification)));
   const ranked = days.filter((day) =>
-    ADHERENCE_RANK[day.diagnostics.classification] === bestRank);
+    adherenceTier(day.diagnostics.classification) === bestRank);
   if (bestRank <= ADHERENCE_RANK["Within tolerance"]) return ranked;
   const bestError = Math.min(...ranked.map((day) => day.diagnostics.normalizedError));
   return ranked.filter((day) =>
     day.diagnostics.normalizedError <= bestError + COMPLETE_DAY_ERROR_EQUIVALENCE);
 }
 
-export function generatePlanWithTargets(options: GenerateOptions): GeneratedPlan {
+/** Everything a day search needs, resolved once and shared by every pass. */
+interface DaySearch {
+  resolution: ReturnType<typeof resolveTarget>;
+  target: MacroTargets;
+  preferences: ClientPreferences;
+  budget: number | null;
+  fillable: SlotPlan[];
+  slotNames: string[];
+  unfilledSlots: string[];
+  complete: boolean;
+}
+
+function prepareDaySearch(options: GenerateOptions): DaySearch {
   const resolution = resolveTarget({
     targets: options.targets,
     style: options.targetStyle ?? options.preferences?.macroStyle,
@@ -1246,10 +1507,16 @@ export function generatePlanWithTargets(options: GenerateOptions): GeneratedPlan
 
   const weights = slots.map(slotWeight);
   const weightTotal = weights.reduce((sum, value) => sum + value, 0) || 1;
+  const optional = optionalSlots(slots);
 
   const plans: SlotPlan[] = slots.map((slot, index) => {
     const ready = readyCandidates(slot, options.includeSavedDishes ? options.savedDishes : [],
       options.includeMenuDishes, budget, preferences, options.candidateFixtures);
+    // Going without is one of this slot's choices, so it belongs in the same list
+    // as the rest. It also pulls the slot's reachable minimum down to zero, which
+    // is what lets the search see a day whose breakfast is most of the target as
+    // something it can still finish.
+    if (optional.has(slot)) ready.push(skippedCandidate(slot));
     const share = weights[index] / weightTotal;
     // Reachability is probed at a light and a heavy serving of this slot, which
     // is what lets the search tell "this path can still be rescued" from "this
@@ -1264,30 +1531,55 @@ export function generatePlanWithTargets(options: GenerateOptions): GeneratedPlan
     return {
       slot,
       weight: weights[index],
+      optional: optional.has(slot),
       ready,
       reach: rangeOver([...ready, ...probes]),
-      composed: new Map(),
+      composed: composedCache(),
     };
   });
 
   const fillable = plans.filter((plan) => plan.ready.length || plan.reach.max.energy_kcal > 0);
+  // Only a slot the day actually needs can leave it short. An optional slot always
+  // holds at least the choice of going without, so it never appears here.
   const unfilledSlots = plans.filter((plan) => !fillable.includes(plan)).map((plan) => plan.slot);
-  const complete = unfilledSlots.length === 0;
 
-  const slotNames = fillable.map((plan) => plan.slot);
-  const ordinaryDays = searchCompleteDays(fillable, target, options, preferences, budget, complete);
-  const ordinaryBestRank = ordinaryDays.length
-    ? Math.min(...ordinaryDays.map((day) => ADHERENCE_RANK[day.diagnostics.classification]))
+  return {
+    resolution, target, preferences, budget, fillable,
+    slotNames: fillable.map((plan) => plan.slot),
+    unfilledSlots,
+    complete: unfilledSlots.length === 0,
+  };
+}
+
+/** Every complete day worth choosing between, in priority order. */
+function buildDayPool(search: DaySearch, options: GenerateOptions): DayPlan[] {
+  const { fillable, target, preferences, budget, complete, slotNames } = search;
+  const ordinaryDays = searchCompleteDays(fillable, target, options, preferences,
+    budget, complete);
+  // One locked search per slot, over everything that slot offers whole and has
+  // not already proved itself. Each gets composed meals built for the day it
+  // actually leaves behind, which is the difference between asking whether a
+  // large dish can work and assuming it cannot.
+  const lockedCaches = fillable.map(() => composedCache(ANCHORED_RESIDUAL_BUCKETS));
+  const anchoredDays = fillable.flatMap((_, slotIndex) =>
+    searchCompleteDays(fillable, target, options, preferences, budget, complete, false,
+      { slotIndex, candidates: unprovenReady(fillable, slotIndex, ordinaryDays, target) },
+      lockedCaches));
+
+  const explored = [...ordinaryDays, ...anchoredDays];
+  const bestRank = explored.length
+    ? Math.min(...explored.map((day) => adherenceTier(day.diagnostics.classification)))
     : Number.POSITIVE_INFINITY;
-  const ordinaryBestDays = ordinaryDays.filter((day) =>
-    ADHERENCE_RANK[day.diagnostics.classification] === ordinaryBestRank);
+  const bestDays = explored.filter((day) =>
+    adherenceTier(day.diagnostics.classification) === bestRank);
   const recoveredDays = fillable.flatMap((plan, slotIndex) =>
-    slotNeedsRecovery(ordinaryBestDays, slotIndex)
-      ? forcedRepresentatives(plan, target, plan.weight / weightTotal).flatMap((candidate) =>
+    slotNeedsRecovery(bestDays, slotIndex)
+      ? forcedRepresentatives(plan).flatMap((candidate) =>
         searchCompleteDays(fillable, target, options, preferences, budget, complete, false,
-          { candidate, slotIndex }))
+          { slotIndex, candidates: [candidate] }))
       : []);
-  let pool = selectDayPool(bestEquivalentDays([...ordinaryDays, ...recoveredDays]), slotNames);
+
+  let pool = selectDayPool(bestEquivalentDays([...explored, ...recoveredDays]), slotNames);
   // The explicit fallback. Normal generation never serves the same dish twice in
   // a day, but a ban is not worth an infeasible day: when nothing compliant can
   // be built without repeating, the search is rerun with repeats permitted and
@@ -1297,69 +1589,146 @@ export function generatePlanWithTargets(options: GenerateOptions): GeneratedPlan
       searchCompleteDays(fillable, target, options, preferences, budget, complete, true),
       slotNames);
     if (relaxed.length && (!pool.length ||
-        ADHERENCE_RANK[relaxed[0].diagnostics.classification] <
-          ADHERENCE_RANK[pool[0].diagnostics.classification] ||
-        (relaxed[0].diagnostics.classification === pool[0].diagnostics.classification &&
+        adherenceTier(relaxed[0].diagnostics.classification) <
+          adherenceTier(pool[0].diagnostics.classification) ||
+        (adherenceTier(relaxed[0].diagnostics.classification) ===
+            adherenceTier(pool[0].diagnostics.classification) &&
           relaxed[0].diagnostics.normalizedError <
             pool[0].diagnostics.normalizedError - COMPLETE_DAY_ERROR_EQUIVALENCE))) {
       pool = relaxed;
     }
   }
+  return pool;
+}
+
+function materializeDay(
+  day: number,
+  plan: DayPlan | undefined,
+  search: DaySearch,
+  usage: WeeklyVarietyUsage
+): GeneratedDay {
+  const { fillable, target, preferences, unfilledSlots, complete } = search;
+  const meals: GeneratedMeal[] = [];
+  const skippedSlots: string[] = [];
+  let price: PriceResult = { ...ZERO_PRICE };
+  (plan?.picks ?? []).forEach((candidate, pickIndex) => {
+    const slot = fillable[pickIndex].slot;
+    if (isSkipped(candidate)) {
+      skippedSlots.push(slot);
+      return;
+    }
+    recordWeeklyVariety(usage, candidate, slot);
+    const mealPrice = candidate.kind === "ready" && candidate.priceIdr > 0
+      ? { ...ZERO_PRICE, totalIdr: candidate.priceIdr }
+      : priceItems(candidate.items);
+    meals.push({
+      slot,
+      name: candidate.name,
+      items: candidate.items,
+      macros: candidate.macros,
+      price: mealPrice,
+      kind: candidate.kind,
+      sourceDishId: candidate.sourceDishId,
+      dishStyle: candidate.dishStyle,
+    });
+    price = addPrices(price, mealPrice);
+  });
+  if (plan) recordDaySignature(usage, plan.exactSignature);
+  const macros = plan?.macros ?? { ...EMPTY_MACROS };
+  // A slot the day deliberately went without is not a slot it failed to fill, so
+  // it has no bearing on whether the day is complete.
+  const dayComplete = Boolean(plan) && complete;
+  const provisional = diagnoseDailyAdherence(macros, target, { complete: dayComplete });
+  return {
+    day,
+    meals,
+    macros,
+    price,
+    unfilledSlots,
+    skippedSlots,
+    adherence: diagnoseDailyAdherence(macros, target, {
+      complete: dayComplete,
+      restrictionsApplied: preferences.avoidIngredientIds.length > 0,
+      unavailableSlots: unfilledSlots,
+      kitchenPortionsConstrained: dayComplete &&
+        kitchenIncrementsPreventCompliance(plan?.picks ?? [], provisional, target),
+    }),
+  };
+}
+
+export function generatePlanWithTargets(options: GenerateOptions): GeneratedPlan {
+  const search = prepareDaySearch(options);
+  const pool = buildDayPool(search, options);
   const week = solveWeek(pool, options.days.length, options.seed ?? 1);
 
   const usage = createWeeklyVarietyUsage();
-  const generated: GeneratedDay[] = options.days.map((day, index) => {
-    const plan = week[index];
-    const meals: GeneratedMeal[] = [];
-    let price: PriceResult = { ...ZERO_PRICE };
-    (plan?.picks ?? []).forEach((candidate, pickIndex) => {
-      recordWeeklyVariety(usage, candidate, fillable[pickIndex].slot);
-      const mealPrice = candidate.kind === "ready" && candidate.priceIdr > 0
-        ? { ...ZERO_PRICE, totalIdr: candidate.priceIdr }
-        : priceItems(candidate.items);
-      meals.push({
-        slot: fillable[pickIndex].slot,
-        name: candidate.name,
-        items: candidate.items,
-        macros: candidate.macros,
-        price: mealPrice,
-        kind: candidate.kind,
-        sourceDishId: candidate.sourceDishId,
-        dishStyle: candidate.dishStyle,
-      });
-      price = addPrices(price, mealPrice);
-    });
-    if (plan) recordDaySignature(usage, plan.exactSignature);
-    const macros = plan?.macros ?? { ...EMPTY_MACROS };
-    const dayComplete = Boolean(plan) && complete;
-    const provisional = diagnoseDailyAdherence(macros, target, { complete: dayComplete });
-    return {
-      day,
-      meals,
-      macros,
-      price,
-      unfilledSlots,
-      adherence: diagnoseDailyAdherence(macros, target, {
-        complete: dayComplete,
-        restrictionsApplied: preferences.avoidIngredientIds.length > 0,
-        unavailableSlots: unfilledSlots,
-        kitchenPortionsConstrained: dayComplete &&
-          kitchenIncrementsPreventCompliance(plan?.picks ?? [], provisional, target),
-      }),
-    };
-  });
+  const generated = options.days.map((day, index) =>
+    materializeDay(day, week[index], search, usage));
 
   return {
     days: generated,
-    resolvedTarget: target,
-    targetSource: resolution.source,
-    targetStyle: resolution.selectedStyle,
-    targetExplanation: resolution.explanation,
+    resolvedTarget: search.target,
+    targetSource: search.resolution.source,
+    targetStyle: search.resolution.selectedStyle,
+    targetExplanation: search.resolution.explanation,
   };
 }
 
 export function generatePlan(options: GenerateOptions): GeneratedDay[] {
   return generatePlanWithTargets(options).days;
+}
+
+/** A meal pinned to a slot, so the rest of the day can be solved around it. */
+export interface LockedMeal {
+  slot: string;
+  /** Planner candidate id, e.g. `menu:special_protein_pancake`. */
+  candidateId: string;
+}
+
+/**
+ * One whole day, solved around a meal that is fixed in advance.
+ *
+ * This asks "can a day that adheres contain this dish?" directly, rather than
+ * inferring it from whether the planner happened to pick the dish — which is not
+ * the same question, and answering the second as though it were the first is how
+ * the menu's largest breakfasts came to be written off as impossible. Returns
+ * null when the slot or the dish is not part of this catalog.
+ */
+export function generateDayWithLockedMeal(
+  options: GenerateOptions,
+  lock: LockedMeal
+): GeneratedDay | null {
+  const search = prepareDaySearch(options);
+  const slotIndex = search.fillable.findIndex((plan) => plan.slot === lock.slot);
+  if (slotIndex < 0) return null;
+  const candidate = search.fillable[slotIndex].ready
+    .find((entry) => entry.id === lock.candidateId);
+  if (!candidate) return null;
+
+  const days = searchCompleteDays(search.fillable, search.target, options,
+    search.preferences, search.budget, search.complete, false,
+    { slotIndex, candidates: [candidate] },
+    search.fillable.map(() => composedCache(ANCHORED_RESIDUAL_BUCKETS)));
+  const pool = selectDayPool(bestEquivalentDays(days), search.slotNames);
+  if (!pool.length) return null;
+  return materializeDay(options.days[0] ?? 0, pool[0], search, createWeeklyVarietyUsage());
+}
+
+/**
+ * Test seam: the days the weekly pass gets to choose between. Survival into the
+ * pool is the guarantee worth asserting — what the week then picks is variety,
+ * and a dish absent from the pool was never in the running at all.
+ */
+export function __dayPoolForTests(options: GenerateOptions): {
+  meals: { slot: string; name: string }[];
+  adherence: DailyAdherenceDiagnostics;
+}[] {
+  const search = prepareDaySearch(options);
+  return buildDayPool(search, options).map((plan) => ({
+    meals: plan.picks.flatMap((candidate, index) => isSkipped(candidate) ? []
+      : [{ slot: search.fillable[index].slot, name: candidate.name }]),
+    adherence: plan.diagnostics,
+  }));
 }
 
 /**

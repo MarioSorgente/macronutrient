@@ -555,6 +555,13 @@ export default function GeneratePlanDialog({
                               </span>
                             </li>
                           ))}
+                          {day.skippedSlots.length > 0 && (
+                            <li className="pt-0.5 text-[11px] text-charcoal-soft">
+                              No {day.skippedSlots.join(", ")} — this day reaches
+                              its target without{" "}
+                              {day.skippedSlots.length > 1 ? "them" : "one"}.
+                            </li>
+                          )}
                           {day.unfilledSlots.length > 0 && (
                             <li className="pt-0.5 text-[11px] text-gold">
                               Could not fill {day.unfilledSlots.join(", ")}
