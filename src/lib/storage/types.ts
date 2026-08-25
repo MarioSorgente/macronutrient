@@ -48,6 +48,20 @@ export interface Assignment {
   /** Set when the meal came from a saved dish. Absent for generated meals. */
   dishId?: string;
   /**
+   * Set when this meal *is* a Negrita menu dish, identified by its recipe id.
+   *
+   * The identity is what makes the dish authoritative rather than the copy of
+   * it stored here: price resolves to the menu's own `price_idr` and macros to
+   * its published `menu_macros_per_serving`, both looked up fresh. Without it
+   * the plan re-derives both from the ingredient list — pricing a Rp 89,000
+   * pancake at Rp 15,000 and counting it as 1,139 kcal instead of the 1,095 the
+   * menu sells and the planner aimed at.
+   *
+   * Absent for DIY and saved dishes, which are correctly priced and counted
+   * from their components.
+   */
+  menuRecipeId?: string;
+  /**
    * Ingredients of a meal built by the auto-planner. Held inline so generated
    * plans do not flood the saved-dish library; a meal worth keeping can still
    * be saved as a dish explicitly.

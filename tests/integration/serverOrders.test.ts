@@ -14,6 +14,8 @@ import {
   seedRestaurant,
   uniqueEmail,
 } from "./serverHarness";
+import { menuRecipes } from "@/lib/database";
+import { negritaMenuCandidate } from "@/lib/plannerCandidates";
 
 /**
  * The order pipeline, as /api/orders/submit and /api/orders/status run it.
@@ -132,6 +134,30 @@ describe("the price is the server's, not the caller's", () => {
     await expect(
       submitOrder(uid, { planId: "p1", weekNumber: 1, fulfilment: PICKUP })
     ).resolves.toMatchObject({ priceIdr: 30_000 });
+  });
+
+  it("bills a Negrita menu dish at the menu's price, identity or not", async () => {
+    const uid = await aUser();
+    const recipe = menuRecipes.find((entry) =>
+      entry.recipe_id === "special_protein_pancake")!;
+    const candidate = negritaMenuCandidate(recipe)!;
+    // A week planned before menu identity existed: the ingredient list and a
+    // name, and nothing saying which menu dish it is. The browser gives it that
+    // identity when it loads the plan, and this read has to agree — otherwise
+    // the diner is quoted Rp 89,000 and the kitchen is billed the Rp 15,000 its
+    // components come to.
+    await seedPlan(uid, "p1", { assignments: [meal({
+      slot: "Breakfast",
+      items: candidate.breakdown.map((item) => ({
+        ingredientId: item.ingredientId, name: item.name, grams: item.grams,
+        unitId: "g", quantity: item.grams,
+      })),
+      snapshot: { name: recipe.name, totals: candidate.optimizerMacros },
+    })] });
+
+    await expect(
+      submitOrder(uid, { planId: "p1", weekNumber: 1, fulfilment: PICKUP })
+    ).resolves.toMatchObject({ priceIdr: 89_000 });
   });
 
   it("ignores a price, totals or status supplied in the request", async () => {

@@ -39,6 +39,7 @@ import { EMPTY_MACROS, scaleMacros, sumDishMacros } from "@/lib/calc";
 import { ZERO_PRICE } from "@/lib/pricing";
 import { loadCurrentPlan, savePlan } from "@/lib/currentPlan";
 import type { GeneratedDay } from "@/lib/mealPlanner";
+import { assignmentsFromGenerated } from "@/lib/planAssignments";
 import { round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import AssignDishDialog from "@/components/AssignDishDialog";
@@ -327,22 +328,7 @@ export default function WeekPlanner() {
       ? plan.assignments.filter((a) => a.week !== currentWeek)
       : [...plan.assignments];
 
-    const additions: Assignment[] = [];
-    for (const gDay of generated) {
-      for (const meal of gDay.meals) {
-        additions.push({
-          id: newAssignmentId(),
-          week: currentWeek,
-          day: gDay.day,
-          slot: meal.slot,
-          items: meal.items,
-          servings: 1,
-          price: { totalIdr: meal.price.totalIdr, complete: meal.price.complete },
-          snapshot: { name: meal.name, totals: meal.macros },
-          ...(meal.sourceDishId ? { dishId: meal.sourceDishId } : {}),
-        });
-      }
-    }
+    const additions = assignmentsFromGenerated(generated, currentWeek);
 
     // Tastes are remembered with the plan, so the next generation starts from
     // what you already told the generator — and so is the target the week was

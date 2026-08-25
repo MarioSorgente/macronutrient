@@ -5,6 +5,7 @@ import { RESTAURANT_ID, adminDb } from "@/lib/server/firebaseAdmin";
 import { HttpError } from "@/lib/server/auth";
 import { cutoffState } from "@/lib/cutoff";
 import { byId } from "@/lib/clients";
+import { withMenuIdentity } from "@/lib/menuIdentity";
 import {
   buildOrderDays,
   fulfilmentProblems,
@@ -132,7 +133,15 @@ export async function submitOrder(
   // except which week it is and how they want it delivered.
   const planSnap = await db.doc(`users/${uid}/plans/${planId}`).get();
   if (!planSnap.exists) throw new HttpError(404, "That plan does not exist.");
-  const plan = planSnap.data() as Plan;
+  const stored = planSnap.data() as Plan;
+  // The browser gives a plan its menu identity when it loads one; this read has
+  // to do the same, or a week planned before that existed would be quoted to
+  // the diner at menu prices and billed to the kitchen at ingredient prices.
+  // Both sides run the same order rules, so both sides start from the same plan.
+  const plan: Plan = {
+    ...stored,
+    assignments: (stored.assignments ?? []).map(withMenuIdentity),
+  };
 
   const startDate = weekStartDate(plan, week);
   const { at: cutoff, passed } = cutoffState(

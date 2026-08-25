@@ -144,6 +144,27 @@ export const menuRecipes: MenuRecipe[] = database.menu_recipes.map((recipe) => {
     },
   };
 });
+
+const MENU_MACRO_KEYS: (keyof Macros)[] = [
+  "energy_kcal", "protein_g", "carbs_g", "fat_g", "fiber_g",
+];
+
+/**
+ * What the printed menu publishes for one serving, when it publishes all of it.
+ *
+ * This is what a menu dish *is* nutritionally, and it is not the same number as
+ * adding its components up: the gram quantities above are a best fit to these
+ * macros, not the recipe the kitchen works from, and they land 3-11% out on
+ * calories and up to 11% out on protein. The diner is sold the menu's figure,
+ * so the menu's figure is the one a plan has to count.
+ */
+export function publishedMenuMacros(recipe: MenuRecipe): Macros | null {
+  const macros = recipe.menu_macros_per_serving;
+  return MENU_MACRO_KEYS.every((key) => Number.isFinite(macros[key]))
+    ? Object.fromEntries(MENU_MACRO_KEYS.map((key) => [key, macros[key]])) as unknown as Macros
+    : null;
+}
+
 export const databaseMeta = {
   name: database.database_name,
   version: database.schema_version,

@@ -85,6 +85,13 @@ export interface GeneratedMeal {
   price: PriceResult;
   /** Set when the meal is an existing saved dish or menu recipe. */
   sourceDishId?: string;
+  /**
+   * Set when the meal is a Negrita menu dish. Carried out of the planner so the
+   * saved plan can keep the identity rather than a copy of it: the menu's price
+   * and published macros are what this meal was chosen on, and re-deriving
+   * either from the ingredient list gives a different meal.
+   */
+  menuRecipeId?: string;
   kind: "composed" | "ready";
   /** Normalized culinary style, carried through so callers can group by it. */
   dishStyle: string;
@@ -284,6 +291,9 @@ function pricePenalty(priceIdr: number): number {
   return PRICE_TIEBREAK_WEIGHT * (priceIdr / PRICE_REFERENCE_IDR);
 }
 
+/** Prefix of a planner candidate id built from a Negrita menu recipe. */
+const MENU_CANDIDATE_PREFIX = "menu:";
+
 /** Identifies the pick that stands for "this optional slot was left out". */
 const SKIPPED_MEAL_PREFIX = "skipped:";
 
@@ -329,6 +339,7 @@ interface Candidate extends PlannerCandidate {
   leaned: boolean;
   kind: "composed" | "ready";
   sourceDishId?: string;
+  menuRecipeId?: string;
   /** Portion-independent identity, used for repetition. */
   dishShape: string;
   familySignature: string;
@@ -341,6 +352,10 @@ function toCandidate(
   slotPenalty: number,
   sourceDishId?: string
 ): Candidate {
+  // Where a ready meal came from, kept as an id rather than as a copy of its
+  // price and macros — those are facts about the menu, and the menu owns them.
+  const menuRecipeId = normalized.source === "negrita_menu"
+    ? normalized.id.slice(MENU_CANDIDATE_PREFIX.length) : undefined;
   const items: DishItem[] = normalized.breakdown.map((item) => ({
     ingredientId: item.ingredientId, name: item.name, grams: item.grams,
     unitId: GRAM_UNIT_ID, quantity: item.grams,
@@ -358,6 +373,7 @@ function toCandidate(
     leaned: candidateIsLeaned(normalized.proteinFamily, preferences.proteinLean),
     kind,
     sourceDishId,
+    ...(menuRecipeId ? { menuRecipeId } : {}),
     dishShape: dishShapeIdentity(normalized),
     familySignature: familySignatureOf(normalized),
   };
@@ -442,7 +458,7 @@ function readyCandidates(
     // Rp 40,000 "minimum" smuggle a 1,218 kcal dish into a snack slot.
     if (budgetIdr !== null && (!price.complete || price.totalIdr > budgetIdr)) continue;
     const recipeSection = normalized.source === "negrita_menu"
-      ? menuRecipesSection(normalized.id.slice("menu:".length)) : null;
+      ? menuRecipesSection(normalized.id.slice(MENU_CANDIDATE_PREFIX.length)) : null;
     const slotPenalty = recipeSection
       ? sectionSlotPenalty(recipeSection, slot) ?? namedDishSlotPenalty(normalized.displayName, slot)
       : namedDishSlotPenalty(normalized.displayName, slot);
@@ -1679,6 +1695,7 @@ function materializeDay(
       price: mealPrice,
       kind: candidate.kind,
       sourceDishId: candidate.sourceDishId,
+      ...(candidate.menuRecipeId ? { menuRecipeId: candidate.menuRecipeId } : {}),
       dishStyle: candidate.dishStyle,
     });
     price = addPrices(price, mealPrice);

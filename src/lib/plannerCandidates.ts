@@ -1,5 +1,5 @@
 import { sumDishMacros } from "@/lib/calc";
-import { getIngredient, menuRecipes } from "@/lib/database";
+import { getIngredient, menuRecipes, publishedMenuMacros } from "@/lib/database";
 import { priceItems } from "@/lib/pricing";
 import { GRAM_UNIT_ID, type Macros, type MenuRecipe, type PlannerCandidate,
   type PlannerCandidateIngredient, type ProteinFamily, type CarbFamily,
@@ -150,13 +150,6 @@ const MACRO_KEYS: (keyof Macros)[] = [
   "energy_kcal", "protein_g", "carbs_g", "fat_g", "fiber_g",
 ];
 
-function publishedMacros(recipe: MenuRecipe): Macros | null {
-  const macros = recipe.menu_macros_per_serving;
-  return MACRO_KEYS.every((key) => Number.isFinite(macros[key]))
-    ? Object.fromEntries(MACRO_KEYS.map((key) => [key, macros[key]])) as unknown as Macros
-    : null;
-}
-
 function publishedConfidence(recipe: MenuRecipe): MacroConfidence {
   const record = recipe.menu_macros_per_serving;
   if (record.macro_confidence) return record.macro_confidence;
@@ -202,14 +195,14 @@ export function negritaMenuCandidate(recipe: MenuRecipe): PlannerCandidate | nul
   });
   if (!dishItems.length) return null;
   const calculatedIngredientMacros = sumDishMacros(dishItems);
-  const optimizerMacros = publishedMacros(recipe) ?? calculatedIngredientMacros;
+  const optimizerMacros = publishedMenuMacros(recipe) ?? calculatedIngredientMacros;
   const metadata = NEGRITA_PLANNER_METADATA[recipe.recipe_id];
   if (!metadata) return null;
   const generic = finish({ id: `menu:${recipe.recipe_id}`, source: "negrita_menu",
     displayName: recipe.name, optimizerMacros, calculatedIngredientMacros,
     breakdown: breakdown(dishItems),
     price: { totalIdr: recipe.price_idr ?? 0, complete: recipe.price_idr !== null },
-    macroConfidence: publishedMacros(recipe) ? publishedConfidence(recipe) : "incomplete",
+    macroConfidence: publishedMenuMacros(recipe) ? publishedConfidence(recipe) : "incomplete",
     exactDishIdentity: `menu:${recipe.recipe_id}` }, recipe.section);
   return { ...generic, ...metadata, readyMadePriority: "high" };
 }

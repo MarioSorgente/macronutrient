@@ -1,6 +1,8 @@
 import type { Macros } from "@/types/nutrition";
 import { EMPTY_MACROS, addMacros, scaleMacros, sumDishMacros } from "@/lib/calc";
 import { ZERO_PRICE, addPrices, priceItems, type PriceResult } from "@/lib/pricing";
+import { publishedMenuMacros } from "@/lib/database";
+import { assignmentMenuRecipe } from "@/lib/menuIdentity";
 import type {
   Assignment,
   Plan,
@@ -51,6 +53,14 @@ export function assignmentMacros(
   assignment: Assignment,
   dishes: Map<string, Dish>
 ): Macros {
+  // A menu dish is counted as the menu publishes it. Its ingredient list is
+  // there for the kitchen and for display; adding it up gives a different
+  // number, and that number is not what the diner is sold or what the planner
+  // built the day from.
+  const recipe = assignmentMenuRecipe(assignment);
+  const published = recipe ? publishedMenuMacros(recipe) : null;
+  if (published) return scaleMacros(published, assignment.servings);
+
   const items = assignmentItems(assignment, dishes);
   const base = items ? sumDishMacros(items) : assignment.snapshot.totals;
   return scaleMacros(base, assignment.servings);
@@ -86,6 +96,14 @@ export function assignmentBasePrice(
   assignment: Assignment,
   dishes: Map<string, Dish>
 ): PriceResult {
+  // A menu dish costs what the menu charges, whatever its parts come to. This
+  // is looked up first and never falls through to components: the fallback
+  // priced a Rp 89,000 pancake at Rp 15,000 and a Rp 99,000 Geisha at
+  // Rp 130,000, in opposite directions, for the same reason.
+  const recipe = assignmentMenuRecipe(assignment);
+  if (recipe && typeof recipe.price_idr === "number") {
+    return { totalIdr: recipe.price_idr, unpricedCount: 0, complete: true };
+  }
   // An authoritative price (e.g. a menu dish's own price) wins over summing
   // components, which would otherwise produce a different, partial figure.
   if (assignment.price) {
@@ -95,6 +113,10 @@ export function assignmentBasePrice(
       complete: assignment.price.complete,
     };
   }
+  // A meal that claims a menu dish we no longer list has no knowable price, and
+  // its components are not it. Say so rather than quoting a number for a
+  // different meal.
+  if (assignment.menuRecipeId) return { ...ZERO_PRICE, unpricedCount: 1, complete: false };
   const items = assignmentItems(assignment, dishes);
   if (!items) return { ...ZERO_PRICE, unpricedCount: 1, complete: false };
   return priceItems(items);

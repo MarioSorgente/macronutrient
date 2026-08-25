@@ -11,6 +11,7 @@ import type {
   Repository,
 } from "@/lib/storage/types";
 import { DEFAULT_MEAL_SLOTS } from "@/lib/storage/types";
+import { withMenuIdentity } from "@/lib/menuIdentity";
 import { createLocalRepository } from "@/lib/storage/local";
 import {
   instrumentRepository,
@@ -134,11 +135,14 @@ export function migratePlan(raw: unknown): Plan | null {
   const legacy = raw as Partial<Plan> & { name?: string; plan?: unknown };
   if (!legacy.id) return null;
 
-  const assignments = Array.isArray(legacy.assignments)
+  // Meals planned before menu identity existed get it back where the match is
+  // beyond doubt, so a saved week stops re-deriving a menu dish's price and
+  // macros from its parts. Read-time and idempotent: the next save persists it.
+  const assignments = (Array.isArray(legacy.assignments)
     ? legacy.assignments
     : Array.isArray(legacy.plan)
     ? (legacy.plan as Plan["assignments"])
-    : [];
+    : []).map(withMenuIdentity);
 
   // Timestamps are not cosmetic here: `latest()` orders on `updatedAt`, and a
   // record without one is either invisible to the Firestore query or poisons
