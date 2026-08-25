@@ -62,13 +62,22 @@ describe("DIY kitchen quantities", () => {
     expect(quantitiesNearResidual(chicken, target)).toEqual([125, 150, 175]);
   });
 
-  it("reports increment-caused infeasibility from snapped, not theoretical, macros", () => {
+  it("reports what the kitchen can serve, not the quantity that was asked for", () => {
     const chicken = ingredient("chicken_breast_raw");
     const theoretical = perItemMacros(chicken, 160);
     const target = asTarget(theoretical);
     const snapped = snappedDiyMacros(chicken, optimalDiyQuantity(chicken, target));
+    const diagnosis = diagnoseDailyAdherence(snapped.macros, target);
+
+    // 160 g is not a portion anyone can plate; 150 is what arrives.
     expect(snapped.grams).toBe(150);
-    expect(diagnoseDailyAdherence(snapped.macros, target).classification).toBe("Best effort");
     expect(snapped.macros).not.toEqual(theoretical);
+    // The diagnosis is of the plate, so it carries the plate's shortfall — the
+    // point of the test. Ten grams of chicken sits inside the daily window, so
+    // this is a real miss that does not matter, not a day that fails.
+    expect(diagnosis.macros.protein_g.actual).toBe(snapped.macros.protein_g);
+    expect(diagnosis.macros.protein_g.deviation).toBeLessThan(0);
+    expect(diagnosis.classification).not.toBe("Exact");
+    expect(diagnosis.compliant).toBe(true);
   });
 });

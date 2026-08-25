@@ -322,6 +322,43 @@ describe("preferences reach every candidate source", () => {
   });
 });
 
+/**
+ * Some targets are hard enough that the menu meets them two ways, and a week
+ * built from two days is the same two dinners over and over. 180 g of protein
+ * inside 50 g of fat is one of them.
+ */
+describe("a target the menu can only just meet", () => {
+  const DEMANDING: MacroTargets = {
+    energy_kcal: 2500, protein_g: 180, carbs_g: 320, fat_g: 50,
+  };
+
+  it("still fills the week with different days", () => {
+    const days = week(DEMANDING);
+    const signatures = days.map((day) => day.meals.map((meal) => meal.name).join(" | "));
+
+    // Two compliant days exist here. Rotating those alone gave four Mondays and
+    // three Tuesdays; the nearest misses are admitted until the week can differ.
+    expect(distinct(signatures), signatures.join(" / ")).toBeGreaterThanOrEqual(5);
+    expect(distinct(inSlot(days, "Breakfast"))).toBeGreaterThanOrEqual(2);
+    for (const day of days) {
+      expect(day.adherence.classification).not.toBe("Impossible");
+      expect(day.unfilledSlots).toEqual([]);
+    }
+  });
+
+  it("does not widen for a single day, which has nothing to vary", () => {
+    // The widening buys variety and costs adherence, so it only happens where
+    // there is variety to buy. One day takes the best answer, full stop.
+    const [day] = generatePlan({
+      days: [0], slots: SLOTS, targets: DEMANDING, savedDishes: [],
+      includeSavedDishes: false, includeMenuDishes: true, includeComposed: true,
+      dailyBudgetIdr: null, preferences: DEFAULT_PREFERENCES, seed: 1,
+    } as Parameters<typeof generatePlan>[0]);
+
+    expect(day.adherence.compliant).toBe(true);
+  });
+});
+
 describe("seed behaviour", () => {
   it("is identical for the same seed and varies only equivalent weeks", () => {
     const first = week(HIGH_PROTEIN, { seed: 5 });

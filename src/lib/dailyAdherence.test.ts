@@ -7,12 +7,12 @@ import {
 const targets = { energy_kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 70 };
 
 describe("daily adherence policy", () => {
-  it("uses the shared percent and absolute daily tolerances", () => {
+  it("uses one absolute daily tolerance per macro", () => {
     expect(DAILY_TOLERANCES).toEqual({
-      energy_kcal: { kind: "percent", amount: 0.03 },
-      protein_g: { kind: "absolute", amount: 5 },
+      energy_kcal: { kind: "absolute", amount: 100 },
+      protein_g: { kind: "absolute", amount: 6 },
       carbs_g: { kind: "absolute", amount: 6 },
-      fat_g: { kind: "absolute", amount: 4 },
+      fat_g: { kind: "absolute", amount: 6 },
     });
     const result = diagnoseDailyAdherence(
       { ...targets, energy_kcal: 2040, protein_g: 146, carbs_g: 205, fat_g: 73, fiber_g: 0 },
@@ -22,9 +22,29 @@ describe("daily adherence policy", () => {
     expect(result.compliant).toBe(true);
   });
 
+  it("holds the window at 100 kcal and 6 g, and closes it after", () => {
+    const day = (over: Partial<typeof targets>) => diagnoseDailyAdherence(
+      { ...targets, ...over, fiber_g: 0 }, targets).classification;
+
+    // The edge is inclusive on both sides, and one unit past it is not.
+    expect(day({ energy_kcal: 2100 })).toBe("Within tolerance");
+    expect(day({ energy_kcal: 1900 })).toBe("Within tolerance");
+    expect(day({ energy_kcal: 2101 })).toBe("Best effort");
+    expect(day({ protein_g: 156, carbs_g: 206, fat_g: 76 })).toBe("Within tolerance");
+    expect(day({ protein_g: 157 })).toBe("Best effort");
+    expect(day({ fat_g: 77 })).toBe("Best effort");
+    // Calories are absolute now, so a big target gets no more room than a small
+    // one: 3 % of 4,000 would have been 120.
+    expect(diagnoseDailyAdherence(
+      { energy_kcal: 4110, protein_g: 300, carbs_g: 400, fat_g: 133, fiber_g: 0 },
+      { energy_kcal: 4000, protein_g: 300, carbs_g: 400, fat_g: 133 }
+    ).classification).toBe("Best effort");
+  });
+
   it("identifies best-effort failure dimensions and reason codes", () => {
+    // Past the ±6 g window on both, so the day is genuinely out on two macros.
     const result = diagnoseDailyAdherence(
-      { ...targets, protein_g: 144, fat_g: 75, fiber_g: 0 },
+      { ...targets, protein_g: 143, fat_g: 77, fiber_g: 0 },
       targets,
       { kitchenPortionsConstrained: true }
     );
@@ -35,8 +55,8 @@ describe("daily adherence policy", () => {
       "kitchen_portion_increments_prevent_compliance",
     ]);
     expect(result.macros.protein_g).toMatchObject({
-      target: 150, actual: 144, deviation: -6, signedDeviation: -6,
-      tolerance: 5, allowedTolerance: 5, status: "fail", compliant: false,
+      target: 150, actual: 143, deviation: -7, signedDeviation: -7,
+      tolerance: 6, allowedTolerance: 6, status: "fail", compliant: false,
     });
     expect(result.reasons).toEqual([
       { code: "protein_below_tolerance", message: "Protein cannot reach its lower bound." },

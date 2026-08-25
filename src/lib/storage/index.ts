@@ -142,7 +142,7 @@ export function migratePlan(raw: unknown): Plan | null {
     ? legacy.assignments
     : Array.isArray(legacy.plan)
     ? (legacy.plan as Plan["assignments"])
-    : []).map(withMenuIdentity);
+    : []).map((assignment) => withMenuIdentity(assignment));
 
   // Timestamps are not cosmetic here: `latest()` orders on `updatedAt`, and a
   // record without one is either invisible to the Firestore query or poisons

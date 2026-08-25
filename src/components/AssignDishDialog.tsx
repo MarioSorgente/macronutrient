@@ -1,26 +1,33 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Hammer, Library, Minus, Plus, Search, X } from "lucide-react";
+import { BookOpen, Hammer, Library, Minus, Plus, Search, X } from "lucide-react";
 import Link from "next/link";
 import type { Dish, DishItem } from "@/lib/storage/types";
-import type { Ingredient } from "@/types/nutrition";
+import type { Ingredient, MenuRecipe } from "@/types/nutrition";
 import { getIngredient } from "@/lib/database";
 import { addItem, setItemQuantity, setItemUnit } from "@/lib/dishItems";
 import { scaleMacros, sumDishMacros, totalGrams } from "@/lib/calc";
 import { formatPrice, priceItems } from "@/lib/pricing";
 import { round0 } from "@/lib/format";
 import DishItemRow from "@/components/DishItemRow";
+import MenuDishList from "@/components/MenuDishList";
 import SegmentedToggle from "@/components/SegmentedToggle";
 import MacroChips from "@/components/MacroChips";
 import IngredientTypeahead from "@/components/IngredientTypeahead";
 
-type Tab = "saved" | "build";
+type Tab = "menu" | "saved" | "build";
 
 /**
- * Fills one meal slot, either from a saved dish or by building something on the
- * spot from Negrita's ingredients — so a custom meal doesn't require leaving the
- * planner for the Builder.
+ * Fills one meal slot: from Negrita's menu, from a saved dish, or by building
+ * something on the spot from ingredients — so neither a menu dish nor a custom
+ * meal requires leaving the planner.
+ *
+ * The menu comes first because it is what the restaurant actually sells, and
+ * because a dish put in from here keeps its identity: Negrita's price and the
+ * macros the menu publishes, rather than a reconstruction from its parts. Every
+ * dish is listed whatever the slot — a hand-made choice is a decision, not a
+ * suggestion to be second-guessed.
  */
 export default function AssignDishDialog({
   dishes,
@@ -29,6 +36,7 @@ export default function AssignDishDialog({
   slot,
   dayLabel,
   onAssign,
+  onAssignMenuDish,
   onAssignCustom,
   onClose,
 }: {
@@ -38,6 +46,7 @@ export default function AssignDishDialog({
   slot: string;
   dayLabel: string;
   onAssign: (dish: Dish, servings: number) => void;
+  onAssignMenuDish: (recipe: MenuRecipe, servings: number) => void;
   onAssignCustom: (
     name: string,
     items: DishItem[],
@@ -46,7 +55,7 @@ export default function AssignDishDialog({
   ) => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>("saved");
+  const [tab, setTab] = useState<Tab>("menu");
   const [query, setQuery] = useState("");
   const [servings, setServings] = useState(1);
 
@@ -124,6 +133,7 @@ export default function AssignDishDialog({
             value={tab}
             onChange={setTab}
             options={[
+              { value: "menu", label: "Menu", icon: <BookOpen size={14} /> },
               { value: "saved", label: "Saved", icon: <Library size={14} /> },
               { value: "build", label: "Build", icon: <Hammer size={14} /> },
             ]}
@@ -154,7 +164,32 @@ export default function AssignDishDialog({
           </div>
         </div>
 
-        {tab === "saved" ? (
+        {tab === "menu" ? (
+          <>
+            <div className="border-b border-cream-deep px-4 py-3">
+              <div className="relative">
+                <Search
+                  size={15}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-charcoal-soft"
+                />
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search Negrita menu…"
+                  className="w-full rounded-xl border border-cream-deep bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-tomato-soft focus:ring-2 focus:ring-tomato-soft/40"
+                />
+              </div>
+            </div>
+            <div className="scroll-slim flex-1 overflow-y-auto px-4 py-3">
+              <MenuDishList
+                query={query}
+                showSectionNotes={false}
+                onChoose={(recipe) => onAssignMenuDish(recipe, servings)}
+              />
+            </div>
+          </>
+        ) : tab === "saved" ? (
           <>
             <div className="border-b border-cream-deep px-4 py-3">
               <div className="relative">

@@ -1,12 +1,28 @@
 import type { Macros } from "@/types/nutrition";
 import type { MacroTargets } from "@/lib/storage/types";
 
-export const DAILY_TOLERANCES = {
-  energy_kcal: { kind: "percent", amount: 0.03 },
-  protein_g: { kind: "absolute", amount: 5 },
+/**
+ * How close a day has to be to count as hitting its target.
+ *
+ * Wide enough that the kitchen can actually serve it. The old window was ±3 %
+ * on calories and ±4 g of fat — half a teaspoon of oil — and a day is graded on
+ * all four at once, so a plate that was 5 g of fat away was "Best effort"
+ * however good it was, and the search spent its whole budget hunting a
+ * combination narrower than Negrita's own portioning.
+ *
+ * Calories are absolute rather than proportional on purpose: ±100 kcal is what
+ * a person notices, at 1,600 as much as at 4,000, where a percentage quietly
+ * gave big targets three times the room it gave small ones.
+ */
+export const DAILY_TOLERANCES: Record<
+  DailyMacroKey,
+  { kind: "absolute" | "percent"; amount: number }
+> = {
+  energy_kcal: { kind: "absolute", amount: 100 },
+  protein_g: { kind: "absolute", amount: 6 },
   carbs_g: { kind: "absolute", amount: 6 },
-  fat_g: { kind: "absolute", amount: 4 },
-} as const;
+  fat_g: { kind: "absolute", amount: 6 },
+};
 
 export const DAILY_MACRO_KEYS = [
   "energy_kcal", "protein_g", "carbs_g", "fat_g",

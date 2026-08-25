@@ -140,28 +140,17 @@ describe("the generator preview", () => {
     expect(screen.queryByText(/No Snack/)).toBeNull();
   });
 
-  it("says the target is out of reach when not one day adheres", async () => {
-    // Three days short of the same 2,000 kcal, for the same reason — which is
-    // what a target above the menu's ceiling looks like.
+  it("leaves a week that misses its target to the days themselves", async () => {
+    // Three days short of the same 2,000 kcal. There is no week-level warning
+    // strip any more: each day says what it is in its own adherence badge, and
+    // saying it again above the list only made the same point louder.
     const short = (day: number, kcal: number) =>
       threeMealDay({ day, macros: { ...DAY_MACROS, energy_kcal: kcal } });
-    await generate([short(0, 1_740), short(1, 1_766), short(2, 1_755)]);
-
-    const note = screen.getByTestId("target-unreachable");
-    expect(note.textContent).toContain("No day on this menu reaches your target");
-    // The closest of the three, not the first and not the last.
-    expect(note.textContent).toContain("1,766");
-    expect(note.textContent).toContain("2,000");
-    expect(note.textContent).toContain("Calories cannot reach its lower bound.");
-    // The generic "this is the closest" reason would only repeat the sentence
-    // the note already opens with.
-    expect(note.textContent).not.toContain("closest complete day the available");
-    expect(note.textContent).toMatch(/Adding a meal slot/);
-  });
-
-  it("stays quiet when the week adheres", async () => {
-    await generate([threeMealDay()]);
+    await generate([short(0, 1_640), short(1, 1_666), short(2, 1_655)]);
 
     expect(screen.queryByTestId("target-unreachable")).toBeNull();
+    expect(screen.queryByText(/No day on this menu reaches/)).toBeNull();
+    // The days are still there, and still honest about themselves.
+    expect(screen.getAllByText(/Out:/).length).toBeGreaterThan(0);
   });
 });

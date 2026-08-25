@@ -1,6 +1,6 @@
 import { getIngredient, getRecipe, menuRecipes } from "@/lib/database";
 import type { MenuRecipe } from "@/types/nutrition";
-import type { Assignment, DishItem } from "@/lib/storage/types";
+import type { Assignment, Dish, DishItem } from "@/lib/storage/types";
 
 /**
  * Which Negrita menu dish a planned meal *is*.
@@ -52,6 +52,24 @@ function isRecipeItemList(recipe: MenuRecipe, items: DishItem[]): boolean {
 }
 
 /**
+ * The menu dish a saved dish is a copy of, if it is an untouched one.
+ *
+ * People reach the menu through the builder's template picker, tweak nothing,
+ * and save it — and that copy is the menu dish, whatever the library calls it.
+ * Priced and counted from its parts it came to 1,139 kcal and Rp 15,000 against
+ * a menu that says 1,095 and Rp 89,000. Adjust a gram and the match fails, as
+ * it should: it is your dish then.
+ */
+export function menuRecipeForDish(dish: Pick<Dish, "name" | "items">):
+  MenuRecipe | undefined {
+  const wanted = normalizedName(dish.name);
+  if (!wanted || !dish.items?.length) return undefined;
+  const named = menuRecipes.filter((recipe) => normalizedName(recipe.name) === wanted);
+  return named.length === 1 && isRecipeItemList(named[0], dish.items)
+    ? named[0] : undefined;
+}
+
+/**
  * Give a meal planned before menu identity existed its identity back.
  *
  * Only where it is beyond doubt: one menu dish of that name, and an ingredient
@@ -62,8 +80,19 @@ function isRecipeItemList(recipe: MenuRecipe, items: DishItem[]): boolean {
  * Name matching lives here and only here, as a one-time upgrade. Once the id is
  * written the plan carries it, and nothing downstream ever matches on a name.
  */
-export function withMenuIdentity(assignment: Assignment): Assignment {
-  if (assignment.menuRecipeId || assignment.dishId) return assignment;
+export function withMenuIdentity(
+  assignment: Assignment,
+  /** Saved dishes, when the caller has them: an assignment can point at one. */
+  dishes?: Map<string, Dish>
+): Assignment {
+  if (assignment.menuRecipeId) return assignment;
+
+  if (assignment.dishId) {
+    const dish = dishes?.get(assignment.dishId);
+    const recipe = dish ? menuRecipeForDish(dish) : undefined;
+    return recipe ? { ...assignment, menuRecipeId: recipe.recipe_id } : assignment;
+  }
+
   const items = assignment.items;
   if (!items?.length) return assignment;
 

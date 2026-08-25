@@ -40,6 +40,9 @@ import { ZERO_PRICE } from "@/lib/pricing";
 import { loadCurrentPlan, savePlan } from "@/lib/currentPlan";
 import type { GeneratedDay } from "@/lib/mealPlanner";
 import { assignmentsFromGenerated } from "@/lib/planAssignments";
+import { menuRecipeForDish, withMenuIdentity } from "@/lib/menuIdentity";
+import { negritaMenuCandidate } from "@/lib/plannerCandidates";
+import { GRAM_UNIT_ID, type MenuRecipe } from "@/types/nutrition";
 import { round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import AssignDishDialog from "@/components/AssignDishDialog";
@@ -62,7 +65,7 @@ export default function WeekPlanner() {
   const repos = useRepos();
   // Re-render totals after a conditionally requested override set arrives.
   useHouseRecipes((state) => state.version);
-  const [plan, setClient] = useState<Plan | null>(null);
+  const [storedPlan, setClient] = useState<Plan | null>(null);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -153,6 +156,20 @@ export default function WeekPlanner() {
   }, [repos]);
 
   const dishMap = useMemo(() => byId(dishes), [dishes]);
+
+  /**
+   * The plan, with any meal that is really a Negrita dish recognised as one.
+   *
+   * Done here because this is the one place holding both the plan and the saved
+   * dishes it points at. In memory only: the week on screen reads the menu's
+   * price and macros straight away, and the identity is written down by the next
+   * ordinary save rather than by a surprise one on load.
+   */
+  const plan = useMemo(() => storedPlan && {
+    ...storedPlan,
+    assignments: storedPlan.assignments.map((assignment) =>
+      withMenuIdentity(assignment, dishMap)),
+  }, [storedPlan, dishMap]);
   const visibleWeekNeedsHouseRecipes = useMemo(() => {
     if (!plan) return false;
     return plan.assignments.some((assignment) => {
@@ -218,6 +235,9 @@ export default function WeekPlanner() {
 
   function assign(dish: Dish, servings: number) {
     if (!plan || !assigning) return;
+    // An untouched saved copy of a menu dish is that menu dish, and is priced
+    // and counted as one. Anything you adjusted stays yours.
+    const asMenuDish = menuRecipeForDish(dish);
     const assignment: Assignment = {
       id: newAssignmentId(),
       week,
@@ -227,6 +247,37 @@ export default function WeekPlanner() {
       servings,
       // Snapshot keeps the plan readable if this dish is later deleted.
       snapshot: { name: dish.name, totals: sumDishMacros(dish.items) },
+      ...(asMenuDish ? { menuRecipeId: asMenuDish.recipe_id } : {}),
+    };
+    void persist({ ...plan, assignments: [...plan.assignments, assignment] });
+    setAssigning(null);
+  }
+
+  /**
+   * A Negrita dish, put straight into the slot as the dish the menu sells.
+   *
+   * `menuRecipeId` is the whole point: price and macros then resolve from the
+   * menu on every read, so this reads 1,095 kcal and Rp 89,000 rather than the
+   * 1,139 and Rp 15,000 its ingredient list adds up to. The components come
+   * along for the kitchen and for display.
+   */
+  function assignMenuDish(recipe: MenuRecipe, servings: number) {
+    if (!plan || !assigning) return;
+    const candidate = negritaMenuCandidate(recipe);
+    if (!candidate) return;
+    const assignment: Assignment = {
+      id: newAssignmentId(),
+      week,
+      day: assigning.day,
+      slot: assigning.slot,
+      servings,
+      items: candidate.breakdown.map((item) => ({
+        ingredientId: item.ingredientId, name: item.name, grams: item.grams,
+        unitId: GRAM_UNIT_ID, quantity: item.grams,
+      })),
+      price: { totalIdr: candidate.price.totalIdr, complete: candidate.price.complete },
+      snapshot: { name: candidate.displayName, totals: candidate.optimizerMacros },
+      menuRecipeId: recipe.recipe_id,
     };
     void persist({ ...plan, assignments: [...plan.assignments, assignment] });
     setAssigning(null);
@@ -636,6 +687,7 @@ export default function WeekPlanner() {
             dateFor(plan, currentWeek, assigning.day)
           )}`}
           onAssign={assign}
+          onAssignMenuDish={assignMenuDish}
           onAssignCustom={assignCustom}
           onClose={() => setAssigning(null)}
         />

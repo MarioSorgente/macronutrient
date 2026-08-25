@@ -313,17 +313,24 @@ function slotWeight(slot: string): number {
 /**
  * Which of a set of equivalent solutions a seed selects.
  *
- * Every entry has already been established as equivalent, so this can only
- * reshuffle equivalents and can never reach a different adherence class. It
- * steps through them rather than hashing: a minimum over hashed keys is an
- * independent coin toss per seed, so two consecutive presses of Shuffle landed
- * on the same week about one time in six — the button visibly doing nothing.
- * Stepping keeps the same determinism and makes "the next seed is a different
- * answer" true by construction.
+ * Counted from the best one: seed 1 — the default, and what every first
+ * generation uses — is the best answer the search found, and each Shuffle from
+ * there steps to the next. Stepping rather than hashing because a minimum over
+ * hashed keys is an independent coin toss per seed, so two consecutive presses
+ * landed on the same week about one time in six, the button visibly doing
+ * nothing.
+ *
+ * The 1-based offset is not cosmetic. `ranked.slice(0, MIN_WEEK_FINALISTS)`
+ * admits a few near-equivalents so Shuffle has somewhere to go even when the
+ * search converges hard, and those are *near*, not equal — indexing from zero
+ * meant the default seed handed back the runner-up, which is how a day whose
+ * target was one menu dish's macros exactly came back as a composed plate
+ * costing two and a half times as much.
  */
 function seededChoice<T>(seed: number, equivalents: readonly T[]): T {
   const count = equivalents.length;
-  return equivalents[((Math.trunc(seed) % count) + count) % count];
+  const step = Math.trunc(seed) - 1;
+  return equivalents[((step % count) + count) % count];
 }
 
 // --- candidates --------------------------------------------------------------
@@ -1074,24 +1081,25 @@ function toDayPlan(day: CompleteDay, slots: string[]): DayPlan {
 /**
  * The pool the week is chosen from.
  *
- * Adherence is lexicographic and decided here: the best classification wins
- * outright. Inside a *compliant* class every day already satisfies the stated
- * daily tolerance, so all of them stay — that is what gives the weekly pass
- * something to vary, and it is why variety can never buy a materially worse
- * day. Inside a non-compliant class only the days that are effectively tied on
- * error survive, because there the difference is real.
+ * Which days are eligible is `bestEquivalentDays`'s answer, not this function's:
+ * the best standard wins outright, every day inside a compliant class stays
+ * because each already satisfies the stated tolerance, and the standard widens
+ * only where it cannot otherwise fill the week. What happens here is the
+ * trimming — dedupe, rank, and reserve room per slot, per locked choice, per
+ * preference and per price, so the weekly pass is handed genuine alternatives
+ * rather than forty variations of one day.
  */
-function selectDayPool(days: CompleteDay[], slots: string[]): DayPlan[] {
+function selectDayPool(
+  days: CompleteDay[],
+  slots: string[],
+  /** Distinct days the caller needs; the standard widens only if it must. */
+  minimum = 1
+): DayPlan[] {
   if (!days.length) return [];
-  const bestRank = days.reduce((best, day) =>
-    Math.min(best, adherenceTier(day.diagnostics.classification)), Number.POSITIVE_INFINITY);
-  const bestClass = days.filter((day) =>
-    adherenceTier(day.diagnostics.classification) === bestRank);
-  const compliant = bestRank <= ADHERENCE_RANK["Within tolerance"];
-  const bestError = bestClass.reduce((best, day) =>
-    Math.min(best, day.diagnostics.normalizedError), Number.POSITIVE_INFINITY);
-  const eligible = compliant ? bestClass : bestClass.filter((day) =>
-    day.diagnostics.normalizedError <= bestError + UNREACHABLE_DAY_ERROR_EQUIVALENCE);
+  // One definition of "worth choosing between", shared with the caller that
+  // assembles the day list — two copies of it meant the widening done there was
+  // quietly undone here.
+  const eligible = bestEquivalentDays(days, minimum);
 
   const unique = new Map<string, DayPlan>();
   for (const day of eligible) {
@@ -1519,16 +1527,48 @@ function unprovenReady(
   return unproven;
 }
 
-function bestEquivalentDays(days: CompleteDay[]): CompleteDay[] {
+const daySignature = (day: CompleteDay): string =>
+  day.picks.map((candidate) => candidate.dishShape).join(">");
+
+/**
+ * The days worth choosing between, and enough of them to fill a week.
+ *
+ * The best standard wins, as ever. But a target can be hard enough that only one
+ * or two combinations meet it — 180 g of protein inside 50 g of fat is two days
+ * on this menu — and a week built from two days is the same two dinners over and
+ * over, which is not a better answer than seven days where five of them are a
+ * few grams outside a line we drew ourselves. So when the best class cannot fill
+ * the week, the next-closest days are admitted, closest first, until it can.
+ *
+ * Never more than that: the days let in are the nearest misses there are, and
+ * the moment there is genuine choice inside the standard, nothing outside it
+ * gets in at all.
+ */
+function bestEquivalentDays(days: CompleteDay[], minimum = 1): CompleteDay[] {
   if (!days.length) return [];
   const bestRank = Math.min(...days.map((day) =>
     adherenceTier(day.diagnostics.classification)));
   const ranked = days.filter((day) =>
     adherenceTier(day.diagnostics.classification) === bestRank);
-  if (bestRank <= ADHERENCE_RANK["Within tolerance"]) return ranked;
   const bestError = Math.min(...ranked.map((day) => day.diagnostics.normalizedError));
-  return ranked.filter((day) =>
-    day.diagnostics.normalizedError <= bestError + UNREACHABLE_DAY_ERROR_EQUIVALENCE);
+  const kept = bestRank <= ADHERENCE_RANK["Within tolerance"] ? ranked
+    : ranked.filter((day) =>
+      day.diagnostics.normalizedError <= bestError + UNREACHABLE_DAY_ERROR_EQUIVALENCE);
+
+  const distinct = new Set(kept.map(daySignature));
+  if (distinct.size >= minimum) return kept;
+
+  // Closest first, so what comes in is always the least compromise available.
+  const rest = days
+    .filter((day) => !kept.includes(day))
+    .sort((a, b) => a.diagnostics.normalizedError - b.diagnostics.normalizedError);
+  const extended = [...kept];
+  for (const day of rest) {
+    if (distinct.size >= minimum) break;
+    extended.push(day);
+    distinct.add(daySignature(day));
+  }
+  return extended;
 }
 
 /** Everything a day search needs, resolved once and shared by every pass. */
@@ -1645,7 +1685,9 @@ function buildDayPool(search: DaySearch, options: GenerateOptions): DayPlan[] {
           { slotIndex, candidates: [candidate] }))
       : []);
 
-  let pool = selectDayPool(bestEquivalentDays([...explored, ...recoveredDays]), slotNames);
+  // A week needs one day per weekday to rotate between; anything less and the
+  // same day comes round again however varied the catalog is.
+  let pool = selectDayPool([...explored, ...recoveredDays], slotNames, options.days.length);
   // The explicit fallback. Normal generation never serves the same dish twice in
   // a day, but a ban is not worth an infeasible day: when nothing compliant can
   // be built without repeating, the search is rerun with repeats permitted and

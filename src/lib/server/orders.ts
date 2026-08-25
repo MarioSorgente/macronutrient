@@ -140,7 +140,7 @@ export async function submitOrder(
   // Both sides run the same order rules, so both sides start from the same plan.
   const plan: Plan = {
     ...stored,
-    assignments: (stored.assignments ?? []).map(withMenuIdentity),
+    assignments: (stored.assignments ?? []).map((a) => withMenuIdentity(a)),
   };
 
   const startDate = weekStartDate(plan, week);
