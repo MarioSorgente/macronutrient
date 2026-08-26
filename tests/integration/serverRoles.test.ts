@@ -41,6 +41,17 @@ async function caller(uid: string) {
 beforeEach(resetEmulators);
 
 describe("syncAccount", () => {
+  it("preserves unrelated claims during sign-in synchronization", async () => {
+    const uid = await createUser(uniqueEmail());
+    await adminAuth().setCustomUserClaims(uid, { featureTier: "gold" });
+    await sync(uid);
+    expect(await claimsOf(uid)).toMatchObject({
+      featureTier: "gold",
+      role: "client",
+      rid: RID,
+    });
+  });
+
   it("makes an ordinary account a client", async () => {
     const uid = await createUser(uniqueEmail());
     await expect(sync(uid)).resolves.toMatchObject({ role: "client" });
@@ -179,6 +190,23 @@ describe("syncAccount", () => {
 });
 
 describe("setRole", () => {
+  it("preserves unrelated claims through promotion and demotion", async () => {
+    const uid = await createUser(uniqueEmail());
+    await adminAuth().setCustomUserClaims(uid, { featureTier: "gold" });
+
+    await setRole("admin-uid", uid, "restaurant");
+    expect(await claimsOf(uid)).toMatchObject({
+      featureTier: "gold",
+      role: "restaurant",
+    });
+
+    await setRole("admin-uid", uid, "client");
+    expect(await claimsOf(uid)).toMatchObject({
+      featureTier: "gold",
+      role: "client",
+    });
+  });
+
   it("grants a role and mirrors it", async () => {
     const uid = await createUser(uniqueEmail());
     await expect(
