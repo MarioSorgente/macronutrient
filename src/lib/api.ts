@@ -64,3 +64,8 @@ export async function getApi<T>(path: string): Promise<T> {
   }
   return payload as T;
 }
+
+/** Saves restaurant settings through the authenticated, admin-only boundary. */
+export async function saveRestaurantSettings(config: unknown): Promise<void> {
+  await callApi("/api/admin/restaurant-config", config);
+}

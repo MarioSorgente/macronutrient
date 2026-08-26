@@ -6,8 +6,8 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import {
   listUsers,
   loadRestaurantConfig,
-  saveRestaurantConfig,
 } from "@/lib/storage/orders";
+import { saveRestaurantSettings } from "@/lib/api";
 import { authErrorMessage } from "@/lib/auth/errors";
 import { BALI_LABEL } from "@/lib/format";
 import { DAY_NAMES } from "@/lib/clients";
@@ -88,7 +88,7 @@ export default function AdminSettings() {
     setSaving(true);
     setError(null);
     try {
-      await saveRestaurantConfig(config);
+      await saveRestaurantSettings(config);
       show("Settings saved.");
     } catch (cause) {
       setError(authErrorMessage(cause));
