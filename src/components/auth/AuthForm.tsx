@@ -146,16 +146,25 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
     async (how: "push" | "replace" = "push") => {
       if (landed.current) return;
       landed.current = true;
-      // Someone who arrived on the staff CTA and then chose "For myself" has
-      // changed their mind: `next` still says /kitchen, and honouring it would
-      // land them on the staff-access panel they just declined.
-      const customerNext = policyFor(next).kind === "role" ? DEFAULT_NEXT : next;
-      const to =
-        intent === "staff"
-          ? await resolveStaffDestination(requested)
-          : customerNext;
-      if (how === "replace") router.replace(to);
-      else router.push(to);
+      try {
+        // Someone who arrived on the staff CTA and then chose "For myself" has
+        // changed their mind: `next` still says /kitchen, and honouring it would
+        // land them on the staff-access panel they just declined.
+        const customerNext = policyFor(next).kind === "role" ? DEFAULT_NEXT : next;
+        const to =
+          intent === "staff"
+            ? await resolveStaffDestination(requested)
+            : customerNext;
+        if (how === "replace") router.replace(to);
+        else router.push(to);
+      } catch (cause) {
+        // The latch exists to stop a double send-onward, not to make one
+        // failure permanent. Left set, a single failed staff lookup meant every
+        // later attempt returned at the first line: the form reported a
+        // successful sign-in and then sat there, doing nothing, forever.
+        landed.current = false;
+        throw cause;
+      }
     },
     [intent, next, requested, router]
   );
@@ -172,7 +181,10 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
    */
   useEffect(() => {
     if (mode === "reset" || authLoading || !user) return;
-    void land("replace");
+    // Say so if the send-onward fails rather than leaving somebody signed in
+    // and staring at a sign-in form. The latch is released either way, so the
+    // next attempt is a real one.
+    land("replace").catch((cause) => setError(authErrorMessage(cause)));
   }, [mode, authLoading, user, land]);
 
   async function withBusy(work: () => Promise<void>) {

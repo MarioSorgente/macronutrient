@@ -88,7 +88,12 @@ export default function MenuDishList({
                       {typeof recipe.menu_macros_per_serving.energy_kcal === "number" && (
                         <>
                           {" · "}
-                          {recipe.menu_macros_per_serving.energy_kcal} kcal (menu)
+                          {/* Calories carry the same weight as the price when
+                              choosing a dish, so they are read in the same way. */}
+                          <span className="font-700 tabular-nums text-tomato">
+                            {recipe.menu_macros_per_serving.energy_kcal} kcal
+                          </span>
+                          {" (menu)"}
                         </>
                       )}
                     </div>

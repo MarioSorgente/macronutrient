@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
 import {
   MAX_PROGRAM_WEEKS,
   type Plan,
 } from "@/lib/storage/types";
+import { mealsPerSlot, withRenamedSlots } from "@/lib/planSlots";
 import Modal from "@/components/ui/Modal";
 import Field from "@/components/ui/Field";
 
@@ -26,30 +27,54 @@ export default function PlanSettings({
   const [notes, setNotes] = useState(plan.notes ?? "");
   const [startDate, setStartDate] = useState(plan.programStartDate);
   const [weekCount, setWeekCount] = useState(plan.weekCount);
-  const [slots, setSlots] = useState<string[]>([...plan.mealSlots]);
+  /**
+   * Each row remembers the slot it started as, so a rename can carry its meals
+   * with it. A row added here has no `was`, and a row removed takes its `was`
+   * out of the list — which is how removal is told apart from renaming.
+   */
+  const [slots, setSlots] = useState<{ was?: string; name: string }[]>(
+    () => plan.mealSlots.map((slot) => ({ was: slot, name: slot }))
+  );
   const [newSlot, setNewSlot] = useState("");
+  const mealCounts = useMemo(() => mealsPerSlot(plan), [plan]);
 
+  const trimmedNames = slots.map((slot) => slot.name.trim());
+  const duplicate = trimmedNames.find((slot, index) =>
+    slot && trimmedNames.indexOf(slot) !== index);
 
   function addSlot() {
     const trimmed = newSlot.trim();
-    if (!trimmed || slots.includes(trimmed)) return;
-    setSlots([...slots, trimmed]);
+    if (!trimmed || trimmedNames.includes(trimmed)) return;
+    setSlots([...slots, { name: trimmed }]);
     setNewSlot("");
   }
 
   function renameSlot(index: number, value: string) {
-    setSlots(slots.map((s, i) => (i === index ? value : s)));
+    setSlots(slots.map((slot, i) => (i === index ? { ...slot, name: value } : slot)));
   }
 
   function save() {
-    const cleanSlots = slots.map((s) => s.trim()).filter(Boolean);
+    const kept = slots
+      .map((slot) => ({ ...slot, name: slot.name.trim() }))
+      .filter((slot) => slot.name);
+    // Every name blanked out is not an instruction to have no meal slots; the
+    // rest of the settings still save, against the slots the plan already has.
+    const emptied = kept.length === 0;
+
+    // Meals name their slot as a string, so a rename has to move them or they
+    // are orphaned: invisible in the planner, and still charged for.
+    const renames = emptied ? new Map<string, string>() : new Map(kept
+      .filter((slot) => slot.was && slot.was !== slot.name)
+      .map((slot) => [slot.was!, slot.name]));
+
     onSave({
       ...plan,
       title: name.trim() || plan.title,
       notes: notes.trim() || undefined,
       programStartDate: startDate,
       weekCount,
-      mealSlots: cleanSlots.length ? cleanSlots : plan.mealSlots,
+      mealSlots: emptied ? plan.mealSlots : kept.map((slot) => slot.name),
+      assignments: withRenamedSlots(plan.assignments, renames),
     });
   }
 
@@ -70,6 +95,10 @@ export default function PlanSettings({
           <button
             type="button"
             onClick={save}
+            // Two slots of one name are indistinguishable to every screen that
+            // finds meals by slot: the same meals would appear under both.
+            disabled={Boolean(duplicate)}
+            title={duplicate ? `There are two slots called "${duplicate}".` : undefined}
             className="rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
           >
             Save settings
@@ -143,27 +172,42 @@ export default function PlanSettings({
             </span>
           </div>
           <ul className="flex flex-col gap-1.5">
-            {slots.map((slot, index) => (
-              <li key={index} className="flex items-center gap-2">
-                <GripVertical size={14} className="shrink-0 text-charcoal-soft" />
-                <input
-                  value={slot}
-                  aria-label={`Meal slot ${index + 1}`}
-                  onChange={(e) => renameSlot(index, e.target.value)}
-                  className="flex-1 rounded-lg border border-cream-deep bg-white px-2.5 py-1.5 text-sm outline-none focus:border-tomato-soft"
-                />
-                <button
-                  type="button"
-                  onClick={() => setSlots(slots.filter((_, i) => i !== index))}
-                  disabled={slots.length === 1}
-                  className="rounded-lg p-1.5 text-charcoal-soft hover:bg-tomato-soft/30 hover:text-tomato-dark disabled:opacity-30"
-                  aria-label={`Remove ${slot}`}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </li>
-            ))}
+            {slots.map((slot, index) => {
+              // Meals live under the name this row started as, so that is what
+              // decides whether removing it would strand any.
+              const meals = slot.was ? mealCounts.get(slot.was) ?? 0 : 0;
+              return (
+                <li key={index} className="flex items-center gap-2">
+                  <GripVertical size={14} className="shrink-0 text-charcoal-soft" />
+                  <input
+                    value={slot.name}
+                    aria-label={`Meal slot ${index + 1}`}
+                    onChange={(e) => renameSlot(index, e.target.value)}
+                    className="flex-1 rounded-lg border border-cream-deep bg-white px-2.5 py-1.5 text-sm outline-none focus:border-tomato-soft"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSlots(slots.filter((_, i) => i !== index))}
+                    disabled={slots.length === 1 || meals > 0}
+                    className="rounded-lg p-1.5 text-charcoal-soft hover:bg-tomato-soft/30 hover:text-tomato-dark disabled:opacity-30"
+                    aria-label={`Remove ${slot.name}`}
+                    title={meals > 0
+                      ? `${slot.was} still holds ${meals} meal${meals === 1 ? "" : "s"}. Remove them from the plan first.`
+                      : undefined}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
+          {duplicate && (
+            <p role="alert" className="mt-1.5 text-[11px] font-600 text-tomato-dark">
+              Two slots are called “{duplicate}”. Give them different names —
+              meals are filed under the slot’s name, so the same ones would show
+              up under both.
+            </p>
+          )}
           <div className="mt-2 flex gap-2">
             <input
               value={newSlot}

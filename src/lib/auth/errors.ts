@@ -36,9 +36,28 @@ function codeOf(cause: unknown): string | null {
   return null;
 }
 
+/**
+ * Whether this is our own API refusing, rather than a library failing.
+ *
+ * `ApiError` carries the message the server chose to send — "Negrita is not
+ * taking orders at the moment", "That plan does not exist" — which is the whole
+ * reason the route bothered to write one. Matched by name rather than by
+ * importing the class, so this stays a plain module the server can load too.
+ */
+function isServerRefusal(cause: unknown): cause is Error {
+  return cause instanceof Error && cause.name === "ApiError" &&
+    cause.message.trim().length > 0;
+}
+
 export function authErrorMessage(cause: unknown): string {
   const code = codeOf(cause);
   if (code && MESSAGES[code]) return MESSAGES[code];
+  // Almost every caller of this hands it an API failure, not a Firebase one,
+  // and the generic line below was throwing away the only sentence that
+  // explained anything: a kitchen past its cutoff, a week already sent, an
+  // order that no longer exists all read "Something went wrong. Please try
+  // again." and left nothing to act on.
+  if (isServerRefusal(cause)) return cause.message;
   if (code) console.error("Unmapped auth error:", code, cause);
   else console.error("Auth error:", cause);
   return "Something went wrong. Please try again.";

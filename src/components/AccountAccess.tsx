@@ -12,7 +12,6 @@ import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
 import { isFirebaseConfigured } from "@/lib/firebaseEnv";
 import { isCloudBackend } from "@/lib/storage";
 import { authErrorMessage } from "@/lib/auth/errors";
-import { ApiError } from "@/lib/api";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import SignInPrompt from "@/components/SignInPrompt";
@@ -125,7 +124,7 @@ export default function AccountAccess() {
       // An ApiError already carries the server's own wording; anything else is
       // a Firebase error and needs translating.
       show(
-        cause instanceof ApiError ? cause.message : authErrorMessage(cause),
+        authErrorMessage(cause),
         "error"
       );
     } finally {

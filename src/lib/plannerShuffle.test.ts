@@ -29,6 +29,20 @@ describe("bounded shuffle search", () => {
     expect(meaningfulDifference(plan("chicken"), plan("chicken"))).toBe(0);
   });
 
+  it("tells two Negrita dishes apart by the dish, not by their parts", () => {
+    const base = plan("chicken").days[0].meals[0];
+    const pancake = { ...base, menuRecipeId: "special_protein_pancake" };
+    const waffle = { ...base, menuRecipeId: "protein_bountiful_fruit_waffle" };
+
+    // Identical ingredient lists here on purpose: a menu dish is the dish it
+    // is, and deriving that from its components only held while no two dishes
+    // shared a set of them.
+    expect(normalizedMealIdentity(pancake)).not.toBe(normalizedMealIdentity(waffle));
+    expect(normalizedMealIdentity(pancake)).toBe("menu:special_protein_pancake");
+    // And a composed plate of the same ingredients is still a different meal.
+    expect(normalizedMealIdentity(base)).not.toBe(normalizedMealIdentity(pancake));
+  });
+
   it("checks a deterministic bound without relying on wall-clock time", async () => {
     let tick = 0;
     const generate = vi.fn(({ seed }: GenerateOptions) => plan(`meal-${seed}`));

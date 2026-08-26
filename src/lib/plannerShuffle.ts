@@ -25,8 +25,17 @@ export interface ShuffleSearchResult {
   evaluated: number;
 }
 
-/** Portion sizes deliberately do not participate in a meal's identity. */
+/**
+ * What makes two meals the same meal, for deciding whether a shuffle changed
+ * anything. Portion sizes deliberately do not participate.
+ *
+ * A Negrita dish is identified by the dish it is. Deriving it from the
+ * ingredient list instead worked only for as long as no two menu dishes shared
+ * a set of components and no composed plate happened to match one — an accident
+ * of the current menu rather than a property of it, and the id is right there.
+ */
 export function normalizedMealIdentity(meal: GeneratedMeal): string {
+  if (meal.menuRecipeId) return `menu:${meal.menuRecipeId}`;
   if (meal.sourceDishId) return `dish:${meal.sourceDishId}`;
   return `meal:${meal.items.map((item) => item.ingredientId).sort().join("+")}`;
 }
