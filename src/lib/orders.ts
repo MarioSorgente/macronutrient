@@ -18,6 +18,7 @@ import type {
   Plan,
   PrepTask,
 } from "@/lib/storage/types";
+import type { RestaurantPricingPolicy } from "@/lib/pricing";
 
 /**
  * Turning a planned week into an order.
@@ -59,7 +60,8 @@ export function buildOrderDays(
   plan: Plan,
   week: number,
   dishes: Map<string, Dish>,
-  fulfilment: FulfilmentByDay
+  fulfilment: FulfilmentByDay,
+  pricingPolicy: RestaurantPricingPolicy = { markupPct: 0 }
 ): OrderDay[] {
   const days: OrderDay[] = [];
 
@@ -74,7 +76,7 @@ export function buildOrderDays(
       servings: assignment.servings,
       items: assignmentItems(assignment, dishes) ?? [],
       totals: assignmentMacros(assignment, dishes),
-      priceIdr: assignmentPrice(assignment, dishes).totalIdr,
+      priceIdr: assignmentPrice(assignment, dishes, pricingPolicy).totalIdr,
     }));
 
     days.push({

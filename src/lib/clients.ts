@@ -1,6 +1,6 @@
 import type { Macros } from "@/types/nutrition";
 import { EMPTY_MACROS, addMacros, scaleMacros, sumDishMacros } from "@/lib/calc";
-import { ZERO_PRICE, addPrices, priceItems, type PriceResult } from "@/lib/pricing";
+import { ZERO_PRICE, addPrices, priceAssignment, type PriceResult, type RestaurantPricingPolicy } from "@/lib/pricing";
 import { publishedMenuMacros } from "@/lib/database";
 import { assignmentMenuRecipe } from "@/lib/menuIdentity";
 import type {
@@ -94,32 +94,10 @@ export function isOrphaned(
 /** The menu price of one serving. */
 export function assignmentBasePrice(
   assignment: Assignment,
-  dishes: Map<string, Dish>
+  dishes: Map<string, Dish>,
+  policy: RestaurantPricingPolicy = { markupPct: 0 }
 ): PriceResult {
-  // A menu dish costs what the menu charges, whatever its parts come to. This
-  // is looked up first and never falls through to components: the fallback
-  // priced a Rp 89,000 pancake at Rp 15,000 and a Rp 99,000 Geisha at
-  // Rp 130,000, in opposite directions, for the same reason.
-  const recipe = assignmentMenuRecipe(assignment);
-  if (recipe && typeof recipe.price_idr === "number") {
-    return { totalIdr: recipe.price_idr, unpricedCount: 0, complete: true };
-  }
-  // An authoritative price (e.g. a menu dish's own price) wins over summing
-  // components, which would otherwise produce a different, partial figure.
-  if (assignment.price) {
-    return {
-      totalIdr: assignment.price.totalIdr,
-      unpricedCount: assignment.price.complete ? 0 : 1,
-      complete: assignment.price.complete,
-    };
-  }
-  // A meal that claims a menu dish we no longer list has no knowable price, and
-  // its components are not it. Say so rather than quoting a number for a
-  // different meal.
-  if (assignment.menuRecipeId) return { ...ZERO_PRICE, unpricedCount: 1, complete: false };
-  const items = assignmentItems(assignment, dishes);
-  if (!items) return { ...ZERO_PRICE, unpricedCount: 1, complete: false };
-  return priceItems(items);
+  return priceAssignment({ ...assignment, servings: 1 }, dishes, policy);
 }
 
 /**
@@ -131,22 +109,19 @@ export function assignmentBasePrice(
  */
 export function assignmentPrice(
   assignment: Assignment,
-  dishes: Map<string, Dish>
+  dishes: Map<string, Dish>,
+  policy: RestaurantPricingPolicy = { markupPct: 0 }
 ): PriceResult {
-  const base = assignmentBasePrice(assignment, dishes);
-  return {
-    totalIdr: base.totalIdr * assignment.servings,
-    unpricedCount: base.unpricedCount,
-    complete: base.complete,
-  };
+  return priceAssignment(assignment, dishes, policy);
 }
 
 export function sumAssignmentPrices(
   assignments: Assignment[],
-  dishes: Map<string, Dish>
+  dishes: Map<string, Dish>,
+  policy: RestaurantPricingPolicy = { markupPct: 0 }
 ): PriceResult {
   return assignments.reduce<PriceResult>(
-    (total, a) => addPrices(total, assignmentPrice(a, dishes)),
+    (total, a) => addPrices(total, assignmentPrice(a, dishes, policy)),
     { ...ZERO_PRICE }
   );
 }
@@ -155,17 +130,19 @@ export function dayPrice(
   plan: Plan,
   week: number,
   day: number,
-  dishes: Map<string, Dish>
+  dishes: Map<string, Dish>,
+  policy: RestaurantPricingPolicy = { markupPct: 0 }
 ): PriceResult {
-  return sumAssignmentPrices(assignmentsFor(plan, week, day), dishes);
+  return sumAssignmentPrices(assignmentsFor(plan, week, day), dishes, policy);
 }
 
 export function weekPrice(
   plan: Plan,
   week: number,
-  dishes: Map<string, Dish>
+  dishes: Map<string, Dish>,
+  policy: RestaurantPricingPolicy = { markupPct: 0 }
 ): PriceResult {
-  return sumAssignmentPrices(assignmentsFor(plan, week), dishes);
+  return sumAssignmentPrices(assignmentsFor(plan, week), dishes, policy);
 }
 
 export function assignmentsFor(

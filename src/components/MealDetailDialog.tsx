@@ -12,7 +12,7 @@ import {
 } from "@/lib/clients";
 import { getIngredient } from "@/lib/database";
 import { perItemMacros } from "@/lib/calc";
-import { formatIdr, formatPrice } from "@/lib/pricing";
+import { formatIdr, formatPrice, type RestaurantPricingPolicy } from "@/lib/pricing";
 import { formatMacroGrams, round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import Modal from "@/components/ui/Modal";
@@ -25,6 +25,7 @@ import Modal from "@/components/ui/Modal";
 export default function MealDetailDialog({
   assignment,
   dishes,
+  pricingPolicy = { markupPct: 0 },
   contextLabel,
   onChangeServings,
   locked = false,
@@ -33,6 +34,7 @@ export default function MealDetailDialog({
 }: {
   assignment: Assignment;
   dishes: Map<string, Dish>;
+  pricingPolicy?: RestaurantPricingPolicy;
   /** e.g. "Breakfast · Monday, Aug 17" */
   contextLabel: string;
   onChangeServings: (servings: number) => void;
@@ -42,8 +44,8 @@ export default function MealDetailDialog({
   onClose: () => void;
 }) {
   const macros = assignmentMacros(assignment, dishes);
-  const price = assignmentPrice(assignment, dishes);
-  const base = assignmentBasePrice(assignment, dishes);
+  const price = assignmentPrice(assignment, dishes, pricingPolicy);
+  const base = assignmentBasePrice(assignment, dishes, pricingPolicy);
   const items = assignmentItems(assignment, dishes);
   const orphan = isOrphaned(assignment, dishes);
   const name = assignmentName(assignment, dishes);

@@ -16,6 +16,7 @@ import {
   isOrphaned,
 } from "@/lib/clients";
 import { formatPrice } from "@/lib/pricing";
+import type { RestaurantPricingPolicy } from "@/lib/pricing";
 import { round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import TargetAdherence from "@/components/TargetAdherence";
@@ -31,6 +32,7 @@ export default function PlanDayView({
   week,
   day,
   dishes,
+  pricingPolicy = { markupPct: 0 },
   showPrices,
   onSelectDay,
   onOpenMeal,
@@ -41,6 +43,7 @@ export default function PlanDayView({
   week: number;
   day: number;
   dishes: Map<string, Dish>;
+  pricingPolicy?: RestaurantPricingPolicy;
   showPrices: boolean;
   onSelectDay: (day: number) => void;
   onOpenMeal: (assignment: Assignment) => void;
@@ -49,7 +52,7 @@ export default function PlanDayView({
   locked?: boolean;
 }) {
   const totals = dayTotals(plan, week, day, dishes);
-  const price = dayPrice(plan, week, day, dishes);
+  const price = dayPrice(plan, week, day, dishes, pricingPolicy);
   const targetResolution = resolveTarget({ targets: plan.targets, mode: plan.targetMode, preset: plan.targetPreset });
 
   return (
@@ -163,7 +166,7 @@ export default function PlanDayView({
                             </span>
                             {showPrices && (
                               <span className="text-xs font-600 tabular-nums text-charcoal-soft">
-                                {formatPrice(assignmentPrice(a, dishes))}
+                                {formatPrice(assignmentPrice(a, dishes, pricingPolicy))}
                               </span>
                             )}
                           </div>

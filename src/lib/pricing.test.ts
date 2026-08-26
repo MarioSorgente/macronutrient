@@ -7,9 +7,11 @@ import {
   portionsFor,
   priceForGrams,
   priceItems,
+  priceAssignment,
 } from "@/lib/pricing";
 import { getIngredient } from "@/lib/database";
 import type { Ingredient } from "@/types/nutrition";
+import type { Assignment, Dish } from "@/lib/storage/types";
 
 /**
  * Pricing. The kitchen sells whole portions, so 100 g out of a 200 g portion
@@ -92,6 +94,49 @@ describe("priceItems", () => {
 
   it("is a complete zero for an empty set", () => {
     expect(priceItems([])).toEqual(ZERO_PRICE);
+  });
+});
+
+describe("priceAssignment", () => {
+  const diy = (extra: Partial<Assignment> = {}): Assignment => ({
+    id: "a", week: 1, day: 0, slot: "Lunch", servings: 1,
+    items: [{ ingredientId: BUCKWHEAT, name: "Buckwheat", grams: 200,
+      unitId: "g", quantity: 200 }],
+    snapshot: { name: "DIY", totals: { energy_kcal: 0, protein_g: 0,
+      carbs_g: 0, fat_g: 0, fiber_g: 0 } }, ...extra,
+  });
+
+  it("leaves component prices unchanged at zero markup", () => {
+    expect(priceAssignment(diy(), new Map(), { markupPct: 0 }).totalIdr).toBe(65_000);
+  });
+
+  it("applies fractional markup and rounds once to whole rupiah", () => {
+    expect(priceAssignment(diy(), new Map(), { markupPct: 2.345 }).totalIdr)
+      .toBe(66_524);
+  });
+
+  it("marks incomplete component totals up without pretending they are complete", () => {
+    const result = priceAssignment(diy({ items: [
+      ...diy().items!,
+      { ingredientId: UNPRICED, name: "Apple", grams: 100, unitId: "g", quantity: 100 },
+    ] }), new Map(), { markupPct: 10 });
+    expect(result).toEqual({ totalIdr: 71_500, unpricedCount: 1, complete: false });
+  });
+
+  it("preserves an explicit published price and never marks it up twice", () => {
+    expect(priceAssignment(diy({ price: { totalIdr: 89_000, complete: true } }),
+      new Map(), { markupPct: 25 }).totalIdr).toBe(89_000);
+  });
+
+  it("uses published menu price rather than marked-up components", () => {
+    const assignment = diy({ menuRecipeId: "special_protein_pancake" });
+    expect(priceAssignment(assignment, new Map(), { markupPct: 25 }).totalIdr).toBe(89_000);
+  });
+
+  it("component-prices saved dishes with the same policy", () => {
+    const dish = { id: "saved", items: diy().items } as Dish;
+    expect(priceAssignment(diy({ dishId: "saved", items: undefined }),
+      new Map([[dish.id, dish]]), { markupPct: 10 }).totalIdr).toBe(71_500);
   });
 });
 

@@ -234,7 +234,7 @@ export async function submitOrder(
     }
 
     const days = buildOrderDays(
-      planWithMenuIdentity(plan, dishes), week, dishes, submittedFulfilment
+      planWithMenuIdentity(plan, dishes), week, dishes, submittedFulfilment, config
     );
     validateOrderDays(days);
     if (days.length === 0) throw new HttpError(409, "That week has no meals in it.");

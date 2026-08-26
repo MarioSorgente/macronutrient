@@ -16,6 +16,7 @@ import {
   isOrphaned,
 } from "@/lib/clients";
 import { formatPrice } from "@/lib/pricing";
+import type { RestaurantPricingPolicy } from "@/lib/pricing";
 import { formatMacroGrams, round0 } from "@/lib/format";
 import TargetAdherence from "@/components/TargetAdherence";
 import { diagnoseDailyAdherence } from "@/lib/dailyAdherence";
@@ -30,6 +31,7 @@ export default function PlanWeekGrid({
   plan,
   week,
   dishes,
+  pricingPolicy = { markupPct: 0 },
   showPrices,
   onOpenMeal,
   onAddMeal,
@@ -38,6 +40,7 @@ export default function PlanWeekGrid({
   plan: Plan;
   week: number;
   dishes: Map<string, Dish>;
+  pricingPolicy?: RestaurantPricingPolicy;
   showPrices: boolean;
   onOpenMeal: (assignment: Assignment) => void;
   onAddMeal: (day: number, slot: string) => void;
@@ -52,7 +55,7 @@ export default function PlanWeekGrid({
       <div className="grid min-w-[52rem] grid-cols-7 gap-2">
         {DAY_SHORT.map((dayName, dayIndex) => {
           const totals = dayTotals(plan, week, dayIndex, dishes);
-          const price = dayPrice(plan, week, dayIndex, dishes);
+          const price = dayPrice(plan, week, dayIndex, dishes, pricingPolicy);
           const date = dateFor(plan, week, dayIndex);
           // A snack is optional: a day that reaches its macros in three meals is
           // a complete day, and reading an empty Snack as a hole is what made a

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildOrderDays, emptySlots, summarizeOrder, DEFAULT_FULFILMENT } from "@/lib/orders";
 import { planWithMenuIdentity } from "@/lib/menuIdentity";
-import { byId } from "@/lib/clients";
+import { assignmentPrice, byId } from "@/lib/clients";
 import { menuRecipes, publishedMenuMacros } from "@/lib/database";
 import type { Assignment, Dish, Plan } from "@/lib/storage/types";
 
@@ -43,6 +43,22 @@ const fromSavedDish = (dish: Dish): Assignment => ({
 } as unknown as Assignment);
 
 describe("pricing a week the same way everywhere", () => {
+  it("uses the identical policy result in browser previews and order construction", () => {
+    const assignment = {
+      ...fromSavedDish(savedCopy()), dishId: undefined,
+      items: [{ ingredientId: "buckwheat_cooked", name: "Buckwheat", grams: 200,
+        unitId: "g", quantity: 200 }],
+    } as Assignment;
+    const policy = { markupPct: 2.345 };
+    const preview = assignmentPrice(assignment, new Map(), policy).totalIdr;
+    const order = buildOrderDays(
+      planWith([assignment]), 1, new Map(), { 0: DEFAULT_FULFILMENT }, policy
+    );
+
+    expect(order[0].meals[0].priceIdr).toBe(preview);
+    expect(preview).toBe(66_524);
+  });
+
   it("charges the menu price for a saved copy of a menu dish", () => {
     const dish = savedCopy();
     const dishes = byId([dish]);
