@@ -156,6 +156,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       teardown.push(
         onAuthStateChanged(auth, async (current) => {
           if (disposed) return;
+
+          if (!current) {
+            // `signOut()` is not the only way a session can end. Firebase can
+            // report a remote revocation, another tab signing out, or an
+            // account deletion here, so session-scoped state must be cleared
+            // at the auth boundary rather than only in our sign-out button.
+            // In particular, releasing this guard lets the same UID reconcile
+            // again if it subsequently signs in as a genuinely new session.
+            syncedFor.current = null;
+            setSyncSettled(false);
+            setSyncError(null);
+            setActualRole(null);
+            setViewAsState(null);
+            try {
+              window.sessionStorage.removeItem(VIEW_AS_KEY);
+            } catch {
+              // Nothing to clear.
+            }
+          }
+
           setUser(current);
           await readRole(current);
           if (!disposed) setLoading(false);
