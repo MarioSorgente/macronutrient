@@ -86,8 +86,13 @@ export default function WeekPlanner() {
   const [assigning, setAssigning] = useState<{ day: number; slot: string } | null>(
     null
   );
-  const [saving, setSaving] = useState(false);
+  const [savesInFlight, setSavesInFlight] = useState(0);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Identifies the newest change handed to currentPlan's write queue. Promise
+  // callbacks may be observed on different renders, so only that change is
+  // allowed to decide the error message shown for the current plan.
+  const latestSave = useRef(0);
+  const saving = savesInFlight > 0;
   /**
    * Which account the plan on screen was loaded for. A token expiry or a sign-out
    * in another tab flips `repos` to a different store, and nothing else ties the
@@ -232,20 +237,24 @@ export default function WeekPlanner() {
       return false;
     }
     setClient(next);
-    setSaving(true);
+    const saveNumber = ++latestSave.current;
+    setSavesInFlight((count) => count + 1);
     setSaveError(null);
     try {
       const stored = await savePlan(repos.plans, repos.uid, next);
       setClient((current) => (current === next ? stored : current));
+      if (latestSave.current === saveNumber) setSaveError(null);
       return true;
     } catch (cause) {
       console.error("Could not save your plan:", cause);
-      setSaveError(
-        "We could not save your plan. Your week is still on screen — try again."
-      );
+      if (latestSave.current === saveNumber) {
+        setSaveError(
+          "We could not save your plan. Your week is still on screen — try again."
+        );
+      }
       return false;
     } finally {
-      setSaving(false);
+      setSavesInFlight((count) => Math.max(0, count - 1));
     }
   }, [repos]);
 
@@ -457,6 +466,16 @@ export default function WeekPlanner() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
       <HouseRecipeLoader enabled={visibleWeekNeedsHouseRecipes} />
+
+      {saving && !saveError && (
+        <p
+          role="status"
+          data-testid="saving-indicator"
+          className="mb-4 text-sm font-600 text-charcoal-soft"
+        >
+          Saving…
+        </p>
+      )}
 
       {/*
         Sticky, not a toast. A toast that dismisses itself is the wrong shape
