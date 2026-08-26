@@ -304,7 +304,11 @@ export async function setOrderStatus(
   const db = adminDb();
 
   const ref = db.doc(`restaurants/${RESTAURANT_ID}/orders/${orderId}`);
-  await db.runTransaction(async (transaction) => {
+  const claimed = await db.runTransaction(async (transaction) => {
+    // This is deliberately the first read in every attempt. Firestore may run
+    // this callback more than once when another caller changes the order; each
+    // retry must authorize and validate against the newly committed status,
+    // not against anything loaded before runTransaction.
     const snap = await transaction.get(ref);
     if (!snap.exists) throw new HttpError(404, "That order does not exist.");
     const order = snap.data() as Order;
@@ -342,14 +346,17 @@ export async function setOrderStatus(
     const restaurantNote = isStaff && typeof note === "string"
       ? note.trim().slice(0, 500)
       : null;
+    const statusHistory = [
+      // `order` belongs to this transaction attempt, so a retry appends to the
+      // winner's history instead of replacing it with a stale caller snapshot.
+      ...(order.statusHistory ?? []),
+      { status: next, at: now, byUid: caller.uid },
+    ];
     transaction.update(ref, {
       status: next,
       updatedAt: now,
       ...(restaurantNote ? { restaurantNote } : {}),
-      statusHistory: [
-        ...(order.statusHistory ?? []),
-        { status: next, at: now, byUid: caller.uid },
-      ],
+      statusHistory,
     });
 
     if (becomingDead) {
@@ -367,6 +374,11 @@ export async function setOrderStatus(
         transaction.delete(lockRef);
       }
     }
+
+    // The order update is the transition claim. Dead-order cleanup, plan
+    // release and reservation release are writes in that same claim, so no
+    // caller can observe a committed dead status with unfinished follow-up.
+    return { orderId, status: next };
   });
-  return { orderId, status: next };
+  return claimed;
 }
