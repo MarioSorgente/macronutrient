@@ -37,6 +37,7 @@ import {
   type RestaurantConfig,
 } from "@/lib/storage/types";
 import { serviceTimeProblems } from "@/lib/fulfilmentTime";
+import { validateRestaurantConfig } from "@/lib/server/restaurantConfig";
 
 /**
  * Turning a planned week into a prep order the kitchen is committed to.
@@ -120,15 +121,26 @@ export function readFulfilment(raw: unknown): FulfilmentByDay {
 
 async function loadConfig(db: Firestore): Promise<RestaurantConfig> {
   const snap = await db.doc(`restaurants/${RESTAURANT_ID}`).get();
-  const stored = snap.exists ? (snap.data() as Partial<RestaurantConfig>) : {};
   const now = new Date().toISOString();
+  if (snap.exists) {
+    try {
+      const stored = snap.data() ?? {};
+      return {
+        ...validateRestaurantConfig(stored),
+        createdAt: typeof stored.createdAt === "string" ? stored.createdAt : now,
+        updatedAt: typeof stored.updatedAt === "string" ? stored.updatedAt : now,
+      };
+    } catch (cause) {
+      console.error("Persisted restaurant settings are invalid:", cause);
+      throw new HttpError(503, "Restaurant settings are invalid. Ask an admin to review them.");
+    }
+  }
   return {
     id: RESTAURANT_ID,
-    createdAt: stored.createdAt ?? now,
-    updatedAt: stored.updatedAt ?? now,
+    createdAt: now,
+    updatedAt: now,
     ...DEFAULT_RESTAURANT_CONFIG,
-    ...stored,
-  } as RestaurantConfig;
+  };
 }
 
 export interface SubmitInput {

@@ -40,34 +40,31 @@ function zones(value: unknown): DeliveryZone[] {
   if (!Array.isArray(value) || value.length > 100) {
     bad("deliveryZones must be an array of at most 100 zones.");
   }
+  const seen = new Set<string>();
   return value.map((entry, index) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
       bad(`deliveryZones[${index}] must be an object.`);
     }
     const candidate = entry as Record<string, unknown>;
     const fee = candidate.feeIdr;
-    if (!Number.isSafeInteger(fee) || (fee as number) < 0 || (fee as number) > 100_000_000) {
-      bad(`deliveryZones[${index}].feeIdr must be a whole amount from 0 to 100000000.`);
+    if (typeof fee !== "number" || !Number.isFinite(fee) || fee < 0 || fee > 100_000_000) {
+      bad(`deliveryZones[${index}].feeIdr must be a finite amount from 0 to 100000000.`);
     }
-    return { name: text(candidate.name, `deliveryZones[${index}].name`), feeIdr: fee as number };
+    const name = text(candidate.name, `deliveryZones[${index}].name`);
+    const key = name.toLocaleLowerCase("en-US");
+    if (seen.has(key)) bad("deliveryZones must have unique names.");
+    seen.add(key);
+    return { name, feeIdr: fee };
   });
 }
 
-/** Validates and persists the public restaurant settings at the server boundary. */
-export async function updateRestaurantConfig(
-  caller: RestaurantCaller,
-  input: unknown
-): Promise<{ updated: true }> {
-  if (caller.role !== "admin" || caller.rid !== RESTAURANT_ID) {
-    throw new HttpError(403, "You cannot configure this restaurant.");
-  }
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    bad("Restaurant settings must be an object.");
-  }
+export type ValidRestaurantConfig = Omit<RestaurantConfig, "createdAt" | "updatedAt">;
+
+/** Strictly validates untrusted settings and returns only their normalized public shape. */
+export function validateRestaurantConfig(input: unknown): ValidRestaurantConfig {
+  if (!input || typeof input !== "object" || Array.isArray(input)) bad("Restaurant settings must be an object.");
   const value = input as Record<string, unknown>;
-  if (value.id !== undefined && value.id !== RESTAURANT_ID) {
-    bad("The restaurant id does not match this restaurant.");
-  }
+  if (value.id !== undefined && value.id !== RESTAURANT_ID) bad("The restaurant id does not match this restaurant.");
   if (!Number.isInteger(value.cutoffDay) || (value.cutoffDay as number) < 0 || (value.cutoffDay as number) > 6) {
     bad("cutoffDay must be a whole number from 0 to 6.");
   }
@@ -79,29 +76,47 @@ export async function updateRestaurantConfig(
     bad("serviceSlots must contain between 1 and 24 entries.");
   }
   const serviceSlots = value.serviceSlots.map((slot, index) => text(slot, `serviceSlots[${index}]`, 50));
-  if (new Set(serviceSlots).size !== serviceSlots.length) bad("serviceSlots must be unique.");
+  if (new Set(serviceSlots.map((slot) => slot.toLocaleLowerCase("en-US"))).size !== serviceSlots.length) {
+    bad("serviceSlots must be unique.");
+  }
+  const serviceOpen = time(value.serviceOpen, "serviceOpen");
+  const serviceClose = time(value.serviceClose, "serviceClose");
+  if (serviceOpen >= serviceClose) bad("serviceOpen must be earlier than serviceClose.");
 
-  const config: Omit<RestaurantConfig, "createdAt" | "updatedAt"> = {
+  return {
     id: RESTAURANT_ID,
     name: text(value.name, "name"),
     timezone: timezone(value.timezone),
     cutoffDay: value.cutoffDay as number,
     cutoffTime: time(value.cutoffTime, "cutoffTime"),
     serviceSlots,
-    serviceOpen: time(value.serviceOpen, "serviceOpen"),
-    serviceClose: time(value.serviceClose, "serviceClose"),
+    serviceOpen,
+    serviceClose,
     deliveryZones: zones(value.deliveryZones),
     markupPct: value.markupPct,
     acceptingOrders: value.acceptingOrders,
   };
+}
+
+/** Validates and persists the public restaurant settings at the server boundary. */
+export async function updateRestaurantConfig(
+  caller: RestaurantCaller,
+  input: unknown
+): Promise<{ updated: true }> {
+  if (caller.role !== "admin") {
+    throw new HttpError(403, "You cannot configure this restaurant.");
+  }
+  const config = validateRestaurantConfig(input);
   const ref = adminDb().doc(`restaurants/${RESTAURANT_ID}`);
   await adminDb().runTransaction(async (transaction) => {
     const existing = await transaction.get(ref);
     transaction.set(ref, {
       ...config,
       updatedAt: FieldValue.serverTimestamp(),
-      ...(!existing.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
-    }, { merge: true });
+      createdAt: existing.exists && existing.get("createdAt")
+        ? existing.get("createdAt")
+        : FieldValue.serverTimestamp(),
+    });
   });
   return { updated: true };
 }

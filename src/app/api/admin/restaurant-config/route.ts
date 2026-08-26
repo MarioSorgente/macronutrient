@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     const caller = await requireAdmin(request);
     const body = await request.json().catch(() => ({}));
     return NextResponse.json(await updateRestaurantConfig(
-      { uid: caller.uid, role: caller.role as string | undefined, rid: caller.rid as string | undefined },
+      { uid: caller.uid, role: caller.role as string | undefined },
       body
     ));
   } catch (cause) {
