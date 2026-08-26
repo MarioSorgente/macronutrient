@@ -1,6 +1,6 @@
 import type { Macros, PlannerCandidate } from "@/types/nutrition";
 import { GRAM_UNIT_ID } from "@/types/nutrition";
-import { getIngredient, menuRecipes } from "@/lib/database";
+import { getIngredient, getRecipe } from "@/lib/database";
 import { EMPTY_MACROS, perItemMacros } from "@/lib/calc";
 import { ZERO_PRICE, addPrices, priceItems, type PriceResult } from "@/lib/pricing";
 import { TARGET_FIELDS, adherencePct } from "@/lib/clients";
@@ -437,7 +437,7 @@ function isSkipped(candidate: { id: string }): boolean {
 }
 
 function menuRecipesSection(recipeId: string): string | null {
-  return menuRecipes.find((recipe) => recipe.recipe_id === recipeId)?.section ?? null;
+  return getRecipe(recipeId)?.section ?? null;
 }
 
 /** Menu recipes and saved dishes, offered whole on their published macros. */

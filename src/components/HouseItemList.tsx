@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, Pencil, TriangleAlert } from "lucide-react";
 import type { Ingredient } from "@/types/nutrition";
-import { getIngredient, ingredients, isEstimated } from "@/lib/database";
+import { getIngredient, nutritionCatalog, isEstimated } from "@/lib/database";
 import { categoryStyle } from "@/lib/categoryStyle";
 import { useHouseRecipes } from "@/store/houseRecipes";
 import HouseRecipeEditor from "@/components/HouseRecipeEditor";
@@ -19,7 +19,7 @@ export default function HouseItemList() {
   // Ingredients whose values are estimates with no public source to verify them.
   const estimatedItems = useMemo(
     () =>
-      ingredients
+      nutritionCatalog.ingredients
         .filter(isEstimated)
         .map((i) => getIngredient(i.ingredient_id) ?? i),
     // `version` is a cache-buster: getIngredient() resolves house overrides at

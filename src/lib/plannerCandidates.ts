@@ -1,5 +1,5 @@
 import { sumDishMacros } from "@/lib/calc";
-import { getIngredient, menuRecipes, publishedMenuMacros } from "@/lib/database";
+import { getIngredient, nutritionCatalog, publishedMenuMacros } from "@/lib/database";
 import { priceItems } from "@/lib/pricing";
 import { GRAM_UNIT_ID, type Macros, type MenuRecipe, type PlannerCandidate,
   type PlannerCandidateIngredient, type ProteinFamily, type CarbFamily,
@@ -229,6 +229,6 @@ export function generatedDiyCandidate(input: { id: string; name: string; items: 
 export function readyPlannerCatalog(saved: Dish[], includeMenu: boolean): PlannerCandidate[] {
   return [
     ...saved.map(savedDishCandidate),
-    ...(includeMenu ? menuRecipes.map(negritaMenuCandidate) : []),
+    ...(includeMenu ? nutritionCatalog.menuRecipes.map(negritaMenuCandidate) : []),
   ].filter((candidate): candidate is PlannerCandidate => candidate !== null);
 }

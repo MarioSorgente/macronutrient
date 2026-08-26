@@ -3,6 +3,7 @@ import rawDatabase from "@data/negrita-database.json";
 import {
   categories,
   categoryLabel,
+  createNutritionCatalog,
   databaseMeta,
   diyMenu,
   getAllIngredients,
@@ -15,11 +16,12 @@ import {
   isMenuStated,
   isPriced,
   menuRecipes,
+  nutritionCatalog,
   rankIngredients,
   searchIngredients,
   setHouseOverrides,
 } from "@/lib/database";
-import { GRAM_UNIT_ID, type Macros } from "@/types/nutrition";
+import { GRAM_UNIT_ID, type Ingredient, type Macros } from "@/types/nutrition";
 
 /**
  * The bundled database and its enrichment overlays.
@@ -36,6 +38,36 @@ const CHICKEN = "chicken_breast_raw";
 afterEach(() => setHouseOverrides(new Map()));
 
 describe("the merged catalogue", () => {
+  it.each([
+    ["ingredient_id", { ingredients: [ingredients[0], ingredients[0]], menuRecipes: [], diyMenu: [] }],
+    ["recipe_id", { ingredients: [], menuRecipes: [menuRecipes[0], menuRecipes[0]], diyMenu: [] }],
+    ["DIY id", { ingredients: [], menuRecipes: [], diyMenu: [diyMenu[0], diyMenu[0]] }],
+  ])("rejects a duplicate %s during initialization", (label, input) => {
+    expect(() => createNutritionCatalog(input)).toThrow(
+      new RegExp(`Nutrition catalog initialization failed: duplicate ${label}`));
+  });
+
+  it("exposes frozen collections and records", () => {
+    expect(Object.isFrozen(ingredients)).toBe(true);
+    expect(Object.isFrozen(ingredients[0])).toBe(true);
+    expect(Object.isFrozen(menuRecipes)).toBe(true);
+    expect(Object.isFrozen(menuRecipes[0].components)).toBe(true);
+    expect(() => (ingredients as Ingredient[]).push(ingredients[0])).toThrow();
+  });
+
+  it("keeps lists, identifier indexes, validation sets, and counts in agreement", () => {
+    expect(nutritionCatalog.counts.ingredients).toBe(ingredients.length);
+    expect(nutritionCatalog.counts.menuRecipes).toBe(menuRecipes.length);
+    for (const ingredient of ingredients) {
+      expect(nutritionCatalog.ingredientById.get(ingredient.ingredient_id)).toBe(ingredient);
+      expect(nutritionCatalog.ingredientIds.has(ingredient.ingredient_id)).toBe(true);
+    }
+    for (const recipe of menuRecipes) {
+      expect(nutritionCatalog.menuRecipeById.get(recipe.recipe_id)).toBe(recipe);
+      expect(nutritionCatalog.menuRecipeIds.has(recipe.recipe_id)).toBe(true);
+    }
+  });
+
   it("keeps every source ingredient and adds the enrichment ones", () => {
     const source = (rawDatabase as { ingredients: unknown[] }).ingredients.length;
     expect(source).toBe(91);

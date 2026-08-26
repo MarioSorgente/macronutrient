@@ -1,4 +1,4 @@
-import { getIngredient, getRecipe, menuRecipes } from "@/lib/database";
+import { getIngredient, getRecipe, nutritionCatalog } from "@/lib/database";
 import type { MenuRecipe } from "@/types/nutrition";
 import type { Assignment, Dish, DishItem, Plan } from "@/lib/storage/types";
 
@@ -64,7 +64,8 @@ export function menuRecipeForDish(dish: Pick<Dish, "name" | "items">):
   MenuRecipe | undefined {
   const wanted = normalizedName(dish.name);
   if (!wanted || !dish.items?.length) return undefined;
-  const named = menuRecipes.filter((recipe) => normalizedName(recipe.name) === wanted);
+  const named = nutritionCatalog.menuRecipes.filter(
+    (recipe) => normalizedName(recipe.name) === wanted);
   return named.length === 1 && isRecipeItemList(named[0], dish.items)
     ? named[0] : undefined;
 }
@@ -99,7 +100,8 @@ export function withMenuIdentity(
   const wanted = normalizedName(assignment.snapshot?.name);
   if (!wanted) return assignment;
   // Two dishes of the same name would make this a guess rather than a match.
-  const named = menuRecipes.filter((recipe) => normalizedName(recipe.name) === wanted);
+  const named = nutritionCatalog.menuRecipes.filter(
+    (recipe) => normalizedName(recipe.name) === wanted);
   if (named.length !== 1 || !isRecipeItemList(named[0], items)) return assignment;
 
   return { ...assignment, menuRecipeId: named[0].recipe_id };
