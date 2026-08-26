@@ -12,14 +12,21 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { listPrepTasks, setPrepStatus, watchPrepTasks } from "@/lib/storage/orders";
+import {
+  listAllOrders,
+  listPrepTasks,
+  setPrepStatus,
+  watchPrepTasks,
+} from "@/lib/storage/orders";
 import { miseEnPlace } from "@/lib/orders";
+import { mealsByDay } from "@/lib/orderStats";
 import { authErrorMessage } from "@/lib/auth/errors";
-import { BALI_LABEL, baliToday, formatBaliDay, round0 } from "@/lib/format";
+import { addDays, BALI_LABEL, baliToday, formatBaliDay, round0 } from "@/lib/format";
 import type { PrepStatus, PrepTask } from "@/lib/storage/types";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import StatTile from "@/components/ui/StatTile";
+import MiniBars from "@/components/ui/MiniBars";
 import SegmentedToggle from "@/components/SegmentedToggle";
 import { PrepStatusBadge } from "@/components/OrderStatusBadge";
 import { cn } from "@/components/ui/cn";
@@ -41,13 +48,6 @@ const ADVANCE_LABEL: Record<PrepStatus, string> = {
   done: "Done",
 };
 
-function addDays(isoDate: string, days: number): string {
-  const [y, m, d] = isoDate.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d) + days * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-}
-
 /**
  * One day of kitchen work.
  *
@@ -64,6 +64,7 @@ export default function KitchenBoard({ date }: { date?: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [groupBy, setGroupBy] = useState<GroupBy>("time");
+  const [ahead, setAhead] = useState<{ date: string; meals: number }[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -101,6 +102,23 @@ export default function KitchenBoard({ date }: { date?: string }) {
     return () => {
       active = false;
       unsubscribe?.();
+    };
+  }, [day]);
+
+  /**
+   * The week ahead, so the board is not the only thing the kitchen can see.
+   *
+   * Deliberately best-effort and separate from the task listener: this is a
+   * planning aid, and the board is what the kitchen actually cooks from. If the
+   * order read fails the strip simply does not appear.
+   */
+  useEffect(() => {
+    let active = true;
+    listAllOrders()
+      .then((orders) => active && setAhead(mealsByDay(orders, day, 7)))
+      .catch(() => active && setAhead([]));
+    return () => {
+      active = false;
     };
   }, [day]);
 
@@ -193,6 +211,29 @@ export default function KitchenBoard({ date }: { date?: string }) {
           value={`${counts.pickup} / ${counts.delivery}`}
         />
       </div>
+
+      {/* The week ahead */}
+      {ahead.some((entry) => entry.meals > 0) && (
+        <Card className="no-print mb-4 p-4">
+          <h2 className="font-display text-lg font-700 text-charcoal">
+            Next seven days
+          </h2>
+          <p className="mt-0.5 text-xs text-charcoal-soft">
+            Meals to cook each day from {formatBaliDay(day)}, so a heavy day is
+            not a surprise on the morning.
+          </p>
+          <MiniBars
+            className="mt-3"
+            height={64}
+            tone="bg-basil"
+            bars={ahead.map((entry) => ({
+              label: formatBaliDay(entry.date).slice(0, 3),
+              value: entry.meals,
+              title: `${formatBaliDay(entry.date)} · ${entry.meals} meal${entry.meals === 1 ? "" : "s"}`,
+            }))}
+          />
+        </Card>
+      )}
 
       {error && (
         <p

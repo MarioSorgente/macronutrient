@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   customerRollup,
   favouriteMeals,
+  periodStats,
+  retention,
   revenueByWeek,
   revenueTotals,
   toCsv,
-  usageSummary,
+  type CustomerRow,
 } from "@/lib/admin/analytics";
-import { baliToday } from "@/lib/format";
+import { periodRange } from "@/lib/orderStats";
+import { addDays, baliToday, baliWeekStart } from "@/lib/format";
 import type { Order, OrderStatus, UserProfile } from "@/lib/storage/types";
 
 /**
@@ -43,6 +46,9 @@ function user(over: Partial<UserProfile> = {}): UserProfile {
     ...over,
   };
 }
+
+/** The Monday `n` weeks from the current service week. */
+const week = (n: number) => addDays(baliWeekStart(), n * 7);
 
 describe("revenueTotals", () => {
   it("separates committed, realised and collected", () => {
@@ -104,6 +110,21 @@ describe("revenueByWeek", () => {
     const bucket = weeks.find((w) => w.weekStart === thisWeek)!;
     expect(bucket.idr).toBe(75_000);
     expect(bucket.orders).toBe(1);
+  });
+
+  it("carries meals and distinct customers alongside the money", () => {
+    const thisWeek = baliWeekStart();
+    const bucket = revenueByWeek(
+      [
+        order({ id: "a", userId: "u1", weekStartDate: thisWeek, mealCount: 5 }),
+        order({ id: "b", userId: "u1", weekStartDate: thisWeek, mealCount: 3 }),
+        order({ id: "c", userId: "u2", weekStartDate: thisWeek, mealCount: 2 }),
+      ],
+      1,
+      1
+    ).find((w) => w.weekStart === thisWeek)!;
+    expect(bucket.meals).toBe(10);
+    expect(bucket.customers).toBe(2); // u1 ordering twice is still one person
   });
 
   it("drops an order outside the window rather than mis-bucketing it", () => {
@@ -168,33 +189,148 @@ describe("customerRollup", () => {
   });
 });
 
-describe("usageSummary", () => {
-  it("counts active users within the last seven days", () => {
-    const now = new Date("2026-08-22T00:00:00.000Z");
-    const summary = usageSummary(
-      [
-        user({ uid: "recent", lastLoginAt: "2026-08-20T00:00:00.000Z" }),
-        user({ uid: "stale", lastLoginAt: "2026-06-01T00:00:00.000Z" }),
-        user({ uid: "never" }),
-      ],
-      [],
-      now
-    );
-    expect(summary.customers).toBe(3);
-    expect(summary.activeLast7Days).toBe(1);
+describe("customer segments", () => {
+  it("files an account with no orders as never", () => {
+    expect(customerRollup([user()], [])[0].segment).toBe("never");
   });
 
-  it("does not count a cancelled order in this month's revenue", () => {
-    const month = baliToday().slice(0, 7);
-    const summary = usageSummary(
-      [],
+  it("marks a customer whose first order is recent as new", () => {
+    expect(
+      customerRollup([user()], [order({ weekStartDate: week(-1) })])[0].segment
+    ).toBe("new");
+  });
+
+  it("marks an established customer who ordered recently as active", () => {
+    const rows = customerRollup([user()], [
+      order({ id: "a", weekStartDate: week(-12) }),
+      order({ id: "b", weekStartDate: week(-1) }),
+    ]);
+    expect(rows[0].segment).toBe("active");
+  });
+
+  it("treats a week already on the books as active, not lapsed", () => {
+    // Orders are placed before the week they cover, so a customer booked in for
+    // next week has not drifted away - they are ahead of the kitchen.
+    const rows = customerRollup([user()], [
+      order({ id: "old", weekStartDate: week(-12) }),
+      order({ id: "next", weekStartDate: week(1) }),
+    ]);
+    expect(rows[0].segment).toBe("active");
+  });
+
+  it("marks silence beyond the lapse window as lapsed", () => {
+    expect(
+      customerRollup([user()], [order({ weekStartDate: week(-8) })])[0].segment
+    ).toBe("lapsed");
+  });
+
+  it("ignores a cancelled order when segmenting", () => {
+    const rows = customerRollup([user()], [
+      order({ weekStartDate: week(-1), status: "cancelled" }),
+    ]);
+    expect(rows[0].segment).toBe("never");
+  });
+
+  it("segments on every order read rather than the selected period", () => {
+    // Narrowing to a period nobody ordered in must not file everyone as lapsed;
+    // that would be a property of the filter, not of the customer.
+    const recent = order({ weekStartDate: week(-1), priceIdr: 50_000 });
+    const rows = customerRollup([user()], [], [recent]);
+    expect(rows[0].segment).not.toBe("lapsed");
+    expect(rows[0].orders).toBe(0);
+    expect(rows[0].spendIdr).toBe(0);
+    expect(rows[0].lifetimeIdr).toBe(50_000);
+    expect(rows[0].lastOrderWeek).toBe(week(-1));
+  });
+});
+
+describe("retention", () => {
+  it("counts each segment and lists the lapsed by spend", () => {
+    const rows = customerRollup(
       [
-        order({ id: "a", submittedAt: `${month}-05T00:00:00.000Z`, priceIdr: 100_000 }),
-        order({ id: "b", submittedAt: `${month}-06T00:00:00.000Z`, status: "cancelled", priceIdr: 900_000 }),
+        user({ uid: "a", id: "a" }),
+        user({ uid: "b", id: "b" }),
+        user({ uid: "quiet", id: "quiet" }),
+      ],
+      [
+        order({ id: "1", userId: "a", weekStartDate: week(-8), priceIdr: 100_000 }),
+        order({ id: "2", userId: "b", weekStartDate: week(-9), priceIdr: 500_000 }),
       ]
     );
-    expect(summary.ordersThisMonth).toBe(1);
-    expect(summary.revenueThisMonthIdr).toBe(100_000);
+    const summary = retention(rows);
+    expect(summary.counts.lapsed).toBe(2);
+    expect(summary.counts.never).toBe(1);
+    expect(summary.lapsed.map((r) => r.uid)).toEqual(["b", "a"]);
+    expect(summary.lapseWeeks).toBe(3);
+  });
+});
+
+describe("periodStats", () => {
+  const all = periodRange("all");
+
+  it("averages only the live orders", () => {
+    const stats = periodStats(
+      [],
+      [
+        order({ id: "a", priceIdr: 100_000, mealCount: 5 }),
+        order({ id: "b", priceIdr: 300_000, mealCount: 5 }),
+        order({ id: "c", status: "cancelled", priceIdr: 900_000, mealCount: 9 }),
+      ],
+      [],
+      all
+    );
+    expect(stats.orders).toBe(2);
+    expect(stats.revenueIdr).toBe(400_000);
+    expect(stats.avgOrderIdr).toBe(200_000);
+    expect(stats.meals).toBe(10);
+  });
+
+  it("is zero rather than NaN with nothing to divide", () => {
+    const stats = periodStats([], [], [], all);
+    expect(stats.avgOrderIdr).toBe(0);
+    expect(stats.repeatPct).toBe(0);
+  });
+
+  it("counts only weeks from this one onward as on the books", () => {
+    const stats = periodStats(
+      [],
+      [],
+      [
+        order({ id: "past", weekStartDate: week(-2), priceIdr: 100_000 }),
+        order({ id: "next", weekStartDate: week(1), priceIdr: 250_000 }),
+      ],
+      all
+    );
+    expect(stats.onTheBooksIdr).toBe(250_000);
+  });
+
+  it("reports the share of customers who ordered more than once", () => {
+    const stats = periodStats(
+      [],
+      [
+        order({ id: "a", userId: "u1" }),
+        order({ id: "b", userId: "u1" }),
+        order({ id: "c", userId: "u2" }),
+      ],
+      [],
+      all
+    );
+    expect(stats.customersOrdered).toBe(2);
+    expect(stats.repeatPct).toBe(50);
+  });
+
+  it("counts signups inside the window only", () => {
+    const thisMonth = baliToday().slice(0, 7);
+    const stats = periodStats(
+      [
+        user({ uid: "in", createdAt: thisMonth + "-02T00:00:00.000Z" }),
+        user({ uid: "out", createdAt: "2000-01-01T00:00:00.000Z" }),
+      ],
+      [],
+      [],
+      periodRange("month")
+    );
+    expect(stats.newCustomers).toBe(1);
   });
 });
 
@@ -234,16 +370,18 @@ describe("favouriteMeals", () => {
 });
 
 describe("toCsv", () => {
-  const row = {
+  const row: CustomerRow = {
     uid: "u1", name: "Mario", email: "m@example.com",
     joined: "2026-08-01", lastLoginAt: undefined,
-    logins: 3, orders: 2, meals: 12, lifetimeIdr: 300_000, avgOrderIdr: 150_000,
+    logins: 3, orders: 2, meals: 12,
+    spendIdr: 300_000, lifetimeIdr: 300_000, avgOrderIdr: 150_000,
+    lastOrderWeek: "2026-08-24", segment: "active",
   };
 
   it("writes a header and one line per row", () => {
     const lines = toCsv([row]).split("\n");
     expect(lines).toHaveLength(2);
-    expect(lines[0].startsWith("Name,Email,Joined")).toBe(true);
+    expect(lines[0].startsWith("Name,Email,Segment,Joined")).toBe(true);
   });
 
   it("quotes and escapes a name containing a comma, quote or newline", () => {

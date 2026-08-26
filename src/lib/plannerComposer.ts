@@ -1,6 +1,6 @@
 import { GRAM_UNIT_ID, type DiySection, type Ingredient, type Macros,
   type PlannerCandidate } from "@/types/nutrition";
-import { getIngredient, nutritionCatalog } from "@/lib/database";
+import { getIngredient, houseOverridesVersion, nutritionCatalog } from "@/lib/database";
 import { perItemMacros } from "@/lib/calc";
 import { quantitiesNearResidual } from "@/lib/diyQuantities";
 import { macroDistance } from "@/lib/macroFit";
@@ -95,9 +95,20 @@ interface DiyLine {
 }
 
 let diyLineCache: DiyLine[] | null = null;
+let diyLineCacheVersion = -1;
 
+/**
+ * The DIY components the composer can build a meal from.
+ *
+ * Cached, but keyed on the house-override version: these lines hold resolved
+ * `Ingredient` objects, and `getIngredient` folds Negrita's real recipe into
+ * the macros. House recipes load from Firestore after the planner has already
+ * rendered, so a cache built once kept composing every DIY meal from the
+ * bundled estimate — including after the owner edited the recipe.
+ */
 function diyLines(): DiyLine[] {
-  if (diyLineCache) return diyLineCache;
+  const version = houseOverridesVersion();
+  if (diyLineCache && diyLineCacheVersion === version) return diyLineCache;
   const seen = new Set<string>();
   const lines: DiyLine[] = [];
   for (const item of nutritionCatalog.diyMenu) {
@@ -110,8 +121,12 @@ function diyLines(): DiyLine[] {
       portionG: item.portion_g });
   }
   diyLineCache = lines;
+  diyLineCacheVersion = version;
   return lines;
 }
+
+/** Test seam: the composer entry points do far more than resolve these lines. */
+export const __diyLinesForTests = diyLines;
 
 interface RoleOption {
   line: DiyLine;

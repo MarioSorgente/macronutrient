@@ -80,6 +80,15 @@ export async function getOrder(orderId: string): Promise<Order | null> {
  * works from recent weeks, so an unbounded read would grow forever to show
  * numbers nothing on screen actually uses.
  */
+/**
+ * How many orders the owner dashboard reads.
+ *
+ * Higher than the kitchen default because the dashboard offers an "all time"
+ * period, and named so the screen can say out loud when it has hit the ceiling
+ * rather than quietly reporting a partial total as a lifetime one.
+ */
+export const DASHBOARD_ORDER_LIMIT = 500;
+
 export async function listAllOrders(max = 200): Promise<Order[]> {
   requireCloud("Reading the order book");
   const { db, collection, getDocs, limit, orderBy, query } = await firestore();

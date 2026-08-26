@@ -246,9 +246,24 @@ export const menuRecipeById = nutritionCatalog.menuRecipeById;
  * store; empty until the restaurant defines a recipe.
  */
 let houseOverrides = new Map<string, Macros>();
+let houseOverridesEpoch = 0;
 
 export function setHouseOverrides(overrides: Map<string, Macros>): void {
   houseOverrides = overrides;
+  houseOverridesEpoch += 1;
+}
+
+/**
+ * Bumped every time the overrides change, so a derived cache can tell whether
+ * what it stored is still current.
+ *
+ * House recipes arrive from Firestore *after* the first render and change again
+ * whenever the owner edits one. Anything that memoises the result of
+ * `getIngredient` therefore has to be keyed on this rather than built once —
+ * otherwise it keeps serving the bundled estimate for the rest of the session.
+ */
+export function houseOverridesVersion(): number {
+  return houseOverridesEpoch;
 }
 
 /**

@@ -7,7 +7,11 @@ import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { roleLabel } from "@/lib/roles";
 import { getUser, listOrdersByUser } from "@/lib/storage/orders";
-import { favouriteMeals, revenueTotals } from "@/lib/admin/analytics";
+import {
+  customerRollup,
+  favouriteMeals,
+  SEGMENT_LABELS,
+} from "@/lib/admin/analytics";
 import { authErrorMessage } from "@/lib/auth/errors";
 import { formatBaliDay, formatBaliDateTime } from "@/lib/format";
 import { formatIdr } from "@/lib/pricing";
@@ -15,6 +19,7 @@ import type { Order, UserProfile } from "@/lib/storage/types";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import StatTile from "@/components/ui/StatTile";
+import Badge from "@/components/ui/Badge";
 import OrderStatusBadge from "@/components/OrderStatusBadge";
 import MacroChips from "@/components/MacroChips";
 
@@ -49,7 +54,12 @@ export default function CustomerDetail() {
     };
   }, [uid]);
 
-  const revenue = useMemo(() => revenueTotals(orders), [orders]);
+  // One row through the same rollup the dashboard table uses, so this page and
+  // that one can never disagree about someone's spend or whether they lapsed.
+  const row = useMemo(
+    () => (person ? customerRollup([person], orders)[0] : undefined),
+    [person, orders]
+  );
   const favourites = useMemo(() => favouriteMeals(orders, 6), [orders]);
 
   if (role !== "admin") {
@@ -89,17 +99,37 @@ export default function CustomerDetail() {
         <ArrowLeft size={14} /> Dashboard
       </Link>
 
-      <h1 className="font-display text-2xl font-700 text-charcoal sm:text-3xl">
-        {person.displayName || person.email}
-      </h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="font-display text-2xl font-700 text-charcoal sm:text-3xl">
+          {person.displayName || person.email}
+        </h1>
+        {row && (
+          <Badge
+            tone={
+              row.segment === "active"
+                ? "verified"
+                : row.segment === "new"
+                  ? "info"
+                  : row.segment === "lapsed"
+                    ? "warning"
+                    : "neutral"
+            }
+          >
+            {SEGMENT_LABELS[row.segment]}
+          </Badge>
+        )}
+      </div>
       <p className="mt-1 text-sm text-charcoal-soft">
         {person.email}
         {person.phone ? ` · ${person.phone}` : ""} · joined{" "}
         {person.createdAt ? formatBaliDay(person.createdAt) : "unknown"}
         {person.role ? ` · ${roleLabel(person.role)}` : ""}
+        {row?.lastOrderWeek
+          ? ` · last ordered ${formatBaliDay(row.lastOrderWeek)}`
+          : ""}
       </p>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile label="Orders" value={String(orders.length)} />
         <StatTile
           label="Meals"
@@ -107,8 +137,13 @@ export default function CustomerDetail() {
         />
         <StatTile
           label="Lifetime"
-          value={formatIdr(revenue.committedIdr)}
+          value={formatIdr(row?.lifetimeIdr ?? 0)}
           tone="tomato"
+        />
+        <StatTile
+          label="Avg order"
+          value={formatIdr(row?.avgOrderIdr ?? 0)}
+          hint="per order"
         />
         <StatTile
           label="Logins"
