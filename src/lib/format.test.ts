@@ -12,10 +12,23 @@ import {
   formatDate,
   formatMacroGrams,
   grams,
+  parseCalendarDate,
   roundedToTenth,
   round0,
   round1,
 } from "@/lib/format";
+
+describe("parseCalendarDate", () => {
+  it("accepts real yyyy-mm-dd dates", () => {
+    expect(parseCalendarDate("2028-02-29")?.toISOString()).toBe("2028-02-29T00:00:00.000Z");
+  });
+
+  it("rejects malformed and normalized-overflow dates", () => {
+    expect(parseCalendarDate("2026-2-03")).toBeNull();
+    expect(parseCalendarDate("not-a-date")).toBeNull();
+    expect(parseCalendarDate("2026-02-31")).toBeNull();
+  });
+});
 
 /**
  * Display helpers. The Bali ones are load-bearing rather than cosmetic: a prep

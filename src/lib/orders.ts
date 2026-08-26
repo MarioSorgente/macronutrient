@@ -8,6 +8,7 @@ import {
 } from "@/lib/clients";
 import { EMPTY_MACROS, addMacros } from "@/lib/calc";
 import { optionalSlots } from "@/lib/slotSuitability";
+import { parseCalendarDate } from "@/lib/format";
 import type {
   Dish,
   Fulfilment,
@@ -30,9 +31,10 @@ import type {
 
 /** ISO yyyy-mm-dd for a day of a plan week, computed as a calendar date. */
 export function planDate(plan: Plan, week: number, day: number): string {
-  const [y, m, d] = plan.programStartDate.split("-").map(Number);
+  const start = parseCalendarDate(plan.programStartDate);
+  if (!start) throw new RangeError(`Invalid calendar date: ${plan.programStartDate}`);
   const offset = (week - 1) * 7 + day;
-  return new Date(Date.UTC(y, m - 1, d) + offset * 86_400_000)
+  return new Date(start.valueOf() + offset * 86_400_000)
     .toISOString()
     .slice(0, 10);
 }

@@ -54,6 +54,18 @@ export const BALI_LABEL = "Bali time (WITA, UTC+8)";
 /** Matches the date style the app already used everywhere ("Aug 21, 2026"). */
 const LOCALE = "en-US";
 
+/**
+ * Parses a stored calendar date without allowing JavaScript's date
+ * normalization (for example, turning February 31 into March 3).
+ */
+export function parseCalendarDate(value: unknown): Date | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== value
+    ? null
+    : parsed;
+}
+
 /** True for a plain calendar date ("2026-08-24") rather than a full instant. */
 function isDateOnly(iso: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(iso);
@@ -115,15 +127,17 @@ export function baliDateOf(at: Date): string {
  * DST, so a Bali day is always exactly 24 hours.
  */
 export function addDays(isoDate: string, days: number): string {
-  const [y, m, d] = isoDate.split("-").map(Number);
-  const t = Date.UTC(y, m - 1, d) + days * 86_400_000;
+  const parsed = parseCalendarDate(isoDate);
+  if (!parsed) throw new RangeError(`Invalid calendar date: ${isoDate}`);
+  const t = parsed.valueOf() + days * 86_400_000;
   return new Date(t).toISOString().slice(0, 10);
 }
 
 /** 0 = Monday .. 6 = Sunday, matching `Assignment.day`. */
 export function dayIndex(isoDate: string): number {
-  const [y, m, d] = isoDate.split("-").map(Number);
-  return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
+  const parsed = parseCalendarDate(isoDate);
+  if (!parsed) throw new RangeError(`Invalid calendar date: ${isoDate}`);
+  return (parsed.getUTCDay() + 6) % 7;
 }
 
 /** Monday of the Bali week containing `isoDate` (defaults to today in Bali). */
