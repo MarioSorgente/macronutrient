@@ -40,6 +40,7 @@ import Input from "@/components/ui/Input";
 import MacroChips from "@/components/MacroChips";
 import SegmentedToggle from "@/components/SegmentedToggle";
 import { useToast } from "@/components/ui/Toast";
+import { serviceTimeProblems } from "@/lib/fulfilmentTime";
 
 /**
  * Review a week and send it to the kitchen.
@@ -119,7 +120,15 @@ export default function SubmitWeek() {
     () => (plan ? emptySlots(plan, week) : []),
     [plan, week]
   );
-  const problems = useMemo(() => fulfilmentProblems(days), [days]);
+  const problems = useMemo(() => [
+    ...fulfilmentProblems(days),
+    ...(config
+      ? serviceTimeProblems(
+          days.map((day) => ({ date: day.date, time: day.fulfilment.time })),
+          config
+        )
+      : []),
+  ], [days, config]);
 
   useEffect(() => {
     if (!user) return;
