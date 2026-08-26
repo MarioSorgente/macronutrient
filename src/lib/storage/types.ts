@@ -168,7 +168,7 @@ export const DEFAULT_MEAL_SLOTS = ["Breakfast", "Lunch", "Dinner", "Snack"];
  */
 export type Role = "client" | "restaurant" | "admin";
 
-export type StaffRequestStatus = "pending" | "approved" | "rejected";
+export type StaffRequestStatus = "pending" | "approving" | "approved" | "rejected";
 
 export interface StaffAccessRequest {
   id: string;
@@ -181,6 +181,10 @@ export interface StaffAccessRequest {
   createdAt: string;
   reviewedAt?: string;
   reviewedByUid?: string;
+  /** Stable identity of an in-progress/completed approval attempt. */
+  reviewOperationId?: string;
+  /** Role the approval operation must apply when it is resumed. */
+  intendedRole?: Role;
 }
 
 export interface UserProfile extends Entity {

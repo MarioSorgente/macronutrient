@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { RESTAURANT_ID, adminAuth, adminDb } from "@/lib/server/firebaseAdmin";
 import { HttpError } from "@/lib/server/auth";
 import type { DecodedIdToken } from "firebase-admin/auth";
@@ -55,11 +56,21 @@ export async function listStaffRequests(): Promise<StaffAccessRequest[]> {
 
 export async function approveStaffRequest(uid: unknown, adminUid: string) {
   if (typeof uid !== "string" || !uid) throw new HttpError(400, "Pass a request uid.");
+  return approveStaffRequestWithHooks(uid, adminUid);
+}
+
+interface ApprovalHooks {
+  /** Fault-injection/observability seam after Auth succeeds but before Firestore finalization. */
+  afterClaimsApplied?: () => void | Promise<void>;
+}
+
+export async function approveStaffRequestWithHooks(
+  uid: unknown,
+  adminUid: string,
+  hooks: ApprovalHooks = {},
+) {
+  if (typeof uid !== "string" || !uid) throw new HttpError(400, "Pass a request uid.");
   const ref = requestRef(uid);
-  const snap = await ref.get();
-  if (!snap.exists || snap.data()?.status !== "pending") {
-    throw new HttpError(409, "This staff request is no longer pending.");
-  }
   const account = await adminAuth().getUser(uid);
   if (!account.emailVerified) {
     throw new HttpError(409, "Email must be verified before staff access can be approved.");
@@ -69,30 +80,76 @@ export async function approveStaffRequest(uid: unknown, adminUid: string) {
     throw new HttpError(409, "This account has an unsupported role.");
   }
 
-  const role = currentRole === "admin" ? "admin" : "restaurant";
-  if (currentRole === undefined || currentRole === "client") {
-    await writeRoleClaims(account, role);
+  const proposedRole: Role = currentRole === "admin" ? "admin" : "restaurant";
+  const proposedOperationId = randomUUID();
+  const operation = await adminDb().runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    const request = snap.data() as StaffAccessRequest | undefined;
+    if (!request) throw new HttpError(409, "This staff request is no longer pending.");
+    if (request.status === "approved" && request.reviewOperationId && request.intendedRole) {
+      return { id: request.reviewOperationId, role: request.intendedRole, complete: true };
+    }
+    if (request.status === "approving" && request.reviewOperationId && request.intendedRole) {
+      return { id: request.reviewOperationId, role: request.intendedRole, complete: false };
+    }
+    if (request.status !== "pending") {
+      throw new HttpError(409, "This staff request is no longer pending.");
+    }
+    transaction.update(ref, {
+      status: "approving",
+      reviewOperationId: proposedOperationId,
+      intendedRole: proposedRole,
+      reviewedByUid: adminUid,
+    });
+    return { id: proposedOperationId, role: proposedRole, complete: false };
+  });
+
+  if (operation.complete) {
+    return { uid, role: operation.role, status: "approved" as const };
   }
+
+  // Auth and Firestore cannot commit together. The claimed operation makes
+  // this write and every following step safe to repeat after a partial failure.
+  const latestAccount = await adminAuth().getUser(uid);
+  if (latestAccount.customClaims?.role !== operation.role) {
+    await writeRoleClaims(latestAccount, operation.role);
+  }
+  await hooks.afterClaimsApplied?.();
+
   const now = new Date().toISOString();
-  const batch = adminDb().batch();
-  if (currentRole === undefined || currentRole === "client") {
-    batch.set(adminDb().doc(`users/${uid}`), {
-      role, rid: RESTAURANT_ID, roleUpdatedAt: now, updatedAt: now,
+  const db = adminDb();
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    const request = snap.data() as StaffAccessRequest | undefined;
+    if (request?.status === "approved" && request.reviewOperationId === operation.id) return;
+    if (request?.status !== "approving" || request.reviewOperationId !== operation.id) {
+      throw new HttpError(409, "This staff request is no longer owned by this approval.");
+    }
+    transaction.set(db.doc(`users/${uid}`), {
+      role: operation.role,
+      rid: RESTAURANT_ID,
+      roleUpdatedAt: now,
+      updatedAt: now,
     }, { merge: true });
-  }
-  batch.update(ref, { status: "approved", reviewedAt: now, reviewedByUid: adminUid, emailVerified: true });
-  await batch.commit();
-  return { uid, role, status: "approved" as const };
+    transaction.update(ref, {
+      status: "approved",
+      reviewedAt: now,
+      emailVerified: true,
+    });
+  });
+  return { uid, role: operation.role, status: "approved" as const };
 }
 
 export async function rejectStaffRequest(uid: unknown, adminUid: string) {
   if (typeof uid !== "string" || !uid) throw new HttpError(400, "Pass a request uid.");
   const ref = requestRef(uid);
-  const snap = await ref.get();
-  if (!snap.exists || snap.data()?.status !== "pending") {
-    throw new HttpError(409, "This staff request is no longer pending.");
-  }
   const now = new Date().toISOString();
-  await ref.update({ status: "rejected", reviewedAt: now, reviewedByUid: adminUid });
+  await adminDb().runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists || snap.data()?.status !== "pending") {
+      throw new HttpError(409, "This staff request is no longer pending.");
+    }
+    transaction.update(ref, { status: "rejected", reviewedAt: now, reviewedByUid: adminUid });
+  });
   return { uid, status: "rejected" as const };
 }
