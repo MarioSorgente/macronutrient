@@ -1,7 +1,10 @@
 import { adminAuth, adminDb } from "@/lib/server/firebaseAdmin";
 import { beforeEach, describe, expect, it } from "vitest";
 import { setRole, syncAccount } from "@/lib/server/roles";
-import { getStaffRequest, requestStaffAccess } from "@/lib/server/staffRequests";
+import {
+  getStaffRequest,
+  requestStaffAccess,
+} from "@/lib/server/staffRequests";
 import { HttpError } from "@/lib/server/auth";
 import {
   RID,
@@ -46,8 +49,19 @@ describe("syncAccount", () => {
 
   it("grants admin to a confirmed address on the allowlist", async () => {
     const uid = await createUser(OWNER, { verified: true });
-    await expect(sync(uid)).resolves.toMatchObject({ role: "admin", changed: true });
-    expect(await claimsOf(uid)).toMatchObject({ role: "admin", rid: RID });
+    await expect(sync(uid)).resolves.toMatchObject({
+      role: "admin",
+      changed: true,
+    });
+    expect(await claimsOf(uid)).toMatchObject({
+      role: "admin",
+      roleSource: "allowlist",
+      rid: RID,
+    });
+    expect(await docAt(`users/${uid}`)).toMatchObject({
+      role: "admin",
+      roleSource: "allowlist",
+    });
   });
 
   it("matches the allowlist case-insensitively", async () => {
@@ -62,6 +76,65 @@ describe("syncAccount", () => {
     await expect(sync(uid)).resolves.toMatchObject({ role: "client" });
   });
 
+  it("revokes an allowlist-managed admin after its address is removed", async () => {
+    const replacement = await createUser(uniqueEmail("replacement"), {
+      verified: true,
+    });
+    await setRole("recovery", replacement, "admin");
+    const uid = await createUser(OWNER, { verified: true });
+    await sync(uid);
+
+    await adminAuth().updateUser(uid, { email: uniqueEmail("former-owner") });
+    await expect(sync(uid)).resolves.toMatchObject({
+      role: "client",
+      changed: true,
+    });
+    expect(await claimsOf(uid)).toMatchObject({ role: "client", rid: RID });
+    expect(await claimsOf(uid)).not.toHaveProperty("roleSource");
+    expect(await docAt(`users/${uid}`)).toMatchObject({
+      role: "client",
+      roleSource: null,
+    });
+  });
+
+  it("revokes an allowlist-managed admin when its email becomes unverified", async () => {
+    const replacement = await createUser(uniqueEmail("replacement"));
+    await setRole("recovery", replacement, "admin");
+    const uid = await createUser(OWNER, { verified: true });
+    await sync(uid);
+
+    await setVerified(uid, false);
+    await expect(sync(uid)).resolves.toMatchObject({ role: "client" });
+  });
+
+  it("does not revoke a manually granted admin that is outside the allowlist", async () => {
+    const uid = await createUser(uniqueEmail("manual"), { verified: true });
+    await setRole("owner", uid, "admin");
+
+    await expect(sync(uid)).resolves.toMatchObject({ role: "admin" });
+    expect(await claimsOf(uid)).toMatchObject({
+      role: "admin",
+      roleSource: "manual",
+    });
+    expect(await docAt(`users/${uid}`)).toMatchObject({
+      role: "admin",
+      roleSource: "manual",
+    });
+  });
+
+  it("requires explicit recovery before revoking the last allowlist owner", async () => {
+    const uid = await createUser(OWNER, { verified: true });
+    await sync(uid);
+    await adminAuth().updateUser(uid, { email: uniqueEmail("former-owner") });
+
+    await expect(sync(uid)).rejects.toThrow(/last owner.*another/i);
+    expect(await claimsOf(uid)).toMatchObject({
+      role: "admin",
+      roleSource: "allowlist",
+    });
+    expect(await docAt(`users/${uid}`)).toMatchObject({ role: "admin" });
+  });
+
   it("promotes on a LATER sync once the address is confirmed", async () => {
     // The whole point: being on the allowlist is enough, whenever the account
     // was made. The old trigger could never do this.
@@ -70,7 +143,10 @@ describe("syncAccount", () => {
     expect(await claimsOf(uid)).toMatchObject({ role: "client" });
 
     await setVerified(uid);
-    await expect(sync(uid)).resolves.toMatchObject({ role: "admin", changed: true });
+    await expect(sync(uid)).resolves.toMatchObject({
+      role: "admin",
+      changed: true,
+    });
   });
 
   it("reports changed: false when there is nothing to do", async () => {
@@ -105,7 +181,9 @@ describe("syncAccount", () => {
 describe("setRole", () => {
   it("grants a role and mirrors it", async () => {
     const uid = await createUser(uniqueEmail());
-    await expect(setRole("admin-uid", uid, "restaurant")).resolves.toMatchObject({
+    await expect(
+      setRole("admin-uid", uid, "restaurant"),
+    ).resolves.toMatchObject({
       role: "restaurant",
     });
     expect(await claimsOf(uid)).toMatchObject({ role: "restaurant", rid: RID });
@@ -139,7 +217,7 @@ describe("setRole", () => {
         reviewedByUid: "promoting-admin",
       });
       expect((await getStaffRequest(uid))?.reviewedAt).toBeTruthy();
-    }
+    },
   );
 
   it("does not change a rejected request during a later promotion", async () => {
@@ -177,23 +255,31 @@ describe("setRole", () => {
     ["an empty role", ""],
     ["a missing role", undefined],
   ])("rejects %s", async (_label, role) => {
-    await expect(setRole("admin-uid", "someone", role)).rejects.toBeInstanceOf(HttpError);
+    await expect(setRole("admin-uid", "someone", role)).rejects.toBeInstanceOf(
+      HttpError,
+    );
   });
 
   it("rejects a missing uid", async () => {
-    await expect(setRole("admin-uid", "", "client")).rejects.toBeInstanceOf(HttpError);
+    await expect(setRole("admin-uid", "", "client")).rejects.toBeInstanceOf(
+      HttpError,
+    );
   });
 
   it("refuses to let the last admin demote themselves", async () => {
     // Losing the last admin would leave nobody able to grant roles back.
     const uid = await createUser(OWNER, { verified: true });
     await sync(uid);
-    await expect(setRole(uid, uid, "client")).rejects.toThrow(/own admin role/i);
+    await expect(setRole(uid, uid, "client")).rejects.toThrow(
+      /own admin role/i,
+    );
   });
 
   it("lets an admin re-affirm their own admin role", async () => {
     const uid = await createUser(OWNER, { verified: true });
     await sync(uid);
-    await expect(setRole(uid, uid, "admin")).resolves.toMatchObject({ role: "admin" });
+    await expect(setRole(uid, uid, "admin")).resolves.toMatchObject({
+      role: "admin",
+    });
   });
 });
