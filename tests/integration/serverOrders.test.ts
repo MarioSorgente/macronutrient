@@ -435,7 +435,7 @@ describe("moving an order through its lifecycle", () => {
     return { uid, orderId };
   }
 
-  const staff = { uid: "staff", role: "restaurant" };
+  const staff = { uid: "staff", role: "restaurant", rid: RID };
 
   it.each(["cancelled", "rejected"])(
     "clears every prep task when an order becomes %s",
@@ -508,6 +508,26 @@ describe("who may change an order", () => {
     const orderId = await anOrderFor(uid);
     await expect(setOrderStatus({ uid, role: "client" }, orderId, "cancelled"))
       .resolves.toMatchObject({ status: "cancelled" });
+  });
+
+  it("rejects restaurant staff whose verified rid belongs to another restaurant", async () => {
+    const uid = await aUser();
+    const orderId = await anOrderFor(uid);
+
+    const error = await setOrderStatus(
+      { uid: "staff", role: "restaurant", rid: "someone-else" },
+      orderId,
+      "accepted",
+      "should not be stored"
+    ).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(HttpError);
+    expect((error as HttpError).status).toBe(403);
+    expect(await docAt(`restaurants/${RID}/orders/${orderId}`)).toMatchObject({
+      status: "submitted",
+    });
+    expect((await docAt(`restaurants/${RID}/orders/${orderId}`))?.restaurantNote)
+      .toBeUndefined();
   });
 
   it("does not let a customer write the note signed \"From Negrita\"", async () => {
