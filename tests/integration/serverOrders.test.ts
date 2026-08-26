@@ -497,6 +497,67 @@ describe("moving an order through its lifecycle", () => {
     expect((order?.restaurantNote as string).length).toBe(500);
   });
 
+  it("atomically resolves staff acceptance versus customer cancellation", async () => {
+    const { uid, orderId } = await anOrder();
+    const outcomes = await Promise.allSettled([
+      setOrderStatus(staff, orderId, "accepted"),
+      setOrderStatus({ uid, role: "client" }, orderId, "cancelled"),
+    ]);
+
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    const loser = outcomes.find((outcome) => outcome.status === "rejected");
+    expect(loser).toMatchObject({ reason: { status: 409 } });
+
+    const order = await docAt(`restaurants/${RID}/orders/${orderId}`);
+    const history = order?.statusHistory as { status: string }[];
+    expect(history.map((entry) => entry.status)).toEqual(["submitted", order?.status]);
+
+    const tasks = await listAt(`restaurants/${RID}/prepTasks`);
+    const plan = await docAt(`users/${uid}/plans/p1`);
+    const reservations = await listAt(`restaurants/${RID}/liveOrderReservations`);
+    if (order?.status === "accepted") {
+      expect(tasks).toHaveLength(2);
+      expect(plan?.submittedWeeks).toEqual([1]);
+      expect(reservations).toHaveLength(1);
+    } else {
+      expect(order?.status).toBe("cancelled");
+      expect(tasks).toHaveLength(0);
+      expect(plan?.submittedWeeks).toEqual([]);
+      expect(reservations).toHaveLength(0);
+    }
+  });
+
+  it("lets only one of two simultaneous staff transitions claim the order", async () => {
+    const { uid, orderId } = await anOrder();
+    const outcomes = await Promise.allSettled([
+      setOrderStatus({ ...staff, uid: "staff-accept" }, orderId, "accepted"),
+      setOrderStatus({ ...staff, uid: "staff-reject" }, orderId, "rejected"),
+    ]);
+
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.find((outcome) => outcome.status === "rejected"))
+      .toMatchObject({ reason: { status: 409 } });
+
+    const order = await docAt(`restaurants/${RID}/orders/${orderId}`);
+    const history = order?.statusHistory as { status: string; byUid: string }[];
+    expect(history).toHaveLength(2);
+    expect(history.map((entry) => entry.status)).toEqual(["submitted", order?.status]);
+    expect(history[1].byUid).toBe(
+      order?.status === "accepted" ? "staff-accept" : "staff-reject"
+    );
+
+    const tasks = await listAt(`restaurants/${RID}/prepTasks`);
+    const plan = await docAt(`users/${uid}/plans/p1`);
+    if (order?.status === "accepted") {
+      expect(tasks).toHaveLength(2);
+      expect(plan?.submittedWeeks).toEqual([1]);
+    } else {
+      expect(order?.status).toBe("rejected");
+      expect(tasks).toHaveLength(0);
+      expect(plan?.submittedWeeks).toEqual([]);
+    }
+  });
+
   it.each([
     ["submitted", "accepted", "staff"],
     ["submitted", "rejected", "staff"],
