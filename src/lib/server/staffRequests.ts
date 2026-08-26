@@ -4,6 +4,7 @@ import { RESTAURANT_ID, adminAuth, adminDb } from "@/lib/server/firebaseAdmin";
 import { HttpError } from "@/lib/server/auth";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import type { Role, StaffAccessRequest } from "@/lib/storage/types";
+import { writeRoleClaims } from "@/lib/server/roles";
 
 const requestRef = (uid: string) =>
   adminDb().doc(`restaurants/${RESTAURANT_ID}/staffRequests/${uid}`);
@@ -70,7 +71,7 @@ export async function approveStaffRequest(uid: unknown, adminUid: string) {
 
   const role = currentRole === "admin" ? "admin" : "restaurant";
   if (currentRole === undefined || currentRole === "client") {
-    await adminAuth().setCustomUserClaims(uid, { role, rid: RESTAURANT_ID });
+    await writeRoleClaims(account, role);
   }
   const now = new Date().toISOString();
   const batch = adminDb().batch();

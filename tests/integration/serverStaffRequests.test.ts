@@ -50,6 +50,23 @@ describe("staff access requests", () => {
     expect(await getStaffRequest(uid)).toMatchObject({ status: "approved", reviewedByUid: "owner" });
   });
 
+  it("preserves unrelated claims during staff approval", async () => {
+    const uid = await createUser(uniqueEmail("worker"), { verified: true });
+    await adminAuth().setCustomUserClaims(uid, {
+      role: "client",
+      rid: "negrita",
+      featureTier: "gold",
+    });
+    await requestStaffAccess(await caller(uid));
+
+    await approveStaffRequest(uid, "owner");
+
+    expect(await claimsOf(uid)).toMatchObject({
+      featureTier: "gold",
+      role: "restaurant",
+    });
+  });
+
   it("does not let a stale staff approval overwrite an assigned admin role", async () => {
     const uid = await createUser(uniqueEmail("worker"), { verified: true });
     await syncAccount(await adminAuth().getUser(uid));

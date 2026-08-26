@@ -28,6 +28,42 @@ import type { Role } from "@/lib/storage/types";
 export const ROLES: Role[] = ["client", "restaurant", "admin"];
 type AdminGrantSource = "allowlist" | "manual";
 
+const RESERVED_CLAIM_KEYS = new Set([
+  "acr", "amr", "at_hash", "aud", "auth_time", "azp", "cnf", "c_hash",
+  "exp", "iat", "iss", "jti", "nbf", "nonce", "sub", "firebase",
+]);
+const UNSAFE_CLAIM_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const MAX_CUSTOM_CLAIMS_BYTES = 1_000;
+
+/**
+ * Updates this application's role claims without erasing claims owned by other
+ * systems. The UserRecord is deliberately required so every caller merges the
+ * last Auth value rather than an ID-token snapshot.
+ */
+export async function writeRoleClaims(
+  user: UserRecord,
+  role: Role,
+  source?: AdminGrantSource,
+): Promise<void> {
+  const claims: Record<string, unknown> = Object.create(null);
+  for (const [key, value] of Object.entries(user.customClaims ?? {})) {
+    if (RESERVED_CLAIM_KEYS.has(key) || UNSAFE_CLAIM_KEYS.has(key)) {
+      throw new HttpError(400, `Custom claim key "${key}" is not allowed.`);
+    }
+    // roleSource belongs to this role domain and is obsolete for non-admins.
+    if (key !== "roleSource") claims[key] = value;
+  }
+  claims.role = role;
+  claims.rid = RESTAURANT_ID;
+  if (source) claims.roleSource = source;
+
+  const serialized = JSON.stringify(claims);
+  if (Buffer.byteLength(serialized, "utf8") > MAX_CUSTOM_CLAIMS_BYTES) {
+    throw new HttpError(400, "Custom claims exceed Firebase's 1000-byte limit.");
+  }
+  await adminAuth().setCustomUserClaims(user.uid, claims);
+}
+
 function onAllowlist(email: string | undefined): boolean {
   if (!email) return false;
   return adminEmails()
@@ -125,11 +161,7 @@ export async function syncAccount(user: UserRecord): Promise<SyncResult> {
     await profileRef.set(roleMirror, { merge: true });
   }
   if (changed) {
-    await adminAuth().setCustomUserClaims(user.uid, {
-      role: target,
-      rid: RESTAURANT_ID,
-      ...(targetSource ? { roleSource: targetSource } : {}),
-    });
+    await writeRoleClaims(user, target, targetSource ?? undefined);
   }
 
   await profileRef.set(
@@ -186,11 +218,12 @@ export async function setRole(
     throw new HttpError(409, "You cannot remove your own admin role.");
   }
 
-  await adminAuth().setCustomUserClaims(uid, {
-    role: role as Role,
-    rid: RESTAURANT_ID,
-    ...((role as Role) === "admin" ? { roleSource: "manual" } : {}),
-  });
+  const account = await adminAuth().getUser(uid);
+  await writeRoleClaims(
+    account,
+    role as Role,
+    (role as Role) === "admin" ? "manual" : undefined,
+  );
 
   const now = new Date().toISOString();
   const db = adminDb();
