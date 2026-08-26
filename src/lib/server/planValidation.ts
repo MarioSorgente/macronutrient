@@ -2,6 +2,8 @@ import { ingredients, menuRecipes } from "@/lib/database";
 import { assignmentPrice } from "@/lib/clients";
 import type { Dish, DishItem, OrderDay, Plan } from "@/lib/storage/types";
 import { HttpError } from "@/lib/server/auth";
+import { parseCalendarDate } from "@/lib/format";
+import { MAX_PROGRAM_WEEKS } from "@/lib/storage/types";
 
 const MAX_SERVINGS = 100;
 const MAX_GRAMS = 100_000;
@@ -22,6 +24,21 @@ function record(value: unknown): value is Record<string, unknown> {
 
 function boundedString(value: unknown, max = 200): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= max;
+}
+
+/** Checks the plan bounds needed before any week/date arithmetic is attempted. */
+export function validatePlanSchedule(raw: unknown, week: number): void {
+  if (!record(raw)) bad("the plan is not an object.");
+  if (!Number.isInteger(raw.weekCount) || (raw.weekCount as number) < 1 ||
+      (raw.weekCount as number) > MAX_PROGRAM_WEEKS) bad("week count is invalid.");
+  if (!Number.isInteger(week) || week < 1 || week > (raw.weekCount as number)) {
+    bad("requested week is outside the program.");
+  }
+  if (typeof raw.programStartDate !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(raw.programStartDate)) {
+    bad("program start date is malformed.");
+  }
+  if (!parseCalendarDate(raw.programStartDate)) bad("program start date is invalid.");
 }
 
 function positive(value: unknown, max: number): value is number {
@@ -58,13 +75,9 @@ function validateItem(value: unknown, label: string): asserts value is DishItem 
 /** Validates the untrusted Firestore plan before any planner/order calculations run. */
 export function validatePlanForOrder(raw: unknown, week: number, dishes: Map<string, Dish>): asserts raw is Plan {
   validateFiniteNumbers(raw);
+  validatePlanSchedule(raw, week);
   if (!record(raw)) bad("the plan is not an object.");
   if (!boundedString(raw.id) || !boundedString(raw.ownerUid) || !boundedString(raw.title, 500)) bad("plan identity is malformed.");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(raw.programStartDate))) bad("program start date is malformed.");
-  const parsedDate = new Date(`${raw.programStartDate}T00:00:00.000Z`);
-  if (Number.isNaN(parsedDate.valueOf()) || parsedDate.toISOString().slice(0, 10) !== raw.programStartDate) bad("program start date is invalid.");
-  if (!Number.isInteger(raw.weekCount) || (raw.weekCount as number) < 1 || (raw.weekCount as number) > 6) bad("week count is invalid.");
-  if (week > (raw.weekCount as number)) bad("requested week is outside the program.");
   if (!Array.isArray(raw.mealSlots) || raw.mealSlots.length < 1 || raw.mealSlots.length > 20 ||
       raw.mealSlots.some((slot) => !boundedString(slot, 100)) || new Set(raw.mealSlots).size !== raw.mealSlots.length) {
     bad("meal slots are malformed.");

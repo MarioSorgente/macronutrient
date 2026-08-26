@@ -4,7 +4,11 @@ import { createHash } from "node:crypto";
 import type { Firestore } from "firebase-admin/firestore";
 import { RESTAURANT_ID, adminDb } from "@/lib/server/firebaseAdmin";
 import { HttpError } from "@/lib/server/auth";
-import { validateOrderDays, validatePlanForOrder } from "@/lib/server/planValidation";
+import {
+  validateOrderDays,
+  validatePlanForOrder,
+  validatePlanSchedule,
+} from "@/lib/server/planValidation";
 import { cutoffState } from "@/lib/cutoff";
 import { byId } from "@/lib/clients";
 import { planWithMenuIdentity } from "@/lib/menuIdentity";
@@ -192,6 +196,9 @@ export async function submitOrder(
     const planSnap = await transaction.get(planRef);
     if (!planSnap.exists) throw new HttpError(404, "That plan does not exist.");
     const plan = planSnap.data();
+    // These bounds guard every date/week calculation below, independently of
+    // the more extensive plan integrity validation that follows.
+    validatePlanSchedule(plan, week);
     validatePlanForOrder(plan, week, dishes);
     const startDate = weekStartDate(plan, week);
     const { at: cutoff, passed } = cutoffState(startDate, {
