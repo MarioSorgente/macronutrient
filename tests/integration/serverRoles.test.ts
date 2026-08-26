@@ -1,6 +1,6 @@
 import { adminAuth, adminDb } from "@/lib/server/firebaseAdmin";
 import { beforeEach, describe, expect, it } from "vitest";
-import { setRole, syncAccount } from "@/lib/server/roles";
+import { setRole, setRoleWithHooks, syncAccount } from "@/lib/server/roles";
 import {
   getStaffRequest,
   requestStaffAccess,
@@ -190,6 +190,56 @@ describe("syncAccount", () => {
 });
 
 describe("setRole", () => {
+  it("marks an operation failed when Auth rejects it and retries idempotently", async () => {
+    const uid = await createUser(uniqueEmail("worker"));
+    await sync(uid);
+
+    await expect(setRoleWithHooks("owner", uid, "restaurant", {
+      beforeClaimsApplied: () => { throw new Error("injected claims failure"); },
+    })).rejects.toThrow(/injected claims failure/);
+
+    expect(await claimsOf(uid)).toMatchObject({ role: "client" });
+    const failed = (await docAt(`users/${uid}`))?.roleTransition as Record<string, unknown>;
+    expect(failed).toMatchObject({
+      targetRole: "restaurant",
+      actorUid: "owner",
+      status: "failed",
+    });
+    expect(failed.operationId).toBeTruthy();
+
+    await setRole("owner", uid, "restaurant");
+    await setRole("owner", uid, "restaurant");
+    expect(await claimsOf(uid)).toMatchObject({ role: "restaurant", rid: RID });
+    expect(await docAt(`users/${uid}`)).toMatchObject({
+      role: "restaurant",
+      roleTransition: { status: "completed" },
+    });
+  });
+
+  it("lets account sync finish a manual grant interrupted after Auth", async () => {
+    const uid = await createUser(uniqueEmail("manual"), { verified: true });
+    await sync(uid);
+
+    await expect(setRoleWithHooks("owner", uid, "admin", {
+      afterClaimsApplied: () => { throw new Error("injected finalization failure"); },
+    })).rejects.toThrow(/injected finalization failure/);
+
+    expect(await claimsOf(uid)).toMatchObject({ role: "admin", roleSource: "manual" });
+    expect(await docAt(`users/${uid}`)).toMatchObject({
+      role: "client",
+      roleTransition: { targetRole: "admin", actorUid: "owner", status: "pending" },
+    });
+
+    await expect(sync(uid)).resolves.toMatchObject({ role: "admin" });
+    await expect(sync(uid)).resolves.toMatchObject({ role: "admin", changed: false });
+    expect(await claimsOf(uid)).toMatchObject({ role: "admin", roleSource: "manual" });
+    expect(await docAt(`users/${uid}`)).toMatchObject({
+      role: "admin",
+      roleSource: "manual",
+      roleTransition: { status: "completed" },
+    });
+  });
+
   it("preserves unrelated claims through promotion and demotion", async () => {
     const uid = await createUser(uniqueEmail());
     await adminAuth().setCustomUserClaims(uid, { featureTier: "gold" });

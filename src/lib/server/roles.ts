@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import type { UserRecord } from "firebase-admin/auth";
 import {
@@ -27,6 +28,16 @@ import type { Role } from "@/lib/storage/types";
 
 export const ROLES: Role[] = ["client", "restaurant", "admin"];
 type AdminGrantSource = "allowlist" | "manual";
+
+interface RoleTransition {
+  operationId: string;
+  targetRole: Role;
+  actorUid: string;
+  status: "pending" | "failed" | "completed";
+  createdAt: string;
+  completedAt?: string;
+  failedAt?: string;
+}
 
 const RESERVED_CLAIM_KEYS = new Set([
   "acr", "amr", "at_hash", "aud", "auth_time", "azp", "cnf", "c_hash",
@@ -95,6 +106,95 @@ export interface SyncResult {
   changed: boolean;
 }
 
+function transitionFrom(data: FirebaseFirestore.DocumentData | undefined): RoleTransition | null {
+  const transition = data?.roleTransition;
+  if (
+    !transition ||
+    typeof transition.operationId !== "string" ||
+    typeof transition.actorUid !== "string" ||
+    !ROLES.includes(transition.targetRole) ||
+    !["pending", "failed", "completed"].includes(transition.status)
+  ) {
+    return null;
+  }
+  return transition as RoleTransition;
+}
+
+async function finalizeRoleTransition(uid: string, operation: RoleTransition): Promise<void> {
+  const now = new Date().toISOString();
+  const db = adminDb();
+  const profileRef = db.doc(`users/${uid}`);
+  const requestRef = db.doc(`restaurants/${RESTAURANT_ID}/staffRequests/${uid}`);
+  await db.runTransaction(async (transaction) => {
+    const [profile, request] = await Promise.all([
+      transaction.get(profileRef),
+      operation.targetRole === "client" ? Promise.resolve(null) : transaction.get(requestRef),
+    ]);
+    const current = transitionFrom(profile.data());
+    if (current?.operationId === operation.operationId && current.status === "completed") return;
+    if (current?.operationId !== operation.operationId || current.status !== "pending") {
+      throw new HttpError(409, "This role transition is no longer active.");
+    }
+    transaction.set(profileRef, {
+      role: operation.targetRole,
+      roleSource: operation.targetRole === "admin" ? "manual" : null,
+      rid: RESTAURANT_ID,
+      roleUpdatedAt: now,
+      updatedAt: now,
+      roleTransition: { ...operation, status: "completed", completedAt: now },
+    }, { merge: true });
+    if (request?.data()?.status === "pending") {
+      transaction.update(requestRef, {
+        status: "approved",
+        reviewedAt: now,
+        reviewedByUid: operation.actorUid,
+      });
+    }
+  });
+}
+
+async function applyRoleTransition(
+  uid: string,
+  operation: RoleTransition,
+  account: UserRecord,
+  hooks: SetRoleHooks = {},
+): Promise<void> {
+  const source = operation.targetRole === "admin" ? "manual" : undefined;
+  if (
+    account.customClaims?.role !== operation.targetRole ||
+    account.customClaims?.rid !== RESTAURANT_ID ||
+    (account.customClaims?.roleSource ?? null) !== (source ?? null)
+  ) {
+    try {
+      await hooks.beforeClaimsApplied?.();
+      await writeRoleClaims(account, operation.targetRole, source);
+    } catch (cause) {
+      const failedAt = new Date().toISOString();
+      const profileRef = adminDb().doc(`users/${uid}`);
+      await adminDb().runTransaction(async (transaction) => {
+        const profile = await transaction.get(profileRef);
+        const current = transitionFrom(profile.data());
+        if (current?.operationId === operation.operationId && current.status === "pending") {
+          transaction.set(profileRef, {
+            roleTransition: { ...operation, status: "failed", failedAt },
+          }, { merge: true });
+        }
+      });
+      throw cause;
+    }
+  }
+  await hooks.afterClaimsApplied?.();
+  await finalizeRoleTransition(uid, operation);
+}
+
+async function reconcilePendingRoleTransition(user: UserRecord): Promise<UserRecord> {
+  const profile = await adminDb().doc(`users/${user.uid}`).get();
+  const operation = transitionFrom(profile.data());
+  if (operation?.status !== "pending") return user;
+  await applyRoleTransition(user.uid, operation, user);
+  return adminAuth().getUser(user.uid);
+}
+
 /**
  * Brings an account's profile and role claim up to date.
  *
@@ -102,6 +202,10 @@ export interface SyncResult {
  * confirmed as a `client` and nothing else happens.
  */
 export async function syncAccount(user: UserRecord): Promise<SyncResult> {
+  // Finish a manual operation before considering the allowlist. In particular,
+  // an admin grant which reached Auth but not its profile mirror must retain its
+  // manual source rather than being mistaken for an allowlist-managed grant.
+  user = await reconcilePendingRoleTransition(user);
   const current = (user.customClaims?.role as Role | undefined) ?? null;
   const profileRef = adminDb().doc(`users/${user.uid}`);
   const profile = await profileRef.get();
@@ -210,6 +314,21 @@ export async function setRole(
   uid: unknown,
   role: unknown,
 ): Promise<{ uid: string; role: Role }> {
+  return setRoleWithHooks(callerUid, uid, role);
+}
+
+export interface SetRoleHooks {
+  /** Test/observability seams around the non-transactional Auth boundary. */
+  beforeClaimsApplied?: () => void | Promise<void>;
+  afterClaimsApplied?: () => void | Promise<void>;
+}
+
+export async function setRoleWithHooks(
+  callerUid: string,
+  uid: unknown,
+  role: unknown,
+  hooks: SetRoleHooks = {},
+): Promise<{ uid: string; role: Role }> {
   if (typeof uid !== "string" || !uid || !ROLES.includes(role as Role)) {
     throw new HttpError(400, "Pass a uid and a valid role.");
   }
@@ -218,45 +337,22 @@ export async function setRole(
     throw new HttpError(409, "You cannot remove your own admin role.");
   }
 
-  const account = await adminAuth().getUser(uid);
-  await writeRoleClaims(
-    account,
-    role as Role,
-    (role as Role) === "admin" ? "manual" : undefined,
-  );
-
+  let account = await adminAuth().getUser(uid);
+  account = await reconcilePendingRoleTransition(account);
   const now = new Date().toISOString();
   const db = adminDb();
   const profileRef = db.doc(`users/${uid}`);
-  const requestRef = db.doc(
-    `restaurants/${RESTAURANT_ID}/staffRequests/${uid}`,
-  );
-  await db.runTransaction(async (transaction) => {
-    // Read before writing so the profile mirror and any pending application
-    // are resolved atomically. A role grant must never revive a rejected (or
-    // otherwise already reviewed) request.
-    const request =
-      role === "client" ? null : await transaction.get(requestRef);
-    transaction.set(
-      profileRef,
-      {
-        role,
-        roleSource: role === "admin" ? "manual" : null,
-        rid: RESTAURANT_ID,
-        roleUpdatedAt: now,
-        updatedAt: now,
-      },
-      { merge: true },
-    );
-
-    if (request?.data()?.status === "pending") {
-      transaction.update(requestRef, {
-        status: "approved",
-        reviewedAt: now,
-        reviewedByUid: callerUid,
-      });
-    }
-  });
+  const operation: RoleTransition = {
+    operationId: randomUUID(),
+    targetRole: role as Role,
+    actorUid: callerUid,
+    status: "pending",
+    createdAt: now,
+  };
+  // This durable intent is written before Auth. It is the recovery record for
+  // the unavoidable gap between Firebase Auth and Firestore.
+  await profileRef.set({ roleTransition: operation, updatedAt: now }, { merge: true });
+  await applyRoleTransition(uid, operation, account, hooks);
 
   return { uid, role: role as Role };
 }
