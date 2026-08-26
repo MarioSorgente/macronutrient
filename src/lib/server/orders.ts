@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import type { Firestore } from "firebase-admin/firestore";
 import { RESTAURANT_ID, adminDb } from "@/lib/server/firebaseAdmin";
 import { HttpError } from "@/lib/server/auth";
+import { validateOrderDays, validatePlanForOrder } from "@/lib/server/planValidation";
 import { cutoffState } from "@/lib/cutoff";
 import { byId } from "@/lib/clients";
 import { planWithMenuIdentity } from "@/lib/menuIdentity";
@@ -22,7 +23,6 @@ import {
   type Fulfilment,
   type Order,
   type OrderStatus,
-  type Plan,
   type RestaurantConfig,
 } from "@/lib/storage/types";
 
@@ -191,7 +191,8 @@ export async function submitOrder(
     // order cannot be based on a different plan revision than submittedWeeks.
     const planSnap = await transaction.get(planRef);
     if (!planSnap.exists) throw new HttpError(404, "That plan does not exist.");
-    const plan = planSnap.data() as Plan;
+    const plan = planSnap.data();
+    validatePlanForOrder(plan, week, dishes);
     const startDate = weekStartDate(plan, week);
     const { at: cutoff, passed } = cutoffState(startDate, {
       timezone: config.timezone,
@@ -203,10 +204,15 @@ export async function submitOrder(
     const days = buildOrderDays(
       planWithMenuIdentity(plan, dishes), week, dishes, readFulfilment(input.fulfilment)
     );
+    validateOrderDays(days);
     if (days.length === 0) throw new HttpError(409, "That week has no meals in it.");
     const problems = fulfilmentProblems(days);
     if (problems.length > 0) throw new HttpError(400, problems.join(" "));
     const summary = summarizeOrder(days);
+    if (!Number.isFinite(summary.priceIdr) || summary.priceIdr < 0 ||
+        Object.values(summary.totals).some((value) => !Number.isFinite(value) || value < 0)) {
+      throw new HttpError(400, "Invalid plan: derived order totals are invalid.");
+    }
     const now = new Date().toISOString();
     const order: Order = {
       id: orderRef.id,

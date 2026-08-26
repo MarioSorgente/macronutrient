@@ -65,6 +65,49 @@ describe("arguments", () => {
   });
 });
 
+describe("hostile stored plans", () => {
+  it.each([
+    ["a non-finite serving count", meal({ servings: Number.NaN })],
+    ["an excessive serving count", meal({ servings: 101 })],
+    ["an out-of-range day", meal({ day: 7 })],
+    ["an unknown slot", meal({ slot: "Midnight feast" })],
+    ["an unknown ingredient", meal({ items: [{
+      ingredientId: "attacker_supplied", name: "Mystery", grams: 10, unitId: "g", quantity: 10,
+    }] })],
+    ["non-positive grams", meal({ items: [{
+      ingredientId: "chicken_breast_raw", name: "Chicken", grams: 0, unitId: "g", quantity: 1,
+    }] })],
+    ["an unknown menu recipe", meal({ menuRecipeId: "not_on_the_menu" })],
+    ["an incomplete price", meal({ price: { totalIdr: 30_000, complete: false } })],
+    ["a non-finite snapshot macro", meal({ snapshot: {
+      name: "Poisoned", totals: { energy_kcal: Infinity, protein_g: 1, carbs_g: 1, fat_g: 1, fiber_g: 1 },
+    } })],
+    ["no items or authoritative menu identity", meal({ items: [] })],
+  ])("rejects %s before writing anything", async (_label, hostileMeal) => {
+    const uid = await aUser();
+    await seedPlan(uid, "hostile", { assignments: [hostileMeal] });
+
+    const error = await submitOrder(uid, {
+      planId: "hostile", weekNumber: 1, fulfilment: PICKUP,
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(HttpError);
+    expect((error as HttpError).status).toBe(400);
+    expect(await listAt(`restaurants/${RID}/orders`)).toHaveLength(0);
+    expect(await listAt(`restaurants/${RID}/prepTasks`)).toHaveLength(0);
+    expect(await listAt(`restaurants/${RID}/liveOrderReservations`)).toHaveLength(0);
+  });
+
+  it("rejects a requested week outside the validated program", async () => {
+    const uid = await aUser();
+    await seedPlan(uid, "short", { weekCount: 1 });
+    await expect(submitOrder(uid, {
+      planId: "short", weekNumber: 2, fulfilment: PICKUP,
+    })).rejects.toMatchObject({ status: 400 });
+    expect(await listAt(`restaurants/${RID}/orders`)).toHaveLength(0);
+  });
+});
+
 describe("the happy path", () => {
   it("writes the order and one prep task per meal, in one batch", async () => {
     const uid = await aUser();
