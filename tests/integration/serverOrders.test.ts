@@ -250,6 +250,33 @@ describe("the restaurant can stop taking orders", () => {
 });
 
 describe("a repeated submit", () => {
+  it("atomically reserves a week when two submissions start together", async () => {
+    const uid = await aUser();
+    await seedPlan(uid, "p1", {
+      assignments: [meal(), meal({ id: "a2", day: 2, slot: "Breakfast" })],
+    });
+    const input = {
+      planId: "p1",
+      weekNumber: 1,
+      fulfilment: {
+        0: { mode: "pickup", time: "12:00" },
+        2: { mode: "pickup", time: "09:00" },
+      },
+    };
+
+    const [first, second] = await Promise.all([
+      submitOrder(uid, input),
+      submitOrder(uid, input),
+    ]);
+
+    expect(second.orderId).toBe(first.orderId);
+    expect([first.deduplicated, second.deduplicated].filter(Boolean)).toHaveLength(1);
+    expect(await listAt(`restaurants/${RID}/orders`)).toHaveLength(1);
+    const tasks = await listAt(`restaurants/${RID}/prepTasks`);
+    expect(tasks).toHaveLength(2);
+    expect(tasks.every((task) => task.orderId === first.orderId)).toBe(true);
+  });
+
   it("treats a double click as one order", async () => {
     const uid = await aUser();
     await seedPlan(uid);

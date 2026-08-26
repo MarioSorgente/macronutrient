@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import type { Firestore } from "firebase-admin/firestore";
 import { RESTAURANT_ID, adminDb } from "@/lib/server/firebaseAdmin";
 import { HttpError } from "@/lib/server/auth";
@@ -39,6 +40,28 @@ import {
  */
 
 const MIN_RESUBMIT_MS = 60_000;
+
+interface LiveOrderReservation {
+  orderId: string;
+  userId: string;
+  planId: string;
+  weekNumber: number;
+  createdAt: string;
+}
+
+/** A bounded Firestore-safe identity for the one live order a week may have. */
+function reservationId(userId: string, planId: string, weekNumber: number): string {
+  return createHash("sha256")
+    .update(JSON.stringify([RESTAURANT_ID, userId, planId, weekNumber]))
+    .digest("hex");
+}
+
+function reservationRef(db: Firestore, userId: string, planId: string, weekNumber: number) {
+  return db.doc(
+    `restaurants/${RESTAURANT_ID}/liveOrderReservations/` +
+      reservationId(userId, planId, weekNumber)
+  );
+}
 
 /** Statuses that mean the kitchen has no work left to do. */
 const DEAD: OrderStatus[] = ["cancelled", "rejected"];
@@ -136,122 +159,104 @@ export async function submitOrder(
     throw new HttpError(409, "Negrita is not taking orders at the moment.");
   }
 
-  // Read the plan ourselves. Nothing about the order is taken from the caller
-  // except which week it is and how they want it delivered.
-  const planSnap = await db.doc(`users/${uid}/plans/${planId}`).get();
-  if (!planSnap.exists) throw new HttpError(404, "That plan does not exist.");
-  const plan = planSnap.data() as Plan;
+  const dishesSnap = await db.collection(`users/${uid}/dishes`).get();
+  const dishes = byId(dishesSnap.docs.map((d) => d.data() as Dish));
+  const profile = (await db.doc(`users/${uid}`).get()).data() ?? {};
+  const orderRef = db.collection(`restaurants/${RESTAURANT_ID}/orders`).doc();
+  const lockRef = reservationRef(db, uid, planId, week);
+  const planRef = db.doc(`users/${uid}/plans/${planId}`);
 
-  const startDate = weekStartDate(plan, week);
-  const { at: cutoff, passed } = cutoffState(
-    startDate,
-    {
+  return db.runTransaction(async (transaction) => {
+    // This deterministic document is the contention point. Firestore retries
+    // one of two concurrent transactions after the other creates it.
+    const lockSnap = await transaction.get(lockRef);
+    if (lockSnap.exists) {
+      const reservation = lockSnap.data() as LiveOrderReservation;
+      const previous = await transaction.get(
+        db.doc(`restaurants/${RESTAURANT_ID}/orders/${reservation.orderId}`)
+      );
+      if (previous.exists && LIVE_ORDER_STATUSES.includes((previous.data() as Order).status)) {
+        const submittedAt = Date.parse((previous.data() as Order).submittedAt ?? "");
+        if (Number.isFinite(submittedAt) && Date.now() - submittedAt < MIN_RESUBMIT_MS) {
+          return { orderId: previous.id, deduplicated: true };
+        }
+        throw new HttpError(409, "That week has already been sent to the kitchen.");
+      }
+      // Dead transitions remove their reservation transactionally. Reaching
+      // this state means storage was modified outside this lifecycle.
+      throw new HttpError(409, "That week already has an order reservation.");
+    }
+
+    // Read the plan in the same transaction that reserves and writes it, so an
+    // order cannot be based on a different plan revision than submittedWeeks.
+    const planSnap = await transaction.get(planRef);
+    if (!planSnap.exists) throw new HttpError(404, "That plan does not exist.");
+    const plan = planSnap.data() as Plan;
+    const startDate = weekStartDate(plan, week);
+    const { at: cutoff, passed } = cutoffState(startDate, {
       timezone: config.timezone,
       cutoffDay: config.cutoffDay,
       cutoffTime: config.cutoffTime,
-    },
-    new Date()
-  );
-  if (passed) throw new HttpError(409, "Orders for that week have closed.");
+    }, new Date());
+    if (passed) throw new HttpError(409, "Orders for that week have closed.");
 
-  // Only a LIVE order blocks a resend. A cancelled or rejected one has already
-  // had its prep tasks cleared and its week freed, so counting it here would
-  // leave a week the UI says is editable but that can never be sent again.
-  const existing = await db
-    .collection(`restaurants/${RESTAURANT_ID}/orders`)
-    .where("userId", "==", uid)
-    .where("planId", "==", planId)
-    .where("weekNumber", "==", week)
-    .get();
+    const days = buildOrderDays(
+      planWithMenuIdentity(plan, dishes), week, dishes, readFulfilment(input.fulfilment)
+    );
+    if (days.length === 0) throw new HttpError(409, "That week has no meals in it.");
+    const problems = fulfilmentProblems(days);
+    if (problems.length > 0) throw new HttpError(400, problems.join(" "));
+    const summary = summarizeOrder(days);
+    const now = new Date().toISOString();
+    const order: Order = {
+      id: orderRef.id,
+      createdAt: now,
+      updatedAt: now,
+      restaurantId: RESTAURANT_ID,
+      userId: uid,
+      planId,
+      weekNumber: week,
+      weekStartDate: startDate,
+      status: "submitted",
+      customer: {
+        // A name is the account holder's to choose, so the profile wins and the
+        // token is the fallback. An email is an identity the kitchen may act on,
+        // so it comes from the verified token and never from a document the
+        // account holder can write. A phone is theirs to give, but bounded.
+        name: String(profile.displayName ?? verified.name ?? "Guest").slice(0, 120),
+        email: String(verified.email ?? profile.email ?? ""),
+        ...(profile.phone ? { phone: String(profile.phone).slice(0, 40) } : {}),
+      },
+      days,
+      totals: summary.totals,
+      priceIdr: summary.priceIdr,
+      mealCount: summary.mealCount,
+      payment: { status: "unpaid", method: "cash", amountIdr: summary.priceIdr },
+      submittedAt: now,
+      lockedAt: cutoff.toISOString(),
+      statusHistory: [{ status: "submitted", at: now, byUid: uid }],
+    };
 
-  const previous = existing.docs.find((doc) =>
-    LIVE_ORDER_STATUSES.includes((doc.data() as Order).status)
-  );
-  if (previous) {
-    const submittedAt = Date.parse((previous.data() as Order).submittedAt ?? "");
-    // A repeated submit within a minute is a double click, not a second order.
-    if (Number.isFinite(submittedAt) && Date.now() - submittedAt < MIN_RESUBMIT_MS) {
-      return { orderId: previous.id, deduplicated: true };
+    const tasks = prepTasksFor(
+      order,
+      (orderId, date, assignmentId) => `${orderId}_${date}_${assignmentId}`
+    );
+
+    transaction.create(lockRef, {
+      orderId: orderRef.id, userId: uid, planId, weekNumber: week, createdAt: now,
+    } satisfies LiveOrderReservation);
+    transaction.create(orderRef, order);
+    for (const task of tasks) {
+      transaction.create(db.doc(`restaurants/${RESTAURANT_ID}/prepTasks/${task.id}`), task);
     }
-    throw new HttpError(409, "That week has already been sent to the kitchen.");
-  }
+    transaction.update(planRef, {
+      status: "submitted",
+      submittedWeeks: Array.from(new Set([...(plan.submittedWeeks ?? []), week])),
+      updatedAt: now,
+    });
 
-  const dishesSnap = await db.collection(`users/${uid}/dishes`).get();
-  const dishes = byId(dishesSnap.docs.map((d) => d.data() as Dish));
-
-  // The browser resolves menu identity when it loads a plan; this read has to
-  // do the same, with the same saved dishes, or the week the diner agreed to
-  // and the order the restaurant bills are priced by different rules. Both
-  // sides run the same order code — they have to start from the same plan.
-  const days = buildOrderDays(
-    planWithMenuIdentity(plan, dishes),
-    week,
-    dishes,
-    readFulfilment(input.fulfilment)
-  );
-  if (days.length === 0) throw new HttpError(409, "That week has no meals in it.");
-
-  const problems = fulfilmentProblems(days);
-  if (problems.length > 0) throw new HttpError(400, problems.join(" "));
-
-  const summary = summarizeOrder(days);
-  const profile = (await db.doc(`users/${uid}`).get()).data() ?? {};
-  const now = new Date().toISOString();
-  const orderRef = db.collection(`restaurants/${RESTAURANT_ID}/orders`).doc();
-
-  const order: Order = {
-    id: orderRef.id,
-    createdAt: now,
-    updatedAt: now,
-    restaurantId: RESTAURANT_ID,
-    userId: uid,
-    planId,
-    weekNumber: week,
-    weekStartDate: startDate,
-    status: "submitted",
-    customer: {
-      // A name is the account holder's to choose, so the profile wins and the
-      // token is the fallback. An email is an identity the kitchen may act on,
-      // so it comes from the verified token and never from a document the
-      // account holder can write. A phone is theirs to give, but bounded.
-      name: String(profile.displayName ?? verified.name ?? "Guest").slice(0, 120),
-      email: String(verified.email ?? profile.email ?? ""),
-      ...(profile.phone ? { phone: String(profile.phone).slice(0, 40) } : {}),
-    },
-    days,
-    totals: summary.totals,
-    priceIdr: summary.priceIdr,
-    mealCount: summary.mealCount,
-    payment: { status: "unpaid", method: "cash", amountIdr: summary.priceIdr },
-    submittedAt: now,
-    lockedAt: cutoff.toISOString(),
-    statusHistory: [{ status: "submitted", at: now, byUid: uid }],
-  };
-
-  const tasks = prepTasksFor(
-    order,
-    (orderId, date, assignmentId) => `${orderId}_${date}_${assignmentId}`
-  );
-
-  // One batch: an order without its prep tasks would be invisible to the
-  // kitchen, and prep tasks without an order would have nothing to cancel.
-  const batch = db.batch();
-  batch.set(orderRef, order);
-  for (const task of tasks) {
-    batch.set(db.doc(`restaurants/${RESTAURANT_ID}/prepTasks/${task.id}`), task);
-  }
-  batch.update(planSnap.ref, {
-    status: "submitted",
-    submittedWeeks: Array.from(new Set([...(plan.submittedWeeks ?? []), week])),
-    updatedAt: now,
+    return { orderId: orderRef.id, mealCount: summary.mealCount, priceIdr: summary.priceIdr };
   });
-  await batch.commit();
-
-  return {
-    orderId: orderRef.id,
-    mealCount: summary.mealCount,
-    priceIdr: summary.priceIdr,
-  };
 }
 
 /**
@@ -281,62 +286,68 @@ export async function setOrderStatus(
   const db = adminDb();
 
   const ref = db.doc(`restaurants/${RESTAURANT_ID}/orders/${orderId}`);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpError(404, "That order does not exist.");
-  const order = snap.data() as Order;
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists) throw new HttpError(404, "That order does not exist.");
+    const order = snap.data() as Order;
 
-  const isStaff = caller.role === "admin" || caller.role === "restaurant";
-  if (!isStaff) {
-    if (order.userId !== caller.uid) throw new HttpError(404, "That order does not exist.");
-    if (next !== "cancelled") throw new HttpError(403, "You can only cancel your own week.");
-    if (order.status !== "submitted") {
-      throw new HttpError(
-        409,
-        "The kitchen has already started this week, so it can no longer be cancelled."
-      );
+    const isStaff = caller.role === "admin" || caller.role === "restaurant";
+    if (!isStaff) {
+      if (order.userId !== caller.uid) throw new HttpError(404, "That order does not exist.");
+      if (next !== "cancelled") throw new HttpError(403, "You can only cancel your own week.");
+      if (order.status !== "submitted") {
+        throw new HttpError(
+          409,
+          "The kitchen has already started this week, so it can no longer be cancelled."
+        );
+      }
     }
-  }
 
-  const now = new Date().toISOString();
-  const batch = db.batch();
-  // The note is shown to the diner as "From Negrita", so only Negrita may write
-  // it — a customer cancelling their own week could put words in the
-  // restaurant's mouth — and it is bounded like every other stored free text.
-  const restaurantNote = isStaff && typeof note === "string"
-    ? note.trim().slice(0, 500)
-    : null;
-  batch.update(ref, {
-    status: next,
-    updatedAt: now,
-    ...(restaurantNote ? { restaurantNote } : {}),
-    statusHistory: [
-      ...(order.statusHistory ?? []),
-      { status: next, at: now, byUid: caller.uid },
-    ],
-  });
-
-  if (DEAD.includes(next) && !DEAD.includes(order.status)) {
-    // A dead order must stop being work. Neither side can do this itself: a
-    // customer may not write prep tasks at all, and leaving it to the
-    // restaurant is exactly the step that gets skipped on a busy service.
-    const tasks = await db
-      .collection(`restaurants/${RESTAURANT_ID}/prepTasks`)
-      .where("orderId", "==", orderId)
-      .get();
-    for (const task of tasks.docs) batch.delete(task.ref);
-
-    // Free the week so the customer can fix and resend it.
+    const becomingDead = DEAD.includes(next) && !DEAD.includes(order.status);
+    const lockRef = reservationRef(db, order.userId, order.planId, order.weekNumber);
     const planRef = db.doc(`users/${order.userId}/plans/${order.planId}`);
-    const plan = await planRef.get();
-    if (plan.exists) {
-      const submitted: number[] = plan.data()?.submittedWeeks ?? [];
-      batch.update(planRef, {
-        submittedWeeks: submitted.filter((w) => w !== order.weekNumber),
-        updatedAt: now,
-      });
-    }
-  }
+    const [tasks, plan, lock] = becomingDead
+      ? await Promise.all([
+          transaction.get(
+            db.collection(`restaurants/${RESTAURANT_ID}/prepTasks`)
+              .where("orderId", "==", orderId)
+          ),
+          transaction.get(planRef),
+          transaction.get(lockRef),
+        ])
+      : [null, null, null];
 
-  await batch.commit();
+    const now = new Date().toISOString();
+    // The note is shown to the diner as "From Negrita", so only Negrita may
+    // write it, and it is bounded like every other stored free text.
+    const restaurantNote = isStaff && typeof note === "string"
+      ? note.trim().slice(0, 500)
+      : null;
+    transaction.update(ref, {
+      status: next,
+      updatedAt: now,
+      ...(restaurantNote ? { restaurantNote } : {}),
+      statusHistory: [
+        ...(order.statusHistory ?? []),
+        { status: next, at: now, byUid: caller.uid },
+      ],
+    });
+
+    if (becomingDead) {
+      for (const task of tasks!.docs) transaction.delete(task.ref);
+      if (plan!.exists) {
+        const submitted: number[] = plan!.data()?.submittedWeeks ?? [];
+        transaction.update(planRef, {
+          submittedWeeks: submitted.filter((w) => w !== order.weekNumber),
+          updatedAt: now,
+        });
+      }
+      // Only remove this order's lock: this protects against repairing a stale
+      // reservation while a newer live order owns the same week.
+      if (lock!.exists && (lock!.data() as LiveOrderReservation).orderId === orderId) {
+        transaction.delete(lockRef);
+      }
+    }
+  });
   return { orderId, status: next };
 }
