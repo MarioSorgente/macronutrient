@@ -46,12 +46,66 @@ export async function listStaffRequests(): Promise<StaffAccessRequest[]> {
     .collection(`restaurants/${RESTAURANT_ID}/staffRequests`)
     .where("status", "==", "pending")
     .get();
-  const requests = await Promise.all(snap.docs.map(async (doc) => {
+  const results = await Promise.allSettled(snap.docs.map(async (doc) => {
     const data = doc.data() as StaffAccessRequest;
-    const account = await adminAuth().getUser(data.uid);
-    return { ...data, emailVerified: account.emailVerified };
+    const createdAt = typeof data.createdAt === "string" ? data.createdAt : "";
+    const email = typeof data.email === "string" ? data.email : "Unavailable account";
+    // A request is keyed by its Auth uid. Keep the document key as the review
+    // target even when corrupt data omitted or changed the stored uid.
+    if (
+      typeof data.uid !== "string" ||
+      !data.uid ||
+      data.uid !== doc.id ||
+      !createdAt ||
+      typeof data.email !== "string"
+    ) {
+      return {
+        ...data,
+        id: doc.id,
+        uid: doc.id,
+        email,
+        createdAt,
+        emailVerified: false,
+        accountState: "unavailable" as const,
+        accountUnavailableReason: "malformed-request" as const,
+      };
+    }
+
+    try {
+      const account = await adminAuth().getUser(data.uid);
+      return {
+        ...data,
+        emailVerified: account.emailVerified,
+        accountState: "available" as const,
+      };
+    } catch (cause) {
+      if (authErrorCode(cause) !== "auth/user-not-found") throw cause;
+      return {
+        ...data,
+        emailVerified: false,
+        accountState: "unavailable" as const,
+        accountUnavailableReason: "user-not-found" as const,
+      };
+    }
   }));
+
+  const failures = results.filter((result) => result.status === "rejected");
+  if (failures.length) {
+    // Missing accounts and malformed documents are expected stale-record
+    // states above. Anything else is an infrastructure failure and must stay
+    // visible rather than being presented as an ordinary unavailable account.
+    throw new AggregateError(
+      failures.map((failure) => failure.reason),
+      "Failed to reconcile one or more staff requests with Auth.",
+    );
+  }
+  const requests = results.map((result) => (result as PromiseFulfilledResult<StaffAccessRequest>).value);
   return requests.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+function authErrorCode(cause: unknown): string | undefined {
+  if (!cause || typeof cause !== "object" || !("code" in cause)) return undefined;
+  return typeof cause.code === "string" ? cause.code : undefined;
 }
 
 export async function approveStaffRequest(uid: unknown, adminUid: string) {

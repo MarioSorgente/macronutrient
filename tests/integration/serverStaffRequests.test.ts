@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { adminAuth } from "@/lib/server/firebaseAdmin";
+import { adminAuth, adminDb } from "@/lib/server/firebaseAdmin";
 import { setRole, syncAccount } from "@/lib/server/roles";
 import {
   approveStaffRequest,
   approveStaffRequestWithHooks,
   getStaffRequest,
+  listStaffRequests,
   rejectStaffRequest,
   requestStaffAccess,
 } from "@/lib/server/staffRequests";
-import { claimsOf, createUser, docAt, resetEmulators, setVerified, uniqueEmail } from "./serverHarness";
+import { claimsOf, createUser, docAt, resetEmulators, RID, setVerified, uniqueEmail } from "./serverHarness";
 
 beforeEach(resetEmulators);
 
@@ -18,6 +19,50 @@ async function caller(uid: string) {
 }
 
 describe("staff access requests", () => {
+  it("keeps valid requests reviewable alongside deleted and malformed accounts", async () => {
+    const validUid = await createUser(uniqueEmail("valid"), { verified: true });
+    const deletedUid = await createUser(uniqueEmail("deleted"));
+    await requestStaffAccess(await caller(validUid));
+    await requestStaffAccess(await caller(deletedUid));
+    await adminAuth().deleteUser(deletedUid);
+    await adminDb()
+      .doc(`restaurants/${RID}/staffRequests/malformed-document`)
+      .set({
+        id: "malformed-document",
+        restaurantId: RID,
+        email: "broken@example.com",
+        emailVerified: true,
+        status: "pending",
+      });
+
+    const requests = await listStaffRequests();
+
+    expect(requests).toHaveLength(3);
+    expect(requests.find(({ uid }) => uid === validUid)).toMatchObject({
+      accountState: "available",
+      emailVerified: true,
+    });
+    expect(requests.find(({ uid }) => uid === deletedUid)).toMatchObject({
+      accountState: "unavailable",
+      accountUnavailableReason: "user-not-found",
+      emailVerified: false,
+    });
+    expect(requests.find(({ uid }) => uid === "malformed-document")).toMatchObject({
+      accountState: "unavailable",
+      accountUnavailableReason: "malformed-request",
+      emailVerified: false,
+    });
+    await expect(approveStaffRequest(validUid, "owner")).resolves.toMatchObject({
+      status: "approved",
+    });
+    await expect(rejectStaffRequest(deletedUid, "owner")).resolves.toMatchObject({
+      status: "rejected",
+    });
+    await expect(rejectStaffRequest("malformed-document", "owner")).resolves.toMatchObject({
+      status: "rejected",
+    });
+  });
+
   it("creates a pending request for a customer with no request", async () => {
     const uid = await createUser(uniqueEmail("worker"));
     await syncAccount(await adminAuth().getUser(uid));
