@@ -114,6 +114,8 @@ export async function approveStaffRequest(uid: unknown, adminUid: string) {
 }
 
 interface ApprovalHooks {
+  /** Fault-injection/observability seam immediately before the Auth write. */
+  beforeClaimsApplied?: () => void | Promise<void>;
   /** Fault-injection/observability seam after Auth succeeds but before Firestore finalization. */
   afterClaimsApplied?: () => void | Promise<void>;
 }
@@ -166,6 +168,7 @@ export async function approveStaffRequestWithHooks(
   // this write and every following step safe to repeat after a partial failure.
   const latestAccount = await adminAuth().getUser(uid);
   if (latestAccount.customClaims?.role !== operation.role) {
+    await hooks.beforeClaimsApplied?.();
     await writeRoleClaims(latestAccount, operation.role);
   }
   await hooks.afterClaimsApplied?.();

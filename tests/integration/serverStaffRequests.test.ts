@@ -173,6 +173,36 @@ describe("staff access requests", () => {
     expect(await docAt(`users/${uid}`)).toMatchObject({ role: "restaurant" });
   });
 
+  it("resumes an approval that fails before assigning Auth claims", async () => {
+    const uid = await createUser(uniqueEmail("worker"), { verified: true });
+    await syncAccount(await adminAuth().getUser(uid));
+    await requestStaffAccess(await caller(uid));
+
+    await expect(approveStaffRequestWithHooks(uid, "owner", {
+      beforeClaimsApplied: () => { throw new Error("injected claims failure"); },
+    })).rejects.toThrow(/injected claims failure/);
+
+    const staged = await getStaffRequest(uid);
+    expect(staged).toMatchObject({
+      status: "approving",
+      intendedRole: "restaurant",
+      reviewedByUid: "owner",
+    });
+    expect(staged?.reviewOperationId).toBeTruthy();
+    expect(await claimsOf(uid)).toMatchObject({ role: "client" });
+    expect(await docAt(`users/${uid}`)).toMatchObject({ role: "client" });
+
+    await approveStaffRequest(uid, "retrying-owner");
+    await approveStaffRequest(uid, "retrying-owner");
+    expect(await claimsOf(uid)).toMatchObject({ role: "restaurant" });
+    expect(await docAt(`users/${uid}`)).toMatchObject({ role: "restaurant" });
+    expect(await getStaffRequest(uid)).toMatchObject({
+      status: "approved",
+      reviewOperationId: staged?.reviewOperationId,
+      reviewedByUid: "owner",
+    });
+  });
+
   it("does not let a stale staff approval overwrite an assigned admin role", async () => {
     const uid = await createUser(uniqueEmail("worker"), { verified: true });
     await syncAccount(await adminAuth().getUser(uid));
