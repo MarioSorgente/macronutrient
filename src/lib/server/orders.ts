@@ -19,7 +19,9 @@ import { planWithMenuIdentity } from "@/lib/menuIdentity";
 import { isOrderTransitionAllowed } from "@/lib/orderLifecycle";
 import {
   buildOrderDays,
+  DEFAULT_FULFILMENT,
   fulfilmentProblems,
+  planDate,
   prepTasksFor,
   summarizeOrder,
   weekStartDate,
@@ -34,6 +36,7 @@ import {
   type OrderStatus,
   type RestaurantConfig,
 } from "@/lib/storage/types";
+import { serviceTimeProblems } from "@/lib/fulfilmentTime";
 
 /**
  * Turning a planned week into a prep order the kitchen is committed to.
@@ -213,8 +216,25 @@ export async function submitOrder(
     }, new Date());
     if (passed) throw new HttpError(409, "Orders for that week have closed.");
 
+    const submittedFulfilment = readFulfilment(input.fulfilment);
+    const mealDays = [...new Set(
+      plan.assignments
+        .filter((assignment: { week: number }) => assignment.week === week)
+        .map((assignment: { day: number }) => assignment.day)
+    )].sort((a, b) => a - b);
+    const serviceProblems = serviceTimeProblems(
+      mealDays.map((day) => ({
+        date: planDate(plan, week, day),
+        time: (submittedFulfilment[day] ?? DEFAULT_FULFILMENT).time,
+      })),
+      config
+    );
+    if (serviceProblems.length > 0) {
+      throw new HttpError(400, serviceProblems.join(" "));
+    }
+
     const days = buildOrderDays(
-      planWithMenuIdentity(plan, dishes), week, dishes, readFulfilment(input.fulfilment)
+      planWithMenuIdentity(plan, dishes), week, dishes, submittedFulfilment
     );
     validateOrderDays(days);
     if (days.length === 0) throw new HttpError(409, "That week has no meals in it.");
