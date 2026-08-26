@@ -16,7 +16,13 @@ export async function POST(request: Request) {
   try {
     const caller = await requireUser(request);
     const body = await request.json().catch(() => ({}));
-    return NextResponse.json(await submitOrder(caller.uid, body));
+    // The verified token is where the contact details on a kitchen order come
+    // from. The profile document is one the account holder may write, so an
+    // address the kitchen phones or emails must not be taken from it.
+    return NextResponse.json(await submitOrder(caller.uid, body, {
+      email: typeof caller.email === "string" ? caller.email : undefined,
+      name: typeof caller.name === "string" ? caller.name : undefined,
+    }));
   } catch (cause) {
     return errorResponse(cause);
   }

@@ -27,6 +27,7 @@ export default function MealDetailDialog({
   dishes,
   contextLabel,
   onChangeServings,
+  locked = false,
   onRemove,
   onClose,
 }: {
@@ -35,6 +36,8 @@ export default function MealDetailDialog({
   /** e.g. "Breakfast · Monday, Aug 17" */
   contextLabel: string;
   onChangeServings: (servings: number) => void;
+  /** The kitchen already has this week: it can be read, not changed. */
+  locked?: boolean;
   onRemove: () => void;
   onClose: () => void;
 }) {
@@ -54,13 +57,21 @@ export default function MealDetailDialog({
       onClose={onClose}
       footer={
         <>
-          <button
-            type="button"
-            onClick={onRemove}
-            className="mr-auto flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-600 text-charcoal-soft hover:text-tomato-dark"
-          >
-            <Trash2 size={15} /> Remove from plan
-          </button>
+          {locked ? (
+            // The kitchen has this week; taking a meal out here would change
+            // nothing it is cooking, and would hide what was actually ordered.
+            <span className="mr-auto text-xs font-600 text-charcoal-soft">
+              With the kitchen — cancel the order to change this week.
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="mr-auto flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-600 text-charcoal-soft hover:text-tomato-dark"
+            >
+              <Trash2 size={15} /> Remove from plan
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -82,7 +93,8 @@ export default function MealDetailDialog({
                 onClick={() =>
                   onChangeServings(Math.max(0.5, assignment.servings - 0.5))
                 }
-                className="grid h-8 w-8 place-items-center rounded-l-lg text-charcoal-soft hover:bg-cream-deep"
+                disabled={locked}
+                className="grid h-8 w-8 place-items-center rounded-l-lg text-charcoal-soft hover:bg-cream-deep disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Fewer servings"
               >
                 <Minus size={14} />
@@ -93,7 +105,8 @@ export default function MealDetailDialog({
               <button
                 type="button"
                 onClick={() => onChangeServings(assignment.servings + 0.5)}
-                className="grid h-8 w-8 place-items-center rounded-r-lg text-charcoal-soft hover:bg-cream-deep"
+                disabled={locked}
+                className="grid h-8 w-8 place-items-center rounded-r-lg text-charcoal-soft hover:bg-cream-deep disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="More servings"
               >
                 <Plus size={14} />

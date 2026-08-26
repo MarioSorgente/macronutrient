@@ -31,6 +31,7 @@ import type {
   Plan,
   RestaurantConfig,
 } from "@/lib/storage/types";
+import { planWithMenuIdentity } from "@/lib/menuIdentity";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
@@ -99,9 +100,19 @@ export default function SubmitWeek() {
 
   const dishMap = useMemo(() => byId(dishes), [dishes]);
 
+  /**
+   * The same plan the server will price, resolved the same way. Quoting a week
+   * here on different rules from the ones the kitchen bills by is the one thing
+   * this screen must not do.
+   */
+  const priced = useMemo(
+    () => (plan ? planWithMenuIdentity(plan, dishMap) : null),
+    [plan, dishMap]
+  );
+
   const days = useMemo(
-    () => (plan ? buildOrderDays(plan, week, dishMap, fulfilment) : []),
-    [plan, week, dishMap, fulfilment]
+    () => (priced ? buildOrderDays(priced, week, dishMap, fulfilment) : []),
+    [priced, week, dishMap, fulfilment]
   );
   const summary = useMemo(() => summarizeOrder(days), [days]);
   const gaps = useMemo(

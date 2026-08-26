@@ -7,6 +7,7 @@ import {
   assignmentsFor,
 } from "@/lib/clients";
 import { EMPTY_MACROS, addMacros } from "@/lib/calc";
+import { optionalSlots } from "@/lib/slotSuitability";
 import type {
   Dish,
   Fulfilment,
@@ -107,7 +108,14 @@ export function summarizeOrder(days: OrderDay[]): OrderSummary {
   return { totals, priceIdr, mealCount, dayCount: days.length };
 }
 
-/** Slots in the week that have no meal — reported, never silently filled. */
+/**
+ * Slots in the week that have no meal — reported, never silently filled.
+ *
+ * A snack the day deliberately went without is not one of them. The planner
+ * finishes a day in three meals when three meals reach the target and calls it
+ * complete; this counted the missing snack as a gap and warned about seven
+ * empty slots in a week the planner had just called finished.
+ */
 export function emptySlots(
   plan: Plan,
   week: number
@@ -115,10 +123,12 @@ export function emptySlots(
   const planned = new Set(
     assignmentsFor(plan, week).map((a) => `${a.day}|${a.slot}`)
   );
+  const optional = optionalSlots(plan.mealSlots);
   const gaps: { day: number; slot: string }[] = [];
 
   for (let day = 0; day < 7; day += 1) {
     for (const slot of plan.mealSlots) {
+      if (optional.has(slot)) continue;
       if (!planned.has(`${day}|${slot}`)) gaps.push({ day, slot });
     }
   }

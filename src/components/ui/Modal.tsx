@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, type ReactNode } from "react";
+import { useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { IconButton } from "@/components/ui/Button";
 import { useBackdropClose } from "@/components/ui/useBackdropClose";
+import { useDialogBehaviour } from "@/components/ui/useDialogBehaviour";
 
 const SIZES = {
   md: "max-w-md",
@@ -13,9 +14,6 @@ const SIZES = {
   "2xl": "max-w-2xl",
   "4xl": "max-w-4xl",
 } as const;
-
-const FOCUSABLE =
-  'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 /**
  * The dialog shell every modal in the app shares: a bottom sheet on phones that
@@ -48,64 +46,14 @@ export default function Modal({
   children: ReactNode;
 }) {
   const titleId = useId();
-  const panelRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-
-  // Remember what had focus so it can be handed back when the dialog closes —
-  // otherwise focus falls to <body> and keyboard users lose their place.
-  const restoreTo = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    restoreTo.current = document.activeElement as HTMLElement | null;
-
-    const { overflow } = document.body.style;
-    document.body.style.overflow = "hidden";
-
-    // Prefer the first control in the body — landing on the close button
-    // reads as "you probably want to leave", which is rarely the intent.
-    const body = bodyRef.current?.querySelector<HTMLElement>(FOCUSABLE);
-    const anywhere = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
-    (body ?? anywhere ?? panelRef.current)?.focus();
-
-    return () => {
-      document.body.style.overflow = overflow;
-      restoreTo.current?.focus?.();
-    };
-  }, []);
+  // Escape, the scroll lock, the focus trap and handing focus back — shared
+  // with the planner's hand-rolled dialog so the two cannot drift apart.
+  const { panelRef, onKeyDown } = useDialogBehaviour(onClose, bodyRef);
 
   // Only a press that starts and ends on the backdrop is a click away from the
   // panel; a drag out of an input is not.
   const backdrop = useBackdropClose(onClose);
-
-  const onKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      // Trap Tab inside the panel by wrapping at either end.
-      const nodes = Array.from(
-        panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []
-      ).filter((el) => el.offsetParent !== null);
-      if (nodes.length === 0) return;
-
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      const active = document.activeElement;
-
-      if (event.shiftKey && active === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    },
-    [onClose]
-  );
 
   return (
     <div

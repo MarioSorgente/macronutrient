@@ -13,6 +13,7 @@ import { round0 } from "@/lib/format";
 import DishItemRow from "@/components/DishItemRow";
 import MenuDishList from "@/components/MenuDishList";
 import { useBackdropClose } from "@/components/ui/useBackdropClose";
+import { useDialogBehaviour } from "@/components/ui/useDialogBehaviour";
 import SegmentedToggle from "@/components/SegmentedToggle";
 import MacroChips from "@/components/MacroChips";
 import IngredientTypeahead from "@/components/IngredientTypeahead";
@@ -57,6 +58,11 @@ export default function AssignDishDialog({
   onClose: () => void;
 }) {
   const backdrop = useBackdropClose(onClose);
+  // Escape, the scroll lock behind it, the focus trap and handing focus back —
+  // the same behaviours the shared Modal has. This dialog owns its own scroll
+  // regions and a per-tab footer, which is why it is not built on Modal, but
+  // that is a layout difference and was never a reason to behave differently.
+  const { panelRef, onKeyDown } = useDialogBehaviour(onClose);
   const [tab, setTab] = useState<Tab>("menu");
   const [query, setQuery] = useState("");
   const [servings, setServings] = useState(1);
@@ -105,10 +111,14 @@ export default function AssignDishDialog({
       className="fixed inset-0 z-40 flex items-end justify-center bg-charcoal/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
+      aria-label={`Add to ${slot}`}
+      onKeyDown={onKeyDown}
       {...backdrop}
     >
       <div
-        className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-t-xl2 bg-cream shadow-card sm:rounded-xl2"
+        ref={panelRef}
+        tabIndex={-1}
+        className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-t-xl2 bg-cream shadow-card outline-none sm:rounded-xl2"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between border-b border-cream-deep px-4 py-3">

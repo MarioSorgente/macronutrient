@@ -415,6 +415,13 @@ describe("moving an order through its lifecycle", () => {
     expect(history.at(-1)).toMatchObject({ status: "accepted", byUid: "staff" });
     expect(order?.restaurantNote).toBe("starting prep");
   });
+
+  it("keeps that note to a sane length", async () => {
+    const { orderId } = await anOrder();
+    await setOrderStatus(staff, orderId, "accepted", "x".repeat(2_000));
+    const order = await docAt(`restaurants/${RID}/orders/${orderId}`);
+    expect((order?.restaurantNote as string).length).toBe(500);
+  });
 });
 
 describe("who may change an order", () => {
@@ -431,6 +438,18 @@ describe("who may change an order", () => {
     const orderId = await anOrderFor(uid);
     await expect(setOrderStatus({ uid, role: "client" }, orderId, "cancelled"))
       .resolves.toMatchObject({ status: "cancelled" });
+  });
+
+  it("does not let a customer write the note signed \"From Negrita\"", async () => {
+    const uid = await aUser();
+    const orderId = await anOrderFor(uid);
+    await setOrderStatus({ uid, role: "client" }, orderId, "cancelled",
+      "Refund issued, call this number");
+
+    // The receipt renders this as the restaurant's own words, so it is the
+    // restaurant's to write. A customer cancelling could put words in its mouth.
+    const order = await docAt(`restaurants/${RID}/orders/${orderId}`);
+    expect(order?.restaurantNote).toBeUndefined();
   });
 
   it("refuses a customer any transition other than cancelling", async () => {

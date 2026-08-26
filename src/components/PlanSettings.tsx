@@ -37,6 +37,15 @@ export default function PlanSettings({
   );
   const [newSlot, setNewSlot] = useState("");
   const mealCounts = useMemo(() => mealsPerSlot(plan), [plan]);
+  /**
+   * The last week that still holds meals. Shortening the program past it would
+   * leave them stored but unreachable — the planner only ever shows weeks 1 to
+   * `weekCount`, so they would vanish from the plan while still being in it.
+   */
+  const lastPlannedWeek = useMemo(
+    () => plan.assignments.reduce((last, a) => Math.max(last, a.week), 0),
+    [plan]
+  );
 
   const trimmedNames = slots.map((slot) => slot.name.trim());
   const duplicate = trimmedNames.find((slot, index) =>
@@ -141,7 +150,12 @@ export default function PlanSettings({
             />
             )}
           </Field>
-          <Field label="Weeks" hint={`Up to ${MAX_PROGRAM_WEEKS}`}>
+          <Field
+            label="Weeks"
+            hint={lastPlannedWeek > 1
+              ? `Up to ${MAX_PROGRAM_WEEKS}. Week ${lastPlannedWeek} has meals in it, so the program cannot end before it.`
+              : `Up to ${MAX_PROGRAM_WEEKS}`}
+          >
             {(id) => (
             <select
               id={id}
@@ -151,8 +165,9 @@ export default function PlanSettings({
             >
               {Array.from({ length: MAX_PROGRAM_WEEKS }, (_, i) => i + 1).map(
                 (n) => (
-                  <option key={n} value={n}>
+                  <option key={n} value={n} disabled={n < lastPlannedWeek}>
                     {n} week{n === 1 ? "" : "s"}
+                    {n < lastPlannedWeek ? " — has meals" : ""}
                   </option>
                 )
               )}

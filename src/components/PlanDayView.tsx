@@ -35,6 +35,7 @@ export default function PlanDayView({
   onSelectDay,
   onOpenMeal,
   onAddMeal,
+  locked = false,
 }: {
   plan: Plan;
   week: number;
@@ -44,6 +45,8 @@ export default function PlanDayView({
   onSelectDay: (day: number) => void;
   onOpenMeal: (assignment: Assignment) => void;
   onAddMeal: (day: number, slot: string) => void;
+  /** The kitchen already has this week, so it is read-only here. */
+  locked?: boolean;
 }) {
   const totals = dayTotals(plan, week, day, dishes);
   const price = dayPrice(plan, week, day, dishes);
@@ -110,6 +113,8 @@ export default function PlanDayView({
                 <button
                   type="button"
                   onClick={() => onAddMeal(day, slot)}
+                        disabled={locked}
+                        title={locked ? "This week is with the kitchen." : undefined}
                   className={
                     "flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-600 text-charcoal-soft transition-colors hover:text-tomato " +
                     (slotAssignments.length === 0 ? "" : "hover-reveal")
@@ -123,7 +128,9 @@ export default function PlanDayView({
                 <button
                   type="button"
                   onClick={() => onAddMeal(day, slot)}
-                  className="w-full rounded-xl border border-dashed border-cream-deep py-3 text-xs text-charcoal-soft transition-colors hover:border-tomato-soft hover:text-tomato"
+                        disabled={locked}
+                        title={locked ? "This week is with the kitchen." : undefined}
+                        className="w-full rounded-xl border border-dashed border-cream-deep py-3 text-xs text-charcoal-soft transition-colors hover:border-tomato-soft hover:text-tomato disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cream-deep disabled:hover:text-charcoal-soft"
                 >
                   Nothing planned
                 </button>

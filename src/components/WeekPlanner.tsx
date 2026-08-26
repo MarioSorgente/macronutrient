@@ -40,7 +40,7 @@ import { ZERO_PRICE } from "@/lib/pricing";
 import { loadCurrentPlan, savePlan } from "@/lib/currentPlan";
 import type { GeneratedDay } from "@/lib/mealPlanner";
 import { assignmentsFromGenerated } from "@/lib/planAssignments";
-import { menuRecipeForDish, withMenuIdentity } from "@/lib/menuIdentity";
+import { menuRecipeForDish, planWithMenuIdentity } from "@/lib/menuIdentity";
 import { negritaMenuCandidate } from "@/lib/plannerCandidates";
 import { GRAM_UNIT_ID, type MenuRecipe } from "@/types/nutrition";
 import { round0 } from "@/lib/format";
@@ -158,18 +158,16 @@ export default function WeekPlanner() {
   const dishMap = useMemo(() => byId(dishes), [dishes]);
 
   /**
-   * The plan, with any meal that is really a Negrita dish recognised as one.
-   *
-   * Done here because this is the one place holding both the plan and the saved
-   * dishes it points at. In memory only: the week on screen reads the menu's
-   * price and macros straight away, and the identity is written down by the next
-   * ordinary save rather than by a surprise one on load.
+   * The plan, with any meal that is really a Negrita dish recognised as one —
+   * by the same rule the submit screen and the kitchen order use, so all three
+   * price a week identically. In memory only: the week on screen reads the
+   * menu's price and macros straight away, and the identity is written down by
+   * the next ordinary save rather than by a surprise one on load.
    */
-  const plan = useMemo(() => storedPlan && {
-    ...storedPlan,
-    assignments: storedPlan.assignments.map((assignment) =>
-      withMenuIdentity(assignment, dishMap)),
-  }, [storedPlan, dishMap]);
+  const plan = useMemo(
+    () => (storedPlan ? planWithMenuIdentity(storedPlan, dishMap) : null),
+    [storedPlan, dishMap]
+  );
   const visibleWeekNeedsHouseRecipes = useMemo(() => {
     if (!plan) return false;
     return plan.assignments.some((assignment) => {
@@ -188,6 +186,16 @@ export default function WeekPlanner() {
   // summary alone, before the grid adds one per day — which is what made a
   // full four-week plan feel sluggish to click around.
   const currentWeekSafe = plan ? Math.min(week, plan.weekCount) : 1;
+  /**
+   * A week the kitchen already has is not editable here.
+   *
+   * The order carries its own copy of what was sent, and resending is refused,
+   * so every change made to a submitted week was a change that could never
+   * reach the kitchen — the planner showed one week while Negrita cooked
+   * another, and nothing said so. Cancelling the order frees it again, which is
+   * what the notice below points at.
+   */
+  const weekLocked = Boolean(plan?.submittedWeeks?.includes(currentWeekSafe));
   const weekSummary = useMemo(() => {
     if (!plan) return null;
     const totals = weekTotals(plan, currentWeekSafe, dishMap);
@@ -234,7 +242,7 @@ export default function WeekPlanner() {
   }, [repos]);
 
   function assign(dish: Dish, servings: number) {
-    if (!plan || !assigning) return;
+    if (!plan || !assigning || weekLocked) return;
     // An untouched saved copy of a menu dish is that menu dish, and is priced
     // and counted as one. Anything you adjusted stays yours.
     const asMenuDish = menuRecipeForDish(dish);
@@ -262,7 +270,7 @@ export default function WeekPlanner() {
    * along for the kitchen and for display.
    */
   function assignMenuDish(recipe: MenuRecipe, servings: number) {
-    if (!plan || !assigning) return;
+    if (!plan || !assigning || weekLocked) return;
     const candidate = negritaMenuCandidate(recipe);
     if (!candidate) return;
     const assignment: Assignment = {
@@ -294,7 +302,7 @@ export default function WeekPlanner() {
     servings: number,
     alsoSave: boolean
   ) {
-    if (!plan || !assigning) return;
+    if (!plan || !assigning || weekLocked) return;
     const totals = sumDishMacros(items);
     const price = priceItems(items);
 
@@ -346,6 +354,7 @@ export default function WeekPlanner() {
   }
 
   function unassign(assignmentId: string) {
+    if (weekLocked) return;
     if (!plan) return;
     void persist({
       ...plan,
@@ -356,7 +365,7 @@ export default function WeekPlanner() {
 
   /** Applies a patch to one assignment and saves. */
   function updateAssignment(assignmentId: string, patch: Partial<Assignment>) {
-    if (!plan) return;
+    if (!plan || weekLocked) return;
     void persist({
       ...plan,
       assignments: plan.assignments.map((a) =>
@@ -374,12 +383,13 @@ export default function WeekPlanner() {
     targetMode: Plan["targetMode"],
     targetPreset?: Plan["targetPreset"]
   ): Promise<boolean> {
-    if (!plan) return false;
+    // The kitchen already has this week; a generated one could never reach it.
+    if (!plan || weekLocked) return false;
     const kept = replace
-      ? plan.assignments.filter((a) => a.week !== currentWeek)
+      ? plan.assignments.filter((a) => a.week !== currentWeekSafe)
       : [...plan.assignments];
 
-    const additions = assignmentsFromGenerated(generated, currentWeek);
+    const additions = assignmentsFromGenerated(generated, currentWeekSafe);
 
     // Tastes are remembered with the plan, so the next generation starts from
     // what you already told the generator — and so is the target the week was
@@ -424,8 +434,6 @@ export default function WeekPlanner() {
       </main>
     );
   }
-
-  const currentWeek = Math.min(week, plan.weekCount);
 
   // Re-read from the plan so the dialog reflects edits made inside it.
   const { totals, average, cost } = weekSummary ?? {
@@ -480,11 +488,13 @@ export default function WeekPlanner() {
           <button
             type="button"
             onClick={() => setGenerateOpen(true)}
-            disabled={dishesLoading || Boolean(dishesError)}
+            disabled={dishesLoading || Boolean(dishesError) || weekLocked}
             title={
-              dishesLoading
-                ? "Loading your dish library…"
-                : dishesError ?? undefined
+              weekLocked
+                ? `Week ${currentWeekSafe} is with the kitchen. Cancel that order to plan it again.`
+                : dishesLoading
+                  ? "Loading your dish library…"
+                  : dishesError ?? undefined
             }
             className="flex items-center gap-1.5 rounded-xl bg-basil px-3 py-2 text-sm font-700 text-cream hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -529,7 +539,7 @@ export default function WeekPlanner() {
       {/* Week summary — one line, not three stacked blocks */}
       <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-basil/30 bg-basil/5 px-3 py-2 text-sm">
         <span className="text-charcoal-soft">
-          Week {currentWeek}{" "}
+          Week {currentWeekSafe}{" "}
           <b className="tabular-nums text-charcoal">{formatPrice(cost)}</b>
         </span>
         <span className="text-charcoal-soft">
@@ -560,7 +570,7 @@ export default function WeekPlanner() {
                 onClick={() => setWeek(w)}
                 className={
                   "flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-600 transition-colors " +
-                  (w === currentWeek
+                  (w === currentWeekSafe
                     ? "bg-charcoal text-cream"
                     : "bg-cream-deep text-charcoal-soft hover:text-charcoal")
                 }
@@ -570,7 +580,7 @@ export default function WeekPlanner() {
                   <span
                     className={
                       "rounded-full px-1.5 text-[10px] font-700 " +
-                      (w === currentWeek
+                      (w === currentWeekSafe
                         ? "bg-cream/20 text-cream"
                         : "bg-white text-charcoal-soft")
                     }
@@ -617,32 +627,46 @@ export default function WeekPlanner() {
         </div>
       </div>
 
+      {weekLocked && (
+        <p className="mb-3 rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-charcoal">
+          <b className="font-700">Week {currentWeekSafe} is with the kitchen.</b>{" "}
+          It cannot be changed here — Negrita is cooking the version that was
+          sent. Cancel that order from{" "}
+          <Link href="/orders" className="font-600 text-tomato hover:underline">
+            My orders
+          </Link>{" "}
+          if you need to plan it again.
+        </p>
+      )}
+
       {/* The plan */}
       {planView === "day" ? (
         <PlanDayView
           plan={plan}
-          week={currentWeek}
+          week={currentWeekSafe}
           day={day}
           dishes={dishMap}
           showPrices={showPrices}
           onSelectDay={setDay}
           onOpenMeal={(a) => setOpenMealId(a.id)}
           onAddMeal={(d, slot) => setAssigning({ day: d, slot })}
+          locked={weekLocked}
         />
       ) : (
         <>
           <PlanWeekGrid
             plan={plan}
-            week={currentWeek}
+            week={currentWeekSafe}
             dishes={dishMap}
             showPrices={showPrices}
             onOpenMeal={(a) => setOpenMealId(a.id)}
             onAddMeal={(d, slot) => setAssigning({ day: d, slot })}
+            locked={weekLocked}
           />
 
           <section className="mt-5 rounded-xl2 border border-cream-deep bg-white/60 p-4">
             <h2 className="mb-3 font-display text-lg font-700 text-charcoal">
-              Week {currentWeek} total
+              Week {currentWeekSafe} total
             </h2>
             <MacroSummary macros={totals} />
             <p className="mt-3 text-xs text-charcoal-soft">
@@ -672,6 +696,7 @@ export default function WeekPlanner() {
           onChangeServings={(servings) =>
             updateAssignment(openMeal.id, { servings })
           }
+          locked={weekLocked}
           onRemove={() => unassign(openMeal.id)}
           onClose={() => setOpenMealId(null)}
         />
@@ -683,8 +708,8 @@ export default function WeekPlanner() {
           dishesLoading={dishesLoading}
           dishesError={dishesError}
           slot={assigning.slot}
-          dayLabel={`Week ${currentWeek} · ${DAY_NAMES[assigning.day]} ${formatShortDate(
-            dateFor(plan, currentWeek, assigning.day)
+          dayLabel={`Week ${currentWeekSafe} · ${DAY_NAMES[assigning.day]} ${formatShortDate(
+            dateFor(plan, currentWeekSafe, assigning.day)
           )}`}
           onAssign={assign}
           onAssignMenuDish={assignMenuDish}
@@ -696,7 +721,7 @@ export default function WeekPlanner() {
       {generateOpen && (
         <GeneratePlanDialog
           plan={plan}
-          week={currentWeek}
+          week={currentWeekSafe}
           savedDishes={dishes}
           onApply={applyGenerated}
           onTargetsSave={async (selection) => {

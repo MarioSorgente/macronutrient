@@ -5,7 +5,7 @@ import { RESTAURANT_ID, adminDb } from "@/lib/server/firebaseAdmin";
 import { HttpError } from "@/lib/server/auth";
 import { cutoffState } from "@/lib/cutoff";
 import { byId } from "@/lib/clients";
-import { withMenuIdentity } from "@/lib/menuIdentity";
+import { planWithMenuIdentity } from "@/lib/menuIdentity";
 import {
   buildOrderDays,
   fulfilmentProblems,
@@ -109,9 +109,16 @@ export interface SubmitResult {
   deduplicated?: boolean;
 }
 
+/** Contact details taken from the verified ID token rather than from a document. */
+export interface VerifiedIdentity {
+  email?: string;
+  name?: string;
+}
+
 export async function submitOrder(
   uid: string,
-  input: SubmitInput
+  input: SubmitInput,
+  verified: VerifiedIdentity = {}
 ): Promise<SubmitResult> {
   const db = adminDb();
 
@@ -133,15 +140,7 @@ export async function submitOrder(
   // except which week it is and how they want it delivered.
   const planSnap = await db.doc(`users/${uid}/plans/${planId}`).get();
   if (!planSnap.exists) throw new HttpError(404, "That plan does not exist.");
-  const stored = planSnap.data() as Plan;
-  // The browser gives a plan its menu identity when it loads one; this read has
-  // to do the same, or a week planned before that existed would be quoted to
-  // the diner at menu prices and billed to the kitchen at ingredient prices.
-  // Both sides run the same order rules, so both sides start from the same plan.
-  const plan: Plan = {
-    ...stored,
-    assignments: (stored.assignments ?? []).map((a) => withMenuIdentity(a)),
-  };
+  const plan = planSnap.data() as Plan;
 
   const startDate = weekStartDate(plan, week);
   const { at: cutoff, passed } = cutoffState(
@@ -180,7 +179,16 @@ export async function submitOrder(
   const dishesSnap = await db.collection(`users/${uid}/dishes`).get();
   const dishes = byId(dishesSnap.docs.map((d) => d.data() as Dish));
 
-  const days = buildOrderDays(plan, week, dishes, readFulfilment(input.fulfilment));
+  // The browser resolves menu identity when it loads a plan; this read has to
+  // do the same, with the same saved dishes, or the week the diner agreed to
+  // and the order the restaurant bills are priced by different rules. Both
+  // sides run the same order code — they have to start from the same plan.
+  const days = buildOrderDays(
+    planWithMenuIdentity(plan, dishes),
+    week,
+    dishes,
+    readFulfilment(input.fulfilment)
+  );
   if (days.length === 0) throw new HttpError(409, "That week has no meals in it.");
 
   const problems = fulfilmentProblems(days);
@@ -202,9 +210,13 @@ export async function submitOrder(
     weekStartDate: startDate,
     status: "submitted",
     customer: {
-      name: String(profile.displayName ?? "Guest"),
-      email: String(profile.email ?? ""),
-      ...(profile.phone ? { phone: String(profile.phone) } : {}),
+      // A name is the account holder's to choose, so the profile wins and the
+      // token is the fallback. An email is an identity the kitchen may act on,
+      // so it comes from the verified token and never from a document the
+      // account holder can write. A phone is theirs to give, but bounded.
+      name: String(profile.displayName ?? verified.name ?? "Guest").slice(0, 120),
+      email: String(verified.email ?? profile.email ?? ""),
+      ...(profile.phone ? { phone: String(profile.phone).slice(0, 40) } : {}),
     },
     days,
     totals: summary.totals,
@@ -287,10 +299,16 @@ export async function setOrderStatus(
 
   const now = new Date().toISOString();
   const batch = db.batch();
+  // The note is shown to the diner as "From Negrita", so only Negrita may write
+  // it — a customer cancelling their own week could put words in the
+  // restaurant's mouth — and it is bounded like every other stored free text.
+  const restaurantNote = isStaff && typeof note === "string"
+    ? note.trim().slice(0, 500)
+    : null;
   batch.update(ref, {
     status: next,
     updatedAt: now,
-    ...(typeof note === "string" ? { restaurantNote: note } : {}),
+    ...(restaurantNote ? { restaurantNote } : {}),
     statusHistory: [
       ...(order.statusHistory ?? []),
       { status: next, at: now, byUid: caller.uid },

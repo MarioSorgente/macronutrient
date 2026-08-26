@@ -22,7 +22,7 @@ export default function ConfirmButton({
   timeoutMs = 4000,
   className,
 }: {
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   /**
    * Accessible name for the icon-only form, e.g. "Delete Chicken bowl".
    *
@@ -41,7 +41,18 @@ export default function ConfirmButton({
   className?: string;
 }) {
   const [armed, setArmed] = useState(false);
+  /**
+   * Set while the confirmed action is still running.
+   *
+   * Every caller here does something destructive and asynchronous — cancelling
+   * an order, clearing a week — and the button disarmed the instant it was
+   * pressed. A second click before the first returned sent the request twice,
+   * and the second one came back as "that order is no longer submitted".
+   */
+  const [running, setRunning] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
 
   useEffect(() => {
     if (!armed) return;
@@ -53,16 +64,22 @@ export default function ConfirmButton({
     return (
       <button
         type="button"
+        disabled={running}
         onClick={() => {
-          setArmed(false);
-          onConfirm();
+          if (running) return;
+          setRunning(true);
+          void Promise.resolve(onConfirm()).finally(() => {
+            if (!mounted.current) return;
+            setRunning(false);
+            setArmed(false);
+          });
         }}
         className={cn(
           "rounded-lg bg-tomato-dark px-2.5 py-2 text-xs font-700 text-cream hover:bg-tomato",
           className
         )}
       >
-        {confirmLabel}
+        {running ? "Working…" : confirmLabel}
       </button>
     );
   }

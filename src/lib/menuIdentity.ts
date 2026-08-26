@@ -1,6 +1,6 @@
 import { getIngredient, getRecipe, menuRecipes } from "@/lib/database";
 import type { MenuRecipe } from "@/types/nutrition";
-import type { Assignment, Dish, DishItem } from "@/lib/storage/types";
+import type { Assignment, Dish, DishItem, Plan } from "@/lib/storage/types";
 
 /**
  * Which Negrita menu dish a planned meal *is*.
@@ -103,4 +103,25 @@ export function withMenuIdentity(
   if (named.length !== 1 || !isRecipeItemList(named[0], items)) return assignment;
 
   return { ...assignment, menuRecipeId: named[0].recipe_id };
+}
+
+/**
+ * A whole plan, with every meal that is really a Negrita dish recognised as one.
+ *
+ * Every surface that prices a plan has to call this, with the saved dishes when
+ * it has them. Doing it in the planner alone was worse than not doing it: the
+ * week quoted a saved copy of a menu dish at the menu's price while the submit
+ * screen and the kitchen order priced the same meal from its ingredients, so
+ * what the diner agreed to and what the restaurant billed were different
+ * numbers for the same food.
+ */
+export function planWithMenuIdentity<T extends Plan>(
+  plan: T,
+  dishes?: Map<string, Dish>
+): T {
+  return {
+    ...plan,
+    assignments: (plan.assignments ?? []).map((assignment) =>
+      withMenuIdentity(assignment, dishes)),
+  };
 }

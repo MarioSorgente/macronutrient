@@ -33,6 +33,7 @@ export default function PlanWeekGrid({
   showPrices,
   onOpenMeal,
   onAddMeal,
+  locked = false,
 }: {
   plan: Plan;
   week: number;
@@ -40,6 +41,8 @@ export default function PlanWeekGrid({
   showPrices: boolean;
   onOpenMeal: (assignment: Assignment) => void;
   onAddMeal: (day: number, slot: string) => void;
+  /** The kitchen already has this week, so it is read-only here. */
+  locked?: boolean;
 }) {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
@@ -119,8 +122,10 @@ export default function PlanWeekGrid({
                       <button
                         type="button"
                         onClick={() => onAddMeal(dayIndex, slot)}
+                        disabled={locked}
+                        title={locked ? "This week is with the kitchen." : undefined}
                         className={
-                          "mt-1 flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-cream-deep py-1 text-[10px] font-600 text-charcoal-soft transition-colors hover:border-tomato-soft hover:text-tomato " +
+                          "mt-1 flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-cream-deep py-1 text-[10px] font-600 text-charcoal-soft transition-colors hover:border-tomato-soft hover:text-tomato disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cream-deep disabled:hover:text-charcoal-soft " +
                           (empty ? "" : "hover-reveal")
                         }
                         aria-label={`Add to ${slot} on ${dayName}`}
