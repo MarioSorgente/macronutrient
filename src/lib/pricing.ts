@@ -1,5 +1,7 @@
 import type { Ingredient } from "@/types/nutrition";
 import { getIngredient } from "@/lib/database";
+import { assignmentMenuRecipe } from "@/lib/menuIdentity";
+import type { Assignment, Dish } from "@/lib/storage/types";
 
 /**
  * Pricing from Negrita's DIY menu.
@@ -37,6 +39,52 @@ export function priceForGrams(
 export interface PriceableItem {
   ingredientId: string;
   grams: number;
+}
+
+/** The only restaurant setting which is allowed to affect a meal's price. */
+export interface RestaurantPricingPolicy {
+  markupPct: number;
+}
+
+/**
+ * Authoritative price for an assignment.
+ *
+ * Published/explicit prices are already selling prices and therefore never
+ * receive markup. Only DIY meals whose price is derived from components do.
+ * Rounding happens once, after markup, so browser and server cannot disagree
+ * for fractional percentages.
+ */
+export function priceAssignment(
+  assignment: Assignment,
+  dishes: Map<string, Dish>,
+  policy: RestaurantPricingPolicy
+): PriceResult {
+  const recipe = assignmentMenuRecipe(assignment);
+  let base: PriceResult;
+
+  if (recipe && typeof recipe.price_idr === "number") {
+    base = { totalIdr: recipe.price_idr, unpricedCount: 0, complete: true };
+  } else if (assignment.price) {
+    base = {
+      totalIdr: assignment.price.totalIdr,
+      unpricedCount: assignment.price.complete ? 0 : 1,
+      complete: assignment.price.complete,
+    };
+  } else if (assignment.menuRecipeId) {
+    base = { totalIdr: 0, unpricedCount: 1, complete: false };
+  } else {
+    const items = assignment.dishId
+      ? dishes.get(assignment.dishId)?.items ?? assignment.items
+      : assignment.items;
+    base = items ? priceItems(items) : { totalIdr: 0, unpricedCount: 1, complete: false };
+    const pct = Number.isFinite(policy.markupPct) ? policy.markupPct : 0;
+    base = { ...base, totalIdr: Math.round(base.totalIdr * (1 + pct / 100)) };
+  }
+
+  return {
+    ...base,
+    totalIdr: Math.round(base.totalIdr * assignment.servings),
+  };
 }
 
 /**

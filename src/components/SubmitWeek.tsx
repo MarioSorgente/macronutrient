@@ -112,8 +112,8 @@ export default function SubmitWeek() {
   );
 
   const days = useMemo(
-    () => (priced ? buildOrderDays(priced, week, dishMap, fulfilment) : []),
-    [priced, week, dishMap, fulfilment]
+    () => (priced && config ? buildOrderDays(priced, week, dishMap, fulfilment, config) : []),
+    [priced, week, dishMap, fulfilment, config]
   );
   const summary = useMemo(() => summarizeOrder(days), [days]);
   const gaps = useMemo(

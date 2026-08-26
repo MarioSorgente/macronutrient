@@ -22,6 +22,7 @@ import {
   type Dish,
   type DishItem,
   type MacroTargets,
+  type RestaurantConfig,
 } from "@/lib/storage/types";
 import {
   byId,
@@ -60,6 +61,8 @@ import ConfirmButton from "@/components/ui/ConfirmButton";
 import HouseRecipeLoader from "@/components/HouseRecipeLoader";
 import { getIngredient, isEstimated } from "@/lib/database";
 import { useHouseRecipes } from "@/store/houseRecipes";
+import { loadRestaurantConfig } from "@/lib/storage/orders";
+import { DEFAULT_RESTAURANT_CONFIG } from "@/lib/storage/types";
 
 export default function WeekPlanner() {
   const repos = useRepos();
@@ -67,6 +70,7 @@ export default function WeekPlanner() {
   useHouseRecipes((state) => state.version);
   const [storedPlan, setClient] = useState<Plan | null>(null);
   const [dishes, setDishes] = useState<Dish[]>([]);
+  const [pricingPolicy, setPricingPolicy] = useState<Pick<RestaurantConfig, "markupPct">>(DEFAULT_RESTAURANT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dishesLoading, setDishesLoading] = useState(true);
@@ -150,6 +154,10 @@ export default function WeekPlanner() {
         if (active) setDishesLoading(false);
       });
 
+    loadRestaurantConfig().then((config) => {
+      if (active) setPricingPolicy(config);
+    });
+
     return () => {
       active = false;
     };
@@ -202,9 +210,9 @@ export default function WeekPlanner() {
     return {
       totals,
       average: scaleMacros(totals, 1 / 7),
-      cost: weekPrice(plan, currentWeekSafe, dishMap),
+      cost: weekPrice(plan, currentWeekSafe, dishMap, pricingPolicy),
     };
-  }, [plan, currentWeekSafe, dishMap]);
+  }, [plan, currentWeekSafe, dishMap, pricingPolicy]);
 
   /**
    * Saves a change and says so if it did not happen.
@@ -646,6 +654,7 @@ export default function WeekPlanner() {
           week={currentWeekSafe}
           day={day}
           dishes={dishMap}
+          pricingPolicy={pricingPolicy}
           showPrices={showPrices}
           onSelectDay={setDay}
           onOpenMeal={(a) => setOpenMealId(a.id)}
@@ -658,6 +667,7 @@ export default function WeekPlanner() {
             plan={plan}
             week={currentWeekSafe}
             dishes={dishMap}
+            pricingPolicy={pricingPolicy}
             showPrices={showPrices}
             onOpenMeal={(a) => setOpenMealId(a.id)}
             onAddMeal={(d, slot) => setAssigning({ day: d, slot })}
@@ -690,6 +700,7 @@ export default function WeekPlanner() {
         <MealDetailDialog
           assignment={openMeal}
           dishes={dishMap}
+          pricingPolicy={pricingPolicy}
           contextLabel={`${openMeal.slot} · ${DAY_NAMES[openMeal.day]}, ${formatShortDate(
             dateFor(plan, openMeal.week, openMeal.day)
           )}`}
