@@ -437,12 +437,16 @@ describe("moving an order through its lifecycle", () => {
 
   const staff = { uid: "staff", role: "restaurant", rid: RID };
 
-  it.each(["cancelled", "rejected"])(
+  it.each(["cancelled", "rejected"] as const)(
     "clears every prep task when an order becomes %s",
     async (status) => {
-      const { orderId } = await anOrder();
+      const { uid, orderId } = await anOrder();
       expect(await listAt(`restaurants/${RID}/prepTasks`)).toHaveLength(2);
-      await setOrderStatus(staff, orderId, status);
+      await setOrderStatus(
+        status === "cancelled" ? { uid, role: "client" } : staff,
+        orderId,
+        status
+      );
       expect(await listAt(`restaurants/${RID}/prepTasks`)).toHaveLength(0);
     }
   );
@@ -450,7 +454,7 @@ describe("moving an order through its lifecycle", () => {
   it("frees the week so the customer can fix and resend it", async () => {
     const { uid, orderId } = await anOrder();
     expect((await docAt(`users/${uid}/plans/p1`))?.submittedWeeks).toEqual([1]);
-    await setOrderStatus(staff, orderId, "cancelled");
+    await setOrderStatus({ uid, role: "client" }, orderId, "cancelled");
     expect((await docAt(`users/${uid}/plans/p1`))?.submittedWeeks).toEqual([]);
   });
 
@@ -458,7 +462,7 @@ describe("moving an order through its lifecycle", () => {
     // Regression: the duplicate check once counted the cancelled order too, so
     // the week became permanently un-orderable while the UI showed it editable.
     const { uid, orderId } = await anOrder();
-    await setOrderStatus(staff, orderId, "cancelled");
+    await setOrderStatus({ uid, role: "client" }, orderId, "cancelled");
     await adminDb()
       .doc(`restaurants/${RID}/orders/${orderId}`)
       .update({ submittedAt: new Date(Date.now() - 5 * 60_000).toISOString() });
@@ -491,6 +495,43 @@ describe("moving an order through its lifecycle", () => {
     await setOrderStatus(staff, orderId, "accepted", "x".repeat(2_000));
     const order = await docAt(`restaurants/${RID}/orders/${orderId}`);
     expect((order?.restaurantNote as string).length).toBe(500);
+  });
+
+  it.each([
+    ["submitted", "accepted", "staff"],
+    ["submitted", "rejected", "staff"],
+    ["submitted", "cancelled", "client"],
+    ["accepted", "in_prep", "staff"],
+    ["in_prep", "ready", "staff"],
+    ["ready", "completed", "staff"],
+  ] as const)("allows %s → %s for %s", async (from, to, actor) => {
+    const { uid, orderId } = await anOrder();
+    if (from !== "submitted") {
+      await adminDb().doc(`restaurants/${RID}/orders/${orderId}`).update({ status: from });
+    }
+
+    await expect(setOrderStatus(
+      actor === "staff" ? staff : { uid, role: "client" },
+      orderId,
+      to
+    )).resolves.toMatchObject({ status: to });
+    expect(await docAt(`restaurants/${RID}/orders/${orderId}`)).toMatchObject({ status: to });
+  });
+
+  it.each([
+    ["submitted", "ready"],
+    ["accepted", "ready"],
+    ["in_prep", "completed"],
+    ["ready", "accepted"],
+    ["completed", "ready"],
+    ["rejected", "submitted"],
+    ["cancelled", "submitted"],
+  ] as const)("returns 409 for the invalid %s → %s transition", async (from, to) => {
+    const { orderId } = await anOrder();
+    await adminDb().doc(`restaurants/${RID}/orders/${orderId}`).update({ status: from });
+
+    await expect(setOrderStatus(staff, orderId, to)).rejects.toMatchObject({ status: 409 });
+    expect(await docAt(`restaurants/${RID}/orders/${orderId}`)).toMatchObject({ status: from });
   });
 });
 
@@ -557,7 +598,7 @@ describe("who may change an order", () => {
     await setOrderStatus({ uid: "staff", role: "admin" }, orderId, "accepted");
     await expect(
       setOrderStatus({ uid, role: "client" }, orderId, "cancelled")
-    ).rejects.toThrow(/already started/i);
+    ).rejects.toMatchObject({ status: 409 });
   });
 
   it("hides someone else's order rather than admitting it exists", async () => {

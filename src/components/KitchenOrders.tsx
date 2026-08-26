@@ -14,17 +14,7 @@ import Button from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
 import OrderStatusBadge, { ORDER_LABELS } from "@/components/OrderStatusBadge";
 import { useToast } from "@/components/ui/Toast";
-
-/** What the restaurant can move an order to from where it is now. */
-const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  submitted: ["accepted", "rejected"],
-  accepted: ["in_prep", "cancelled"],
-  in_prep: ["ready", "cancelled"],
-  ready: ["completed"],
-  completed: [],
-  rejected: [],
-  cancelled: [],
-};
+import { ORDER_TRANSITIONS } from "@/lib/orderLifecycle";
 
 const FILTERS: { value: string; label: string }[] = [
   { value: "all", label: "All orders" },
@@ -155,16 +145,14 @@ export default function KitchenOrders() {
                   </div>
                 </div>
 
-                {TRANSITIONS[order.status].length > 0 && (
+                {ORDER_TRANSITIONS[order.status].staff.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2 border-t border-cream-deep pt-3">
-                    {TRANSITIONS[order.status].map((next) => (
+                    {ORDER_TRANSITIONS[order.status].staff.map((next) => (
                       <Button
                         key={next}
                         size="sm"
                         variant={
-                          next === "rejected" || next === "cancelled"
-                            ? "danger"
-                            : "primary"
+                          next === "rejected" ? "danger" : "primary"
                         }
                         onClick={() => move(order, next)}
                       >
