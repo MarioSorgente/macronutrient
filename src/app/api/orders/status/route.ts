@@ -16,7 +16,11 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     return NextResponse.json(
       await setOrderStatus(
-        { uid: caller.uid, role: caller.role as string | undefined },
+        {
+          uid: caller.uid,
+          role: caller.role as string | undefined,
+          rid: caller.rid as string | undefined,
+        },
         body.orderId,
         body.status,
         body.note

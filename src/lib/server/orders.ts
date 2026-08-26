@@ -3,7 +3,11 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { Firestore } from "firebase-admin/firestore";
 import { RESTAURANT_ID, adminDb } from "@/lib/server/firebaseAdmin";
-import { HttpError } from "@/lib/server/auth";
+import {
+  HttpError,
+  authorizeRestaurantStaff,
+  type RestaurantCaller,
+} from "@/lib/server/auth";
 import {
   validateOrderDays,
   validatePlanForOrder,
@@ -284,7 +288,7 @@ export async function submitOrder(
  * accepted it — the same rule the security rules enforce for direct writes.
  */
 export async function setOrderStatus(
-  caller: { uid: string; role?: string },
+  caller: RestaurantCaller,
   orderId: unknown,
   status: unknown,
   note?: unknown
@@ -304,7 +308,7 @@ export async function setOrderStatus(
     if (!snap.exists) throw new HttpError(404, "That order does not exist.");
     const order = snap.data() as Order;
 
-    const isStaff = caller.role === "admin" || caller.role === "restaurant";
+    const isStaff = authorizeRestaurantStaff(caller, order.restaurantId, RESTAURANT_ID);
     if (!isStaff) {
       if (order.userId !== caller.uid) throw new HttpError(404, "That order does not exist.");
       if (next !== "cancelled") throw new HttpError(403, "You can only cancel your own week.");

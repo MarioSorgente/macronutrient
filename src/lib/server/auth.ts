@@ -23,6 +23,36 @@ export class HttpError extends Error {
   }
 }
 
+export interface RestaurantCaller {
+  uid: string;
+  role?: string;
+  rid?: string;
+}
+
+/**
+ * Whether a verified caller may act as staff for a restaurant-owned resource.
+ *
+ * Admins have the product's global scope. Restaurant accounts are deliberately
+ * narrower: both their claim and the stored resource must belong to the
+ * configured restaurant. A restaurant claim that misses any part of that
+ * match is an attempted staff action, not a customer action, and is rejected.
+ */
+export function authorizeRestaurantStaff(
+  caller: RestaurantCaller,
+  resourceRestaurantId: unknown,
+  configuredRestaurantId: string
+): boolean {
+  if (caller.role === "admin") return true;
+  if (caller.role !== "restaurant") return false;
+  if (
+    caller.rid !== configuredRestaurantId ||
+    resourceRestaurantId !== configuredRestaurantId
+  ) {
+    throw new HttpError(403, "You cannot manage orders for this restaurant.");
+  }
+  return true;
+}
+
 /** Reads a bearer token, or nothing. */
 function bearer(request: Request): string | null {
   const header = request.headers.get("authorization") ?? "";
