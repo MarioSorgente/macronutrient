@@ -339,6 +339,22 @@ describe("4c. prep tasks are the kitchen's, and the meal is not theirs to rewrit
 });
 
 describe("5. staff access is scoped to their own restaurant", () => {
+  it("denies restaurant staff mutating root configuration", async () => {
+    await seed(`restaurants/${RID}`, { id: RID, acceptingOrders: true });
+    await assertFails(updateDoc(doc(db("staff", claims.restaurant), `restaurants/${RID}`), {
+      acceptingOrders: false,
+    }));
+  });
+
+  it("allows only an admin scoped to the restaurant to mutate configuration", async () => {
+    await seed(`restaurants/${RID}`, { id: RID, acceptingOrders: true });
+    await assertSucceeds(updateDoc(doc(db("admin", claims.admin), `restaurants/${RID}`), {
+      acceptingOrders: false,
+    }));
+    await assertFails(updateDoc(doc(db("outside-admin", { role: "admin", rid: "someone-else" }), `restaurants/${RID}`), {
+      acceptingOrders: false,
+    }));
+  });
   it("denies a restaurant claim carrying a different rid", async () => {
     // The multi-tenant promise in the README depends on this holding.
     await seed(`restaurants/${RID}/prepTasks/t1`, prepTaskDoc());

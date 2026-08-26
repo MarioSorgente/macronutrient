@@ -20,6 +20,7 @@ service cloud.firestore {
     function claims()       { return request.auth.token; }
     function roleIs(r)      { return signedIn() && claims().role == r; }
     function isAdmin()      { return roleIs('admin'); }
+    function isAdminOf(rid) { return isAdmin() && claims().rid == rid; }
     function isSelf(userId) { return signedIn() && uid() == userId; }
     function isStaffOf(rid) {
       return isAdmin() || (roleIs('restaurant') && claims().rid == rid);
@@ -31,7 +32,9 @@ service cloud.firestore {
     // ---------- restaurant: public menu data ----------
     match /restaurants/{rid} {
       allow read:  if true;
-      allow write: if isStaffOf(rid);
+      // The root is operational configuration, not staff-managed restaurant
+      // data. Admins may use it only inside the tenant named by their claim.
+      allow write: if isAdminOf(rid);
 
       // Requests and their review are server-only. The Admin SDK verifies the
       // caller and bypasses rules; browsers cannot forge or approve one.

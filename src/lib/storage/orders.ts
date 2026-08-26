@@ -215,12 +215,9 @@ async function fetchRestaurantConfig(): Promise<RestaurantConfig> {
 export async function saveRestaurantConfig(
   config: RestaurantConfig
 ): Promise<void> {
-  const { db, doc, setDoc } = await firestore();
-  await setDoc(
-    doc(db, "restaurants", RESTAURANT_ID),
-    { ...config, updatedAt: new Date().toISOString() },
-    { merge: true }
-  );
+  requireCloud("Saving restaurant settings");
+  const { callApi } = await import("@/lib/api");
+  await callApi("/api/admin/restaurant-config", config);
   invalidateRestaurantConfig();
 }
 
