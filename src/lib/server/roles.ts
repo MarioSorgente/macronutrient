@@ -26,6 +26,7 @@ import type { Role } from "@/lib/storage/types";
  */
 
 export const ROLES: Role[] = ["client", "restaurant", "admin"];
+type AdminGrantSource = "allowlist" | "manual";
 
 function onAllowlist(email: string | undefined): boolean {
   if (!email) return false;
@@ -45,7 +46,10 @@ function onAllowlist(email: string | undefined): boolean {
  * verified. Only the admin path is gated — an ordinary sign-up is a `client`
  * either way.
  */
-export function mayBecomeAdmin(email: string | undefined, verified: boolean): boolean {
+export function mayBecomeAdmin(
+  email: string | undefined,
+  verified: boolean,
+): boolean {
   return verified && onAllowlist(email);
 }
 
@@ -63,48 +67,94 @@ export interface SyncResult {
  */
 export async function syncAccount(user: UserRecord): Promise<SyncResult> {
   const current = (user.customClaims?.role as Role | undefined) ?? null;
+  const profileRef = adminDb().doc(`users/${user.uid}`);
+  const profile = await profileRef.get();
+  const recordedSource = (user.customClaims?.roleSource ??
+    profile.data()?.roleSource) as AdminGrantSource | undefined;
+  // Admin claims created before roleSource existed were necessarily assigned
+  // through an administrative path. Treating them as manual is the safe,
+  // backwards-compatible migration: only grants we positively identify as
+  // allowlist grants are governed by later allowlist changes.
+  const source: AdminGrantSource | undefined =
+    current === "admin" ? (recordedSource ?? "manual") : undefined;
+  const eligible = mayBecomeAdmin(user.email, user.emailVerified);
 
-  // An existing staff role is never downgraded here. Only an admin, through
-  // setRole, decides that — otherwise a restaurant account would be demoted
-  // to client every time its owner signed in.
-  const target: Role = mayBecomeAdmin(user.email, user.emailVerified)
+  // The allowlist is authoritative only for grants it made. A manually granted
+  // admin remains an admin, while an ineligible allowlist bootstrap returns to
+  // the deliberately safe client role.
+  const target: Role = eligible
     ? "admin"
-    : current ?? "client";
+    : current === "admin" && source === "allowlist"
+      ? "client"
+      : (current ?? "client");
+  const targetSource: AdminGrantSource | null =
+    target === "admin" ? (source === "manual" ? "manual" : "allowlist") : null;
 
-  const changed = current !== target || user.customClaims?.rid !== RESTAURANT_ID;
+  if (current === "admin" && source === "allowlist" && target !== "admin") {
+    const otherAdmins = await adminDb()
+      .collection("users")
+      .where("role", "==", "admin")
+      .limit(2)
+      .get();
+    if (!otherAdmins.docs.some((doc) => doc.id !== user.uid)) {
+      throw new HttpError(
+        409,
+        "This is the last owner. Add and verify another allowlisted owner, or manually grant another admin before removing this address.",
+      );
+    }
+  }
+
+  const changed =
+    current !== target ||
+    user.customClaims?.rid !== RESTAURANT_ID ||
+    (user.customClaims?.roleSource ?? null) !== targetSource;
+  const now = new Date().toISOString();
+  const roleMirror = {
+    role: target,
+    roleSource: targetSource,
+    rid: RESTAURANT_ID,
+    updatedAt: now,
+    ...(changed ? { roleUpdatedAt: now } : {}),
+  };
+
+  // On revocation, hide authority from the UI before invalidating the claim.
+  // On promotion, do the reverse so the UI never advertises authority that the
+  // token does not yet possess. Firebase cannot transact Auth and Firestore,
+  // so this ordering intentionally fails closed at the presentation boundary.
+  if (changed && current === "admin" && target !== "admin") {
+    await profileRef.set(roleMirror, { merge: true });
+  }
   if (changed) {
     await adminAuth().setCustomUserClaims(user.uid, {
       role: target,
       rid: RESTAURANT_ID,
+      ...(targetSource ? { roleSource: targetSource } : {}),
     });
   }
 
-  const now = new Date().toISOString();
-  await adminDb()
-    .doc(`users/${user.uid}`)
-    .set(
-      {
-        uid: user.uid,
-        email: user.email ?? "",
-        displayName:
-          user.displayName ?? user.email?.split("@")[0] ?? "",
-        ...(user.photoURL ? { photoURL: user.photoURL } : {}),
-        role: target,
-        rid: RESTAURANT_ID,
-        signupMethod:
-          user.providerData[0]?.providerId === "google.com" ? "google" : "password",
-        // Only stamped the first time; a merge leaves an existing value alone
-        // only if we do not send it, so it is set on create via the metadata.
-        createdAt: user.metadata.creationTime
-          ? new Date(user.metadata.creationTime).toISOString()
-          : now,
-        updatedAt: now,
-        // Watched by the client to force a token refresh, so a change lands in
-        // seconds rather than at the end of the token's hour.
-        ...(changed ? { roleUpdatedAt: now } : {}),
-      },
-      { merge: true }
-    );
+  await profileRef.set(
+    {
+      uid: user.uid,
+      email: user.email ?? "",
+      displayName: user.displayName ?? user.email?.split("@")[0] ?? "",
+      ...(user.photoURL ? { photoURL: user.photoURL } : {}),
+      ...roleMirror,
+      signupMethod:
+        user.providerData[0]?.providerId === "google.com"
+          ? "google"
+          : "password",
+      // Only stamped the first time; a merge leaves an existing value alone
+      // only if we do not send it, so it is set on create via the metadata.
+      createdAt: user.metadata.creationTime
+        ? new Date(user.metadata.creationTime).toISOString()
+        : now,
+      updatedAt: now,
+      // Watched by the client to force a token refresh, so a change lands in
+      // seconds rather than at the end of the token's hour.
+      ...(changed ? { roleUpdatedAt: now } : {}),
+    },
+    { merge: true },
+  );
 
   return { role: target, changed };
 }
@@ -116,7 +166,7 @@ export async function stampSignIn(uid: string): Promise<void> {
     .doc(`users/${uid}`)
     .set(
       { lastLoginAt: now, loginCount: FieldValue.increment(1), updatedAt: now },
-      { merge: true }
+      { merge: true },
     );
 }
 
@@ -126,7 +176,7 @@ export async function stampSignIn(uid: string): Promise<void> {
 export async function setRole(
   callerUid: string,
   uid: unknown,
-  role: unknown
+  role: unknown,
 ): Promise<{ uid: string; role: Role }> {
   if (typeof uid !== "string" || !uid || !ROLES.includes(role as Role)) {
     throw new HttpError(400, "Pass a uid and a valid role.");
@@ -139,23 +189,31 @@ export async function setRole(
   await adminAuth().setCustomUserClaims(uid, {
     role: role as Role,
     rid: RESTAURANT_ID,
+    ...((role as Role) === "admin" ? { roleSource: "manual" } : {}),
   });
 
   const now = new Date().toISOString();
   const db = adminDb();
   const profileRef = db.doc(`users/${uid}`);
   const requestRef = db.doc(
-    `restaurants/${RESTAURANT_ID}/staffRequests/${uid}`
+    `restaurants/${RESTAURANT_ID}/staffRequests/${uid}`,
   );
   await db.runTransaction(async (transaction) => {
     // Read before writing so the profile mirror and any pending application
     // are resolved atomically. A role grant must never revive a rejected (or
     // otherwise already reviewed) request.
-    const request = role === "client" ? null : await transaction.get(requestRef);
+    const request =
+      role === "client" ? null : await transaction.get(requestRef);
     transaction.set(
       profileRef,
-      { role, rid: RESTAURANT_ID, roleUpdatedAt: now, updatedAt: now },
-      { merge: true }
+      {
+        role,
+        roleSource: role === "admin" ? "manual" : null,
+        rid: RESTAURANT_ID,
+        roleUpdatedAt: now,
+        updatedAt: now,
+      },
+      { merge: true },
     );
 
     if (request?.data()?.status === "pending") {
