@@ -41,6 +41,7 @@ import { ZERO_PRICE } from "@/lib/pricing";
 import { loadCurrentPlan, savePlan } from "@/lib/currentPlan";
 import type { GeneratedDay } from "@/lib/mealPlanner";
 import { assignmentsFromGenerated } from "@/lib/planAssignments";
+import { withRenamedSlots } from "@/lib/planSlots";
 import { menuRecipeForDish, planWithMenuIdentity } from "@/lib/menuIdentity";
 import { negritaMenuCandidate } from "@/lib/plannerCandidates";
 import { GRAM_UNIT_ID, type MenuRecipe } from "@/types/nutrition";
@@ -92,6 +93,10 @@ export default function WeekPlanner() {
   // callbacks may be observed on different renders, so only that change is
   // allowed to decide the error message shown for the current plan.
   const latestSave = useRef(0);
+  // Mutation callbacks must never derive from a render's potentially stale
+  // `plan`. This ref advances synchronously with every optimistic edit, before
+  // React has had a chance to render it.
+  const optimisticPlan = useRef<Plan | null>(null);
   const saving = savesInFlight > 0;
   /**
    * Which account the plan on screen was loaded for. A token expiry or a sign-out
@@ -122,6 +127,7 @@ export default function WeekPlanner() {
       .then((loaded) => {
         if (!active) return;
         loadedFor.current = repos.uid;
+        optimisticPlan.current = loaded;
         setClient(loaded);
         setSaveError(null);
         // The plan is self-contained: assignment snapshots and inline items
@@ -231,18 +237,25 @@ export default function WeekPlanner() {
    * Returns whether the write landed, so callers that should not move on until
    * it has (applying a whole generated week) can wait for it.
    */
-  const persist = useCallback(async (next: Plan): Promise<boolean> => {
+  const persist = useCallback(async (update: (current: Plan) => Plan): Promise<boolean> => {
     if (loadedFor.current !== repos.uid) {
       setSaveError("You are signed in as someone else now. Reload to keep editing.");
       return false;
     }
+    const current = optimisticPlan.current;
+    if (!current) return false;
+    const next = update(current);
+    optimisticPlan.current = next;
     setClient(next);
     const saveNumber = ++latestSave.current;
     setSavesInFlight((count) => count + 1);
     setSaveError(null);
     try {
       const stored = await savePlan(repos.plans, repos.uid, next);
-      setClient((current) => (current === next ? stored : current));
+      if (optimisticPlan.current === next) {
+        optimisticPlan.current = stored;
+        setClient(stored);
+      }
       if (latestSave.current === saveNumber) setSaveError(null);
       return true;
     } catch (cause) {
@@ -274,7 +287,7 @@ export default function WeekPlanner() {
       snapshot: { name: dish.name, totals: sumDishMacros(dish.items) },
       ...(asMenuDish ? { menuRecipeId: asMenuDish.recipe_id } : {}),
     };
-    void persist({ ...plan, assignments: [...plan.assignments, assignment] });
+    void persist((current) => ({ ...current, assignments: [...current.assignments, assignment] }));
     setAssigning(null);
   }
 
@@ -304,7 +317,7 @@ export default function WeekPlanner() {
       snapshot: { name: candidate.displayName, totals: candidate.optimizerMacros },
       menuRecipeId: recipe.recipe_id,
     };
-    void persist({ ...plan, assignments: [...plan.assignments, assignment] });
+    void persist((current) => ({ ...current, assignments: [...current.assignments, assignment] }));
     setAssigning(null);
   }
 
@@ -350,7 +363,7 @@ export default function WeekPlanner() {
       snapshot: { name, totals },
       ...(dishId ? { dishId } : {}),
     };
-    void persist({ ...plan, assignments: [...plan.assignments, assignment] });
+    void persist((current) => ({ ...current, assignments: [...current.assignments, assignment] }));
     setAssigning(null);
   }
 
@@ -363,32 +376,32 @@ export default function WeekPlanner() {
    */
   function clearWeek() {
     if (!plan) return;
-    void persist({
-      ...plan,
-      assignments: plan.assignments.filter((a) => a.week !== currentWeekSafe),
-    });
+    void persist((current) => ({
+      ...current,
+      assignments: current.assignments.filter((a) => a.week !== currentWeekSafe),
+    }));
     setOpenMealId(null);
   }
 
   function unassign(assignmentId: string) {
     if (weekLocked) return;
     if (!plan) return;
-    void persist({
-      ...plan,
-      assignments: plan.assignments.filter((a) => a.id !== assignmentId),
-    });
+    void persist((current) => ({
+      ...current,
+      assignments: current.assignments.filter((a) => a.id !== assignmentId),
+    }));
     setOpenMealId(null);
   }
 
   /** Applies a patch to one assignment and saves. */
   function updateAssignment(assignmentId: string, patch: Partial<Assignment>) {
     if (!plan || weekLocked) return;
-    void persist({
-      ...plan,
-      assignments: plan.assignments.map((a) =>
+    void persist((current) => ({
+      ...current,
+      assignments: current.assignments.map((a) =>
         a.id === assignmentId ? { ...a, ...patch } : a
       ),
-    });
+    }));
   }
 
   /** Writes a generated week into the plan as inline meals. */
@@ -402,10 +415,6 @@ export default function WeekPlanner() {
   ): Promise<boolean> {
     // The kitchen already has this week; a generated one could never reach it.
     if (!plan || weekLocked) return false;
-    const kept = replace
-      ? plan.assignments.filter((a) => a.week !== currentWeekSafe)
-      : [...plan.assignments];
-
     const additions = assignmentsFromGenerated(generated, currentWeekSafe);
 
     // Tastes are remembered with the plan, so the next generation starts from
@@ -416,9 +425,12 @@ export default function WeekPlanner() {
     // The one write worth waiting for: twenty-odd assignments, the resolved
     // target and the preferences, all at once. The dialog stays open if it
     // fails, so the generated week is still in hand rather than lost.
-    const saved = await persist({ ...plan, preferences, targets: resolvedTarget,
+    const saved = await persist((current) => ({ ...current, preferences, targets: resolvedTarget,
       targetMode, ...(targetMode === "preset" ? { targetPreset } : { targetPreset: undefined }),
-      assignments: [...kept, ...additions] });
+      assignments: [
+        ...(replace ? current.assignments.filter((a) => a.week !== currentWeekSafe) : current.assignments),
+        ...additions,
+      ] }));
     if (saved) setGenerateOpen(false);
     return saved;
   }
@@ -492,7 +504,7 @@ export default function WeekPlanner() {
           <span className="min-w-0 flex-1 font-600">{saveError}</span>
           <button
             type="button"
-            onClick={() => void persist(plan)}
+            onClick={() => void persist((current) => current)}
             disabled={saving}
             className="rounded-lg bg-tomato px-3 py-1.5 text-xs font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
           >
@@ -622,7 +634,7 @@ export default function WeekPlanner() {
             <button
               type="button"
               onClick={() =>
-                void persist({ ...plan, weekCount: plan.weekCount + 1 })
+                void persist((current) => ({ ...current, weekCount: current.weekCount + 1 }))
               }
               className="flex items-center gap-1 rounded-xl border border-dashed border-cream-deep px-2.5 py-2 text-sm font-600 text-charcoal-soft hover:border-tomato-soft hover:text-charcoal"
               aria-label="Add week"
@@ -755,8 +767,8 @@ export default function WeekPlanner() {
           savedDishes={dishes}
           onApply={applyGenerated}
           onTargetsSave={async (selection) => {
-            await persist({ ...plan, targets: selection.targets, targetMode: selection.mode,
-              ...(selection.mode === "preset" ? { targetPreset: selection.preset } : { targetPreset: undefined }) });
+            await persist((current) => ({ ...current, targets: selection.targets, targetMode: selection.mode,
+              ...(selection.mode === "preset" ? { targetPreset: selection.preset } : { targetPreset: undefined }) }));
           }}
           onClose={() => setGenerateOpen(false)}
         />
@@ -764,8 +776,8 @@ export default function WeekPlanner() {
 
       {targetsOpen && (
         <MacroTargetDialog plan={plan} onSave={async (selection) => {
-          await persist({ ...plan, targets: selection.targets, targetMode: selection.mode,
-            ...(selection.mode === "preset" ? { targetPreset: selection.preset } : { targetPreset: undefined }) });
+          await persist((current) => ({ ...current, targets: selection.targets, targetMode: selection.mode,
+            ...(selection.mode === "preset" ? { targetPreset: selection.preset } : { targetPreset: undefined }) }));
           setTargetsOpen(false);
         }} onClose={() => setTargetsOpen(false)} />
       )}
@@ -774,7 +786,25 @@ export default function WeekPlanner() {
         <PlanSettings
           plan={plan}
           onSave={async (next) => {
-            await persist(next);
+            const previousSlots = new Map(plan.assignments.map((assignment) => [
+              assignment.id, assignment.slot,
+            ]));
+            const renames = new Map<string, string>();
+            for (const assignment of next.assignments) {
+              const previous = previousSlots.get(assignment.id);
+              if (previous && previous !== assignment.slot) {
+                renames.set(previous, assignment.slot);
+              }
+            }
+            await persist((current) => ({
+              ...current,
+              title: next.title,
+              notes: next.notes,
+              programStartDate: next.programStartDate,
+              weekCount: next.weekCount,
+              mealSlots: next.mealSlots,
+              assignments: withRenamedSlots(current.assignments, renames),
+            }));
             setSettingsOpen(false);
           }}
           onClose={() => setSettingsOpen(false)}

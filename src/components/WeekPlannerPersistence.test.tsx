@@ -159,6 +159,30 @@ describe("an applied week survives leaving the page", () => {
     expect(weekCount()).toBe(21);
   });
 
+  it("composes edits made while the first save is still pending", async () => {
+    await mountPlanner();
+    const writesBeforeEdits = backing.saves.length;
+    let release!: () => void;
+    backing.state.hold = new Promise<void>((resolve) => { release = resolve; });
+
+    fireEvent.click(screen.getByLabelText("Add week"));
+    await act(async () => { fireEvent.click(screen.getByText("Auto-fill my week")); });
+    await act(async () => { fireEvent.click(screen.getByText("apply generated week")); });
+
+    // Both optimistic changes are visible even though neither repository write
+    // has completed yet.
+    expect(screen.getByText("Week 5")).toBeDefined();
+    expect(weekCount()).toBe(21);
+
+    backing.state.hold = null;
+    await act(async () => { release(); });
+    await vi.waitFor(() => expect(backing.saves).toHaveLength(writesBeforeEdits + 2));
+
+    const finalWrite = backing.saves.at(-1);
+    expect(finalWrite?.weekCount).toBe(5);
+    expect(finalWrite?.assignments).toHaveLength(21);
+  });
+
   it("survives a reload, with its target and preferences", async () => {
     await mountPlanner();
     await applyWeek();
