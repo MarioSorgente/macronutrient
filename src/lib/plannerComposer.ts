@@ -1,6 +1,6 @@
 import { GRAM_UNIT_ID, type DiySection, type Ingredient, type Macros,
   type PlannerCandidate } from "@/types/nutrition";
-import { diyMenu, getIngredient } from "@/lib/database";
+import { getIngredient, nutritionCatalog } from "@/lib/database";
 import { perItemMacros } from "@/lib/calc";
 import { quantitiesNearResidual } from "@/lib/diyQuantities";
 import { macroDistance } from "@/lib/macroFit";
@@ -100,7 +100,7 @@ function diyLines(): DiyLine[] {
   if (diyLineCache) return diyLineCache;
   const seen = new Set<string>();
   const lines: DiyLine[] = [];
-  for (const item of diyMenu) {
+  for (const item of nutritionCatalog.diyMenu) {
     const key = `${item.section}:${item.ingredient_id}`;
     if (seen.has(key)) continue;
     seen.add(key);

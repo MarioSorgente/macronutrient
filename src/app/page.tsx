@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import BrandHeader from "@/components/BrandHeader";
 import LandingCtas from "@/components/LandingCtas";
-import { databaseMeta, ingredients, menuRecipes } from "@/lib/database";
+import { databaseMeta, nutritionCatalog } from "@/lib/database";
 
 /**
  * Public landing page.
@@ -51,9 +51,7 @@ const STEPS = [
  * of the catalogue is USDA-verified, and the remainder is *flagged* as an
  * estimate in the UI rather than quietly presented as fact.
  */
-const VERIFIED_COUNT = ingredients.filter(
-  (i) => i.source_status === "verified_usda"
-).length;
+const VERIFIED_COUNT = nutritionCatalog.counts.verifiedIngredients;
 
 const PROOF = [
   {
@@ -139,7 +137,7 @@ export default function LandingPage() {
             </h2>
             <p className="mt-3 leading-relaxed text-charcoal-soft">
               Most macro apps guess, and never tell you when they are guessing.
-              Here, {VERIFIED_COUNT} of the {ingredients.length} ingredients
+              Here, {VERIFIED_COUNT} of the {nutritionCatalog.counts.ingredients} ingredients
               Negrita cooks with are verified against USDA FoodData Central. The
               rest are marked <b className="text-gold">est</b> everywhere they
               appear, so you always know which numbers are solid.
@@ -158,7 +156,7 @@ export default function LandingPage() {
                   Ingredients
                 </dt>
                 <dd className="font-display text-2xl font-700 tabular-nums text-tomato">
-                  {ingredients.length}
+                  {nutritionCatalog.counts.ingredients}
                 </dd>
               </div>
               <div>
@@ -166,7 +164,7 @@ export default function LandingPage() {
                   Menu dishes
                 </dt>
                 <dd className="font-display text-2xl font-700 tabular-nums text-tomato">
-                  {menuRecipes.length}
+                  {nutritionCatalog.counts.menuRecipes}
                 </dd>
               </div>
             </dl>

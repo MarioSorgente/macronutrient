@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { AlertTriangle } from "lucide-react";
-import { categoryLabel, menuNotes, menuRecipes } from "@/lib/database";
+import { categoryLabel, menuNotes, nutritionCatalog } from "@/lib/database";
 import { formatIdr } from "@/lib/pricing";
 import type { MenuRecipe } from "@/types/nutrition";
 
@@ -26,7 +26,7 @@ export default function MenuDishList({
 }) {
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const filtered = menuRecipes.filter((recipe) =>
+    const filtered = nutritionCatalog.menuRecipes.filter((recipe) =>
       q ? recipe.name.toLowerCase().includes(q) : true
     );
     const map = new Map<string, MenuRecipe[]>();

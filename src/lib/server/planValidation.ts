@@ -1,4 +1,4 @@
-import { ingredients, menuRecipes } from "@/lib/database";
+import { nutritionCatalog } from "@/lib/database";
 import { assignmentPrice } from "@/lib/clients";
 import type { Dish, DishItem, OrderDay, Plan } from "@/lib/storage/types";
 import { HttpError } from "@/lib/server/auth";
@@ -10,8 +10,7 @@ const MAX_GRAMS = 100_000;
 const MAX_QUANTITY = 100_000;
 const MAX_MACRO = 1_000_000;
 const MAX_PRICE_IDR = 1_000_000_000;
-const ingredientIds = new Set(ingredients.map((item) => item.ingredient_id));
-const menuRecipeIds = new Set(menuRecipes.map((recipe) => recipe.recipe_id));
+const { ingredientIds, menuRecipeIds } = nutritionCatalog;
 const macroKeys = ["energy_kcal", "protein_g", "carbs_g", "fat_g", "fiber_g"] as const;
 
 function bad(detail: string): never {
