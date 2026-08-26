@@ -4,8 +4,8 @@ import { setOrderStatus } from "@/lib/server/orders";
 
 /**
  * Moves an order through its lifecycle, clearing the kitchen's board when it
- * dies. Staff may make any transition; a customer may only cancel their own
- * week, and only before the kitchen has accepted it.
+ * dies. Staff follow the kitchen lifecycle; a customer may only cancel their
+ * own submitted week.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -16,6 +16,7 @@ import {
 import { cutoffState } from "@/lib/cutoff";
 import { byId } from "@/lib/clients";
 import { planWithMenuIdentity } from "@/lib/menuIdentity";
+import { isOrderTransitionAllowed } from "@/lib/orderLifecycle";
 import {
   buildOrderDays,
   fulfilmentProblems,
@@ -312,12 +313,13 @@ export async function setOrderStatus(
     if (!isStaff) {
       if (order.userId !== caller.uid) throw new HttpError(404, "That order does not exist.");
       if (next !== "cancelled") throw new HttpError(403, "You can only cancel your own week.");
-      if (order.status !== "submitted") {
-        throw new HttpError(
-          409,
-          "The kitchen has already started this week, so it can no longer be cancelled."
-        );
-      }
+    }
+
+    if (!isOrderTransitionAllowed(order.status, next, isStaff ? "staff" : "client")) {
+      throw new HttpError(
+        409,
+        `An order cannot move from ${order.status} to ${next}.`
+      );
     }
 
     const becomingDead = DEAD.includes(next) && !DEAD.includes(order.status);
