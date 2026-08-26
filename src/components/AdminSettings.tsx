@@ -183,10 +183,16 @@ export default function AdminSettings() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-700 text-charcoal">{request.displayName || request.email}</p>
                   <p className="truncate text-xs text-charcoal-soft">{request.email}</p>
-                  <p className={`mt-1 text-xs font-600 ${request.emailVerified ? "text-basil" : "text-tomato-dark"}`}>{request.emailVerified ? "Email verified" : "Email not verified"}</p>
+                  <p className={`mt-1 text-xs font-600 ${request.emailVerified ? "text-basil" : "text-tomato-dark"}`}>
+                    {request.accountState === "unavailable"
+                      ? request.accountUnavailableReason === "user-not-found"
+                        ? "Account deleted — reject this stale request"
+                        : "Account unavailable — request data is invalid"
+                      : request.emailVerified ? "Email verified" : "Email not verified"}
+                  </p>
                 </div>
                 <Button variant="danger" onClick={() => reviewRequest(request.uid, "reject")}>Reject</Button>
-                <Button variant="primary" disabled={!request.emailVerified} title={!request.emailVerified ? "Email must be verified first" : undefined} onClick={() => reviewRequest(request.uid, "approve")}>Approve</Button>
+                <Button variant="primary" disabled={!request.emailVerified || request.accountState === "unavailable"} title={request.accountState === "unavailable" ? "This request has no available account" : !request.emailVerified ? "Email must be verified first" : undefined} onClick={() => reviewRequest(request.uid, "approve")}>Approve</Button>
               </li>
             ))}
           </ul>

@@ -185,6 +185,10 @@ export interface StaffAccessRequest {
   reviewOperationId?: string;
   /** Role the approval operation must apply when it is resumed. */
   intendedRole?: Role;
+  /** Result of reconciling a pending request with its Firebase Auth account. */
+  accountState?: "available" | "unavailable";
+  /** Why an unavailable request cannot be approved, while it remains rejectable. */
+  accountUnavailableReason?: "user-not-found" | "malformed-request";
 }
 
 export interface UserProfile extends Entity {
