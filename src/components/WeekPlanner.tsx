@@ -40,7 +40,7 @@ import { EMPTY_MACROS, scaleMacros, sumDishMacros } from "@/lib/calc";
 import { ZERO_PRICE } from "@/lib/pricing";
 import { loadCurrentPlan, savePlan } from "@/lib/currentPlan";
 import type { GeneratedDay } from "@/lib/mealPlanner";
-import { assignmentsFromGenerated } from "@/lib/planAssignments";
+import { assignmentsFromGenerated, occupiedSlots } from "@/lib/planAssignments";
 import { withRenamedSlots } from "@/lib/planSlots";
 import { menuRecipeForDish, planWithMenuIdentity } from "@/lib/menuIdentity";
 import { negritaMenuCandidate } from "@/lib/plannerCandidates";
@@ -393,6 +393,29 @@ export default function WeekPlanner() {
     setOpenMealId(null);
   }
 
+  /**
+   * Moves a planned meal to another day or slot.
+   *
+   * Deliberately unrestricted by meal time: dragging a breakfast onto Dinner is
+   * a decision, the same way choosing one from the add-dish dialog is. The
+   * generator is what has opinions about when a dish belongs.
+   */
+  function moveAssignment(assignmentId: string, toDay: number, toSlot: string) {
+    if (weekLocked) return;
+    // The ref rather than `plan`: it advances synchronously with every
+    // optimistic edit, so a second drag started before the first save lands
+    // still sees where the first one put things.
+    const current = optimisticPlan.current;
+    if (!current) return;
+    // A slot that is not on the plan would strand the meal: every screen finds
+    // meals by matching this string against `plan.mealSlots`, and the server
+    // rejects the plan outright.
+    if (!current.mealSlots.includes(toSlot)) return;
+    const meal = current.assignments.find((a) => a.id === assignmentId);
+    if (!meal || (meal.day === toDay && meal.slot === toSlot)) return;
+    updateAssignment(assignmentId, { day: toDay, slot: toSlot });
+  }
+
   /** Applies a patch to one assignment and saves. */
   function updateAssignment(assignmentId: string, patch: Partial<Assignment>) {
     if (!plan || weekLocked) return;
@@ -415,7 +438,6 @@ export default function WeekPlanner() {
   ): Promise<boolean> {
     // The kitchen already has this week; a generated one could never reach it.
     if (!plan || weekLocked) return false;
-    const additions = assignmentsFromGenerated(generated, currentWeekSafe);
 
     // Tastes are remembered with the plan, so the next generation starts from
     // what you already told the generator — and so is the target the week was
@@ -429,7 +451,17 @@ export default function WeekPlanner() {
       targetMode, ...(targetMode === "preset" ? { targetPreset } : { targetPreset: undefined }),
       assignments: [
         ...(replace ? current.assignments.filter((a) => a.week !== currentWeekSafe) : current.assignments),
-        ...additions,
+        // Built from `current`, not from the render's plan: keeping the existing
+        // week means filling what is empty, and what is empty has to be read at
+        // the moment of the write. Otherwise a meal added while the dialog was
+        // open gets a second one stacked into its slot.
+        // A meal whose slot is not on the plan would be invisible on every
+        // screen and is rejected by the server outright, taking the whole save
+        // with it. The generator falls back to a slot called "Meal" when it is
+        // given none, so this is the guard that keeps the write valid.
+        ...assignmentsFromGenerated(generated, currentWeekSafe,
+          replace ? undefined : occupiedSlots(current.assignments, currentWeekSafe))
+          .filter((assignment) => current.mealSlots.includes(assignment.slot)),
       ] }));
     if (saved) setGenerateOpen(false);
     return saved;
@@ -690,6 +722,7 @@ export default function WeekPlanner() {
           onSelectDay={setDay}
           onOpenMeal={(a) => setOpenMealId(a.id)}
           onAddMeal={(d, slot) => setAssigning({ day: d, slot })}
+          onMoveMeal={moveAssignment}
           locked={weekLocked}
         />
       ) : (
@@ -702,6 +735,7 @@ export default function WeekPlanner() {
             showPrices={showPrices}
             onOpenMeal={(a) => setOpenMealId(a.id)}
             onAddMeal={(d, slot) => setAssigning({ day: d, slot })}
+            onMoveMeal={moveAssignment}
             locked={weekLocked}
           />
 
@@ -738,6 +772,9 @@ export default function WeekPlanner() {
           onChangeServings={(servings) =>
             updateAssignment(openMeal.id, { servings })
           }
+          mealSlots={plan.mealSlots}
+          dayNames={DAY_NAMES}
+          onMove={(day, slot) => moveAssignment(openMeal.id, day, slot)}
           locked={weekLocked}
           onRemove={() => unassign(openMeal.id)}
           onClose={() => setOpenMealId(null)}

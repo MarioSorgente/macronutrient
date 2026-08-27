@@ -16,7 +16,13 @@
  * European breakfast. Rice and sweet potato stay neutral.
  */
 
-export type SlotKind = "breakfast" | "main" | "snack";
+import { kindOfMealTime, namedMealTime, slotKindOf, type MealTime,
+  type SlotKind } from "@/lib/mealTime";
+
+// Slot kind is defined once, in mealTime, and re-exported here so the existing
+// importers of this module keep working.
+export { slotKindOf };
+export type { SlotKind };
 
 /** Stable, machine-readable outcomes for hard slot eligibility. */
 export type SlotEligibilityReason =
@@ -36,18 +42,17 @@ export interface SlotEligibilityResult {
 
 export interface SlotEligibilityInput {
   slot: string;
+  /**
+   * The meal time the slot stands for, when the caller knows where the slot
+   * sits in the day. Without it the name is all there is, and an unrecognised
+   * name has to be guessed at.
+   */
+  mealTime?: MealTime;
   name?: string;
   /** Normalized/curated classification, when the catalog has one. */
   mealArchetype?: string;
   eligibleMealTypes?: string[];
   ingredients?: Array<{ ingredientId: string; name?: string; grams?: number }>;
-}
-
-export function slotKindOf(slot: string): SlotKind {
-  const name = slot.toLowerCase();
-  if (/breakfast|brunch|morning/.test(name)) return "breakfast";
-  if (/snack|shake|pre-?workout|post-?workout|dessert/.test(name)) return "snack";
-  return "main";
 }
 
 /**
@@ -139,14 +144,16 @@ const BREAKFAST_MAIN_WORDS =
   /chicken breast|chicken plate|steak plate|peri.?peri chicken|teriyaki chicken|kebab|kofta|wagyu|curry|rendang|satay/i;
 const SNACK_WORDS = /snack|shake|smoothie|yogurt|fruit|banana|toast|bread/i;
 
-function requestedMealType(slot: string): string {
-  const lower = slot.toLowerCase();
-  if (/breakfast|brunch|morning/.test(lower)) return "breakfast";
-  if (/snack/.test(lower)) return "snack";
-  if (/pre-?workout/.test(lower)) return "pre-workout";
-  if (/post-?workout/.test(lower)) return "post-workout";
-  if (/lunch/.test(lower)) return "lunch";
-  return "dinner";
+/**
+ * The meal time a slot stands for, from its name alone.
+ *
+ * Only a fallback now. Defaulting an unrecognised name to dinner was the worst
+ * of both outcomes — a slot called "Meal 1" admitted every dinner main *and*
+ * barred every breakfast dish — so callers that know the slot's position pass
+ * `mealTime` instead and never reach this.
+ */
+function requestedMealType(slot: string): MealTime {
+  return namedMealTime(slot) ?? "dinner";
 }
 
 /**
@@ -156,8 +163,8 @@ function requestedMealType(slot: string): string {
  * never turn an otherwise appropriate meal into an ineligible one.
  */
 export function mealSlotEligibility(input: SlotEligibilityInput): SlotEligibilityResult {
-  const kind = slotKindOf(input.slot);
-  const requested = requestedMealType(input.slot);
+  const kind = input.mealTime ? kindOfMealTime(input.mealTime) : slotKindOf(input.slot);
+  const requested = input.mealTime ?? requestedMealType(input.slot);
   const classified = input.eligibleMealTypes?.map((type) => type.toLowerCase());
   if (classified?.length) {
     if (classified.includes(requested) ||
@@ -291,12 +298,20 @@ const SECTION_KIND: Record<string, SlotKind> = {
  */
 export function sectionSlotPenalty(
   section: string | undefined,
-  slot: string
+  slot: string,
+  eligibleMealTypes?: string[],
+  mealTime?: MealTime
 ): number | null {
-  const belongsTo = section ? SECTION_KIND[section] : undefined;
+  // Curated eligibility wins over the database section. `before_cardio` and
+  // `breakfast_protein_burrito` are filed under `fitness_meals` but are curated
+  // breakfast-only, so reading the section alone charged them the full
+  // wrong-time penalty in the one slot they are allowed to occupy.
+  const curated = eligibleMealTypes?.length
+    ? (eligibleMealTypes.includes("breakfast") ? "breakfast" : "main") as SlotKind
+    : undefined;
+  const belongsTo = curated ?? (section ? SECTION_KIND[section] : undefined);
   if (!belongsTo) return null;
-
-  const kind = slotKindOf(slot);
+  const kind = mealTime ? kindOfMealTime(mealTime) : slotKindOf(slot);
   if (kind === belongsTo) return RIGHT_TIME_BONUS;
 
   // A dinner plate at breakfast is the jarring case; the reverse is milder,

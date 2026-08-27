@@ -16,6 +16,7 @@ import { formatIdr, formatPrice, type RestaurantPricingPolicy } from "@/lib/pric
 import { formatMacroGrams, round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import Modal from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Input";
 
 /**
  * Everything about one planned meal: what it is, what it delivers, what it
@@ -28,6 +29,9 @@ export default function MealDetailDialog({
   pricingPolicy = { markupPct: 0 },
   contextLabel,
   onChangeServings,
+  mealSlots,
+  dayNames,
+  onMove,
   locked = false,
   onRemove,
   onClose,
@@ -38,6 +42,11 @@ export default function MealDetailDialog({
   /** e.g. "Breakfast · Monday, Aug 17" */
   contextLabel: string;
   onChangeServings: (servings: number) => void;
+  /** The plan's slots, in the order they are eaten. */
+  mealSlots: string[];
+  dayNames: string[];
+  /** Move this meal to another day or slot. */
+  onMove: (day: number, slot: string) => void;
   /** The kitchen already has this week: it can be read, not changed. */
   locked?: boolean;
   onRemove: () => void;
@@ -113,6 +122,43 @@ export default function MealDetailDialog({
               >
                 <Plus size={14} />
               </button>
+            </div>
+          </div>
+
+          {/* Move.
+
+              Dragging the card does the same thing, but HTML5 drag events do
+              not fire on touch and cannot be reached from a keyboard, so the
+              gesture is the shortcut and this is the way. */}
+          <div className="mt-2 rounded-xl border border-cream-deep bg-white px-3 py-2.5">
+            <span className="text-sm font-600 text-charcoal">Move to</span>
+            <div className="mt-1.5 flex gap-2">
+              <Select
+                value={String(assignment.day)}
+                onChange={(event) =>
+                  onMove(Number(event.target.value), assignment.slot)
+                }
+                disabled={locked}
+                aria-label="Move to day"
+              >
+                {dayNames.map((label, index) => (
+                  <option key={label} value={index}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                value={assignment.slot}
+                onChange={(event) => onMove(assignment.day, event.target.value)}
+                disabled={locked}
+                aria-label="Move to slot"
+              >
+                {mealSlots.map((slot) => (
+                  <option key={slot} value={slot}>
+                    {slot}
+                  </option>
+                ))}
+              </Select>
             </div>
           </div>
 

@@ -45,6 +45,7 @@ import {
   sectionSlotPenalty,
   slotKindOf,
 } from "@/lib/slotSuitability";
+import { resolveSlotProfiles, type SlotProfile } from "@/lib/mealTime";
 import {
   DEFAULT_PREFERENCES,
   type ClientPreferences,
@@ -442,7 +443,7 @@ function menuRecipesSection(recipeId: string): string | null {
 
 /** Menu recipes and saved dishes, offered whole on their published macros. */
 function readyCandidates(
-  slot: string,
+  profile: SlotProfile,
   savedDishes: Dish[],
   menuDishes: boolean,
   budgetIdr: number | null,
@@ -451,13 +452,15 @@ function readyCandidates(
 ): Candidate[] {
   const out: Candidate[] = [];
   const avoid = preferences.avoidIngredientIds;
+  const slot = profile.slot;
 
   for (const normalized of [...readyPlannerCatalog(savedDishes, menuDishes), ...fixtures]) {
-    const eligibility = mealSlotEligibility({ slot, name: normalized.displayName,
+    const eligibility = mealSlotEligibility({ slot, mealTime: profile.mealTime,
+      name: normalized.displayName,
       mealArchetype: normalized.mealArchetype,
       eligibleMealTypes: normalized.eligibleMealTypes,
       ingredients: normalized.breakdown });
-    if (!eligibility.allowed) continue;
+    if (!profile.unrestricted && !eligibility.allowed) continue;
     if (normalized.breakdown.some((item) => avoid.includes(item.ingredientId))) continue;
     const price = normalized.price;
     // An incompletely priced dish has an unknown true cost, so it cannot be
@@ -466,8 +469,13 @@ function readyCandidates(
     if (budgetIdr !== null && (!price.complete || price.totalIdr > budgetIdr)) continue;
     const recipeSection = normalized.source === "negrita_menu"
       ? menuRecipesSection(normalized.id.slice(MENU_CANDIDATE_PREFIX.length)) : null;
+    // Curated eligibility is handed over so the section cannot contradict it:
+    // `before_cardio` is filed under `fitness_meals` but is breakfast-only, and
+    // reading the section alone charged it the full wrong-time penalty in the
+    // one slot it is allowed to occupy.
     const slotPenalty = recipeSection
-      ? sectionSlotPenalty(recipeSection, slot) ?? namedDishSlotPenalty(normalized.displayName, slot)
+      ? sectionSlotPenalty(recipeSection, slot, normalized.eligibleMealTypes,
+          profile.mealTime) ?? namedDishSlotPenalty(normalized.displayName, slot)
       : namedDishSlotPenalty(normalized.displayName, slot);
     out.push(toCandidate(normalized, preferences, "ready", slotPenalty,
       normalized.source === "saved_dish" ? normalized.id.slice("saved:".length) : undefined));
@@ -477,22 +485,25 @@ function readyCandidates(
 }
 
 function composedCandidates(
-  slot: string,
+  profile: SlotProfile,
   residual: MacroTargets,
   slotsRemaining: number,
   slotShare: number,
   preferences: ClientPreferences,
   budgetRemainingIdr: number | null
 ): Candidate[] {
+  const slot = profile.slot;
   return composeCandidatesForResidual({
-    slot, residual, slotsRemaining, slotShare, preferences, budgetRemainingIdr,
+    slot, mealTime: profile.mealTime, residual, slotsRemaining, slotShare,
+    preferences, budgetRemainingIdr,
     maxCandidates: COMPOSED_CANDIDATES_PER_RESIDUAL,
   }).map((normalized) => {
-    const eligibility = mealSlotEligibility({ slot, name: normalized.displayName,
+    const eligibility = mealSlotEligibility({ slot, mealTime: profile.mealTime,
+      name: normalized.displayName,
       mealArchetype: normalized.mealArchetype,
       eligibleMealTypes: normalized.eligibleMealTypes,
       ingredients: normalized.breakdown });
-    if (!eligibility.allowed) return null;
+    if (!profile.unrestricted && !eligibility.allowed) return null;
     return toCandidate(normalized, preferences, "composed",
       mealSlotPenalty(normalized.breakdown.map((item) => item.ingredientId), slot));
   }).filter((candidate): candidate is Candidate => candidate !== null);
@@ -579,6 +590,8 @@ export function estimateCompletion(
 
 interface SlotPlan {
   slot: string;
+  /** The meal time this slot stands for, resolved with its position in the day. */
+  profile: SlotProfile;
   /** Share of the remaining appetite this slot carries. */
   weight: number;
   /** Whether the day may be finished without this slot at all. */
@@ -685,7 +698,7 @@ function composedFor(
     }
     return nearest?.candidates ?? [];
   }
-  const candidates = composedCandidates(plan.slot, residual, slotsRemaining,
+  const candidates = composedCandidates(plan.profile, residual, slotsRemaining,
     slotShare, preferences, budgetRemainingIdr);
   cache.store.set(key, { coords, candidates });
   return candidates;
@@ -970,6 +983,8 @@ interface DayPlan {
   diagnostics: DailyAdherenceDiagnostics;
   /** Suitability, preferences, within-day repetition, accuracy, then price. */
   softScore: number;
+  /** The slot bias alone, so ranking can weigh it apart from the rest. */
+  slotPenaltyTotal: number;
   repeatKeys: RepeatKey[];
   keySet: Set<string>;
   exactSignature: string;
@@ -1055,6 +1070,8 @@ function repeatKeysFor(picks: Candidate[], slots: string[]): RepeatKey[] {
 }
 
 function toDayPlan(day: CompleteDay, slots: string[]): DayPlan {
+  const slotPenaltyTotal = day.picks.reduce(
+    (sum, candidate) => sum + candidate.slotPenalty, 0);
   const softScore =
     day.picks.reduce((sum, candidate) => sum + candidate.slotPenalty +
       (candidate.readyMadePriority === "high" ? -0.3 : 0) +
@@ -1069,6 +1086,7 @@ function toDayPlan(day: CompleteDay, slots: string[]): DayPlan {
     priceIdr: day.priceIdr,
     diagnostics: day.diagnostics,
     softScore,
+    slotPenaltyTotal,
     repeatKeys,
     keySet: new Set(repeatKeys.map((entry) => entry.key)),
     exactSignature: day.picks.map((candidate) => candidate.dishShape).join(">"),
@@ -1240,8 +1258,24 @@ function selectDayPool(
 /** Test seam for exercising pool retention without running the full planner. */
 export const __selectDayPoolForTests = selectDayPool;
 
+/**
+ * How much being wrong for the time of day costs when days are ranked.
+ *
+ * `softScore` is scaled by 0.01, which made the whole slot bias worth 0.0045 of
+ * a day's rank — the "strong penalty rather than a filter" the slotSuitability
+ * header describes did not exist in practice. Given its own term it can break a
+ * tie between days that are otherwise alike.
+ *
+ * It cannot cost adherence. `selectDayPool` narrows to `bestEquivalentDays`
+ * before anything is ranked, and `adherenceTier` gates the pool, so this only
+ * ever reorders days that already share a classification — it can never demote
+ * a day from Exact to Best effort to avoid an unusual pairing.
+ */
+const SLOT_RANK_WEIGHT = 0.08;
+
 function rankDayPlan(plan: DayPlan): number {
-  return plan.diagnostics.normalizedError + plan.softScore * 0.01;
+  return plan.diagnostics.normalizedError + plan.softScore * 0.01 +
+    plan.slotPenaltyTotal * SLOT_RANK_WEIGHT;
 }
 
 // --- weekly assignment -------------------------------------------------------
@@ -1602,9 +1636,13 @@ function prepareDaySearch(options: GenerateOptions): DaySearch {
   const weights = slots.map(slotWeight);
   const weightTotal = weights.reduce((sum, value) => sum + value, 0) || 1;
   const optional = optionalSlots(slots);
+  // Resolved together, because an unrecognised slot name is read from where it
+  // sits in the day: "Meal 1" is breakfast, not dinner.
+  const profiles = resolveSlotProfiles(slots);
 
   const plans: SlotPlan[] = slots.map((slot, index) => {
-    const ready = readyCandidates(slot, options.includeSavedDishes ? options.savedDishes : [],
+    const profile = profiles[index];
+    const ready = readyCandidates(profile, options.includeSavedDishes ? options.savedDishes : [],
       options.includeMenuDishes, budget, preferences, options.candidateFixtures);
     // Going without is one of this slot's choices, so it belongs in the same list
     // as the rest. It also pulls the slot's reachable minimum down to zero, which
@@ -1616,7 +1654,7 @@ function prepareDaySearch(options: GenerateOptions): DaySearch {
     // is what lets the search tell "this path can still be rescued" from "this
     // path is already impossible" without enumerating the menu.
     const probes = options.includeComposed === false ? [] : [0.6, 1.6].flatMap((factor) =>
-      composedCandidates(slot, {
+      composedCandidates(profile, {
         energy_kcal: target.energy_kcal * share * factor,
         protein_g: target.protein_g * share * factor,
         carbs_g: target.carbs_g * share * factor,
@@ -1624,6 +1662,7 @@ function prepareDaySearch(options: GenerateOptions): DaySearch {
       }, 1, 1, preferences, budget));
     return {
       slot,
+      profile,
       weight: weights[index],
       optional: optional.has(slot),
       ready,

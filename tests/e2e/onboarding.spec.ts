@@ -64,13 +64,27 @@ test.describe("the owner", () => {
     // --- the dashboard ------------------------------------------------------
     await page.goto("/admin");
     await expect(page.getByText(/owner access only/i)).toHaveCount(0);
-    // first(): "Customers" is both a stat tile and a section heading.
-    for (const tile of ["Customers", "New this month", "Active 7 days", "Orders this month"]) {
+    // The Overview tab: the headline figures. first() because "Revenue" also
+    // appears in the chart heading below the tiles.
+    for (const tile of ["Revenue", "Avg order", "On the books", "Repeat rate"]) {
       await expect(page.getByText(tile, { exact: true }).first()).toBeVisible();
     }
+    await expect(page.getByText("Revenue by service week")).toBeVisible();
+
+    // The roster and its export live on the Customers tab. Scoped to the tab
+    // strip: "Customers" is also a stat tile and a section heading.
+    const tabs = page.getByRole("group", { name: "Dashboard section" });
+    await tabs.getByRole("button", { name: "Customers" }).click();
     // The owner themselves is a customer record, so the roster is never empty.
     await expect(page.getByText(OWNER_EMAIL).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /csv/i })).toBeVisible();
+    await expect(page.getByText("Where everyone stands")).toBeVisible();
+
+    // And the Menu tab renders, with or without anything ordered yet.
+    await tabs.getByRole("button", { name: "Menu" }).click();
+    await expect(
+      page.getByText(/menu performance|nothing ordered in this period/i).first()
+    ).toBeVisible();
 
     // --- settings -----------------------------------------------------------
     await page.goto("/admin/settings");

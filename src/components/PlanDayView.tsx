@@ -1,7 +1,9 @@
 "use client";
 
+import { useState, type DragEvent } from "react";
 import { AlertTriangle, Plus } from "lucide-react";
 import type { Assignment, Plan, Dish } from "@/lib/storage/types";
+import { isMealDrag, isSameSlot, readMealDrag, startMealDrag } from "@/components/mealDrag";
 import {
   DAY_NAMES,
   DAY_SHORT,
@@ -37,6 +39,7 @@ export default function PlanDayView({
   onSelectDay,
   onOpenMeal,
   onAddMeal,
+  onMoveMeal,
   locked = false,
 }: {
   plan: Plan;
@@ -48,11 +51,41 @@ export default function PlanDayView({
   onSelectDay: (day: number) => void;
   onOpenMeal: (assignment: Assignment) => void;
   onAddMeal: (day: number, slot: string) => void;
+  /** Move a planned meal to another day or slot. */
+  onMoveMeal?: (assignmentId: string, toDay: number, toSlot: string) => void;
   /** The kitchen already has this week, so it is read-only here. */
   locked?: boolean;
 }) {
   const totals = dayTotals(plan, week, day, dishes);
   const price = dayPrice(plan, week, day, dishes, pricingPolicy);
+  // Which slot the pointer is over, so only that one lights up.
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
+  const canMove = Boolean(onMoveMeal) && !locked;
+
+  function dropHandlers(slot: string) {
+    if (!canMove) return {};
+    return {
+      onDragOver: (event: DragEvent<HTMLElement>) => {
+        if (!isMealDrag(event)) return;
+        // Preventing the default is what marks this a valid drop target.
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        setDropTarget(slot);
+      },
+      onDragLeave: () =>
+        setDropTarget((current) => (current === slot ? null : current)),
+      onDrop: (event: DragEvent<HTMLElement>) => {
+        const payload = readMealDrag(event);
+        setDropTarget(null);
+        if (!payload) return;
+        event.preventDefault();
+        if (isSameSlot(payload, day, slot)) return;
+        onMoveMeal!(payload.assignmentId, day, slot);
+      },
+      "data-drop-slot": slot,
+    };
+  }
   const targetResolution = resolveTarget({ targets: plan.targets, mode: plan.targetMode, preset: plan.targetPreset });
 
   return (
@@ -108,7 +141,14 @@ export default function PlanDayView({
         {plan.mealSlots.map((slot) => {
           const slotAssignments = assignmentsFor(plan, week, day, slot);
           return (
-            <section key={slot} className="hover-reveal-parent">
+            <section
+              key={slot}
+              className={
+                "hover-reveal-parent rounded-xl transition-colors " +
+                (dropTarget === slot ? "bg-tomato-soft/25 ring-1 ring-tomato-soft" : "")
+              }
+              {...dropHandlers(slot)}
+            >
               <div className="mb-1.5 flex items-center justify-between">
                 <h3 className="text-[11px] font-700 uppercase tracking-[0.14em] text-charcoal-soft">
                   {slot}
@@ -146,7 +186,17 @@ export default function PlanDayView({
                         <button
                           type="button"
                           onClick={() => onOpenMeal(a)}
-                          className="w-full rounded-xl border border-cream-deep bg-white px-3 py-2.5 text-left transition-colors hover:border-tomato-soft hover:bg-tomato/5"
+                          draggable={canMove}
+                          onDragStart={(event) =>
+                            startMealDrag(event, {
+                              assignmentId: a.id, fromDay: day, fromSlot: slot,
+                            })
+                          }
+                          onDragEnd={() => setDropTarget(null)}
+                          className={
+                            "w-full rounded-xl border border-cream-deep bg-white px-3 py-2.5 text-left transition-colors hover:border-tomato-soft hover:bg-tomato/5 " +
+                            (canMove ? "cursor-grab active:cursor-grabbing" : "")
+                          }
                         >
                           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                             <span className="font-600 text-charcoal">

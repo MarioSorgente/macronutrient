@@ -435,18 +435,25 @@ export default function GeneratePlanDialog({
                   )}
                 </label>
 
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    disabled={generating}
-                    checked={replace}
-                    onChange={(e) => setReplace(e.target.checked)}
-                    className="h-4 w-4 accent-tomato"
-                  />
-                  <span className="font-600 text-charcoal">
-                    Replace what is already planned this week
-                  </span>
-                </label>
+                <div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      disabled={generating}
+                      checked={replace}
+                      onChange={(e) => setReplace(e.target.checked)}
+                      className="h-4 w-4 accent-tomato"
+                    />
+                    <span className="font-600 text-charcoal">
+                      Replace what is already planned this week
+                    </span>
+                  </label>
+                  <p className="mt-1 pl-6 text-[11px] text-charcoal-soft">
+                    {replace
+                      ? "This week's meals are cleared and the generated week takes their place."
+                      : "Meals you already planned are kept, and only the empty slots are filled — so the week may not match the preview above."}
+                  </p>
+                </div>
               </div>
 
               {/* Generate */}

@@ -71,12 +71,16 @@ describe("a week that is with the kitchen", () => {
     render(
       <MealDetailDialog assignment={meal} dishes={new Map<string, Dish>()}
         contextLabel="Breakfast · Monday" locked
+        mealSlots={["Breakfast", "Lunch", "Dinner"]}
+        dayNames={["Monday", "Tuesday"]} onMove={vi.fn()}
         onChangeServings={onChangeServings} onRemove={onRemove} onClose={() => {}} />
     );
 
     expect(screen.queryByText("Remove from plan")).toBeNull();
     expect(screen.getByText(/cancel the order to change this week/i)).toBeTruthy();
     expect((screen.getByLabelText("More servings") as HTMLButtonElement).disabled).toBe(true);
+    // A week with the kitchen cannot be rearranged either.
+    expect((screen.getByLabelText("Move to slot") as HTMLSelectElement).disabled).toBe(true);
   });
 });
 

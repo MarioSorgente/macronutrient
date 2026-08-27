@@ -6,6 +6,7 @@ import {
   mealSlotPenalty,
   namedDishSlotPenalty,
   optionalSlots,
+  sectionSlotPenalty,
   slotKindOf,
 } from "@/lib/slotSuitability";
 
@@ -108,6 +109,25 @@ describe("main meals and snacks", () => {
   it("keeps a knife-and-fork main out of a snack slot", () => {
     expect(ingredientSlotPenalty("beef_tenderloin_raw", "snack")).toBeGreaterThan(0);
     expect(ingredientSlotPenalty("greek_yogurt_nonfat", "snack")).toBe(0);
+  });
+});
+
+describe("curated eligibility beats the database section", () => {
+  it("stops penalising a breakfast dish filed under fitness_meals", () => {
+    // before_cardio and breakfast_protein_burrito are curated breakfast-only but
+    // filed under fitness_meals, so reading the section alone charged them the
+    // full wrong-time penalty in the one slot they are allowed to occupy.
+    expect(sectionSlotPenalty("fitness_meals", "Breakfast", ["breakfast"],
+      "breakfast")).toBeLessThanOrEqual(0);
+  });
+
+  it("still reads the section when nothing is curated", () => {
+    expect(sectionSlotPenalty("fitness_meals", "Breakfast")).toBeGreaterThan(1);
+  });
+
+  it("keeps a curated main penalised at breakfast", () => {
+    expect(sectionSlotPenalty("fitness_meals", "Breakfast", ["lunch", "dinner"],
+      "breakfast")).toBeGreaterThan(1);
   });
 });
 

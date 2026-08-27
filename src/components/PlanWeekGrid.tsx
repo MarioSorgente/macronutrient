@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type DragEvent } from "react";
 import { AlertTriangle, Plus, X } from "lucide-react";
 import type { Assignment, Plan, Dish } from "@/lib/storage/types";
+import { isMealDrag, isSameSlot, readMealDrag, startMealDrag } from "@/components/mealDrag";
 import {
   DAY_SHORT,
   DAY_NAMES,
@@ -35,6 +36,7 @@ export default function PlanWeekGrid({
   showPrices,
   onOpenMeal,
   onAddMeal,
+  onMoveMeal,
   locked = false,
 }: {
   plan: Plan;
@@ -44,10 +46,40 @@ export default function PlanWeekGrid({
   showPrices: boolean;
   onOpenMeal: (assignment: Assignment) => void;
   onAddMeal: (day: number, slot: string) => void;
+  /** Move a planned meal to another day or slot. */
+  onMoveMeal?: (assignmentId: string, toDay: number, toSlot: string) => void;
   /** The kitchen already has this week, so it is read-only here. */
   locked?: boolean;
 }) {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  // Which cell the pointer is currently over, so only that one lights up.
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
+  const canMove = Boolean(onMoveMeal) && !locked;
+
+  function dropHandlers(day: number, slot: string) {
+    if (!canMove) return {};
+    const key = `${day}:${slot}`;
+    return {
+      onDragOver: (event: DragEvent<HTMLDivElement>) => {
+        if (!isMealDrag(event)) return;
+        // Preventing the default is what marks this a valid drop target.
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        setDropTarget(key);
+      },
+      onDragLeave: () => setDropTarget((current) => (current === key ? null : current)),
+      onDrop: (event: DragEvent<HTMLDivElement>) => {
+        const payload = readMealDrag(event);
+        setDropTarget(null);
+        if (!payload) return;
+        event.preventDefault();
+        if (isSameSlot(payload, day, slot)) return;
+        onMoveMeal!(payload.assignmentId, day, slot);
+      },
+      "data-drop-slot": key,
+    };
+  }
 
   return (
     <>
@@ -87,7 +119,16 @@ export default function PlanWeekGrid({
                   const empty = slotAssignments.length === 0;
 
                   return (
-                    <div key={slot} className="hover-reveal-parent">
+                    <div
+                      key={slot}
+                      className={
+                        "hover-reveal-parent rounded-lg transition-colors " +
+                        (dropTarget === `${dayIndex}:${slot}`
+                          ? "bg-tomato-soft/30 ring-1 ring-tomato-soft"
+                          : "")
+                      }
+                      {...dropHandlers(dayIndex, slot)}
+                    >
                       <div className="mb-1 px-1 text-[10px] font-700 uppercase tracking-wide text-charcoal-soft/70">
                         {slot}
                       </div>
@@ -98,7 +139,17 @@ export default function PlanWeekGrid({
                             <button
                               type="button"
                               onClick={() => onOpenMeal(a)}
-                              className="group w-full rounded-lg bg-cream px-2 py-1.5 text-left transition-colors hover:bg-tomato-soft/20"
+                              draggable={canMove}
+                              onDragStart={(event) =>
+                                startMealDrag(event, {
+                                  assignmentId: a.id, fromDay: dayIndex, fromSlot: slot,
+                                })
+                              }
+                              onDragEnd={() => setDropTarget(null)}
+                              className={
+                                "group w-full rounded-lg bg-cream px-2 py-1.5 text-left transition-colors hover:bg-tomato-soft/20 " +
+                                (canMove ? "cursor-grab active:cursor-grabbing" : "")
+                              }
                             >
                               <span className="line-clamp-2 text-[11px] font-600 leading-tight text-charcoal">
                                 {assignmentName(a, dishes)}

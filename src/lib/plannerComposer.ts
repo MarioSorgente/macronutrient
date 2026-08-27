@@ -15,6 +15,7 @@ import {
   type MealTemplate,
 } from "@/lib/mealTemplates";
 import { isDinnerOnlyIngredient, slotKindOf } from "@/lib/slotSuitability";
+import { kindOfMealTime, type MealTime } from "@/lib/mealTime";
 import type { ClientPreferences, DishItem, MacroTargets } from "@/lib/storage/types";
 
 /**
@@ -40,6 +41,13 @@ import type { ClientPreferences, DishItem, MacroTargets } from "@/lib/storage/ty
 
 export interface ComposeRequest {
   slot: string;
+  /**
+   * The meal time the slot stands for, resolved with its position in the day.
+   * Without it an unrecognised slot name falls back to the main archetype, so a
+   * plan whose slots are called "Meal 1..3" composed a dinner plate for the
+   * morning.
+   */
+  mealTime?: MealTime;
   /** Daily macros still to be covered, including this slot. */
   residual: MacroTargets;
   /** How many slots (this one included) still have to be filled. */
@@ -286,7 +294,9 @@ export function composeCandidatesForResidual(
     fat_g: Math.max(request.residual.fat_g * share, 2),
   };
   const avoid = request.preferences.avoidIngredientIds;
-  const breakfast = slotKindOf(request.slot) === "breakfast";
+  const breakfast = (request.mealTime
+    ? kindOfMealTime(request.mealTime)
+    : slotKindOf(request.slot)) === "breakfast";
   const budget = request.budgetRemainingIdr;
 
   const byRole = new Map<MealComponentRole, RoleOption[]>();
@@ -296,7 +306,9 @@ export function composeCandidatesForResidual(
 
   const drafts: ComposedDraft[] = [];
 
-  for (const template of templatesForSlot(request.slot)) {
+  // The meal time doubles as the archetype key ("breakfast", "lunch", ...),
+  // so a resolved slot picks its templates directly rather than by name match.
+  for (const template of templatesForSlot(request.mealTime ?? request.slot)) {
     const usable = templateRoles(template);
     const eligible = new Map<MealComponentRole, RoleOption[]>();
     for (const role of usable) {

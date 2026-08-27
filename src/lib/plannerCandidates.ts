@@ -1,5 +1,7 @@
 import { sumDishMacros } from "@/lib/calc";
 import { getIngredient, nutritionCatalog, publishedMenuMacros } from "@/lib/database";
+import { archetypeForCourse, classifyCourse, mealTimesForCourse } from "@/lib/mealTime";
+import { menuRecipeForDish } from "@/lib/menuIdentity";
 import { priceItems } from "@/lib/pricing";
 import { GRAM_UNIT_ID, type Macros, type MenuRecipe, type PlannerCandidate,
   type PlannerCandidateIngredient, type ProteinFamily, type CarbFamily,
@@ -113,17 +115,6 @@ function dishStyle(name: string, items: PlannerCandidateIngredient[],
   return matched ?? archetype;
 }
 
-function mealMetadata(name: string, section = ""): { archetype: string; eligible: string[] } {
-  const text = `${name} ${section}`.toLowerCase();
-  if (/breakfast|oat|pancake|waffle|toast|egg/.test(text)) {
-    return { archetype: "breakfast", eligible: ["breakfast"] };
-  }
-  if (/snack|dessert|smoothie|shake/.test(text)) {
-    return { archetype: "snack", eligible: ["snack", "pre-workout", "post-workout"] };
-  }
-  return { archetype: "main", eligible: ["lunch", "dinner"] };
-}
-
 function tags(items: PlannerCandidateIngredient[]): { dietary: string[]; allergens: string[]; sauces: string[] } {
   const text = ingredientText(items);
   const ingredients = items.map((item) => getIngredient(item.ingredientId)).filter(Boolean);
@@ -164,12 +155,17 @@ function finish(base: Omit<PlannerCandidate, "proteinFamily" | "carbFamily" | "c
   "dietaryTags" | "allergenTags" | "sauceFamilies" | "readyMadePriority">,
   section = ""): PlannerCandidate {
   const families = normalizedFamilies(base.breakdown);
-  const meal = mealMetadata(base.displayName, section);
+  // One vocabulary, shared with slotSuitability. The regex that used to live
+  // here did not contain "banana bread", so a saved loaf was classified a main
+  // and offered for lunch.
+  const course = classifyCourse({ name: base.displayName, section,
+    ingredients: base.breakdown });
+  const archetype = archetypeForCourse(course);
   const classified = tags(base.breakdown);
   return { ...base, ...families, cuisineFamily: cuisineFamily(base.displayName, base.breakdown),
-    mealArchetype: meal.archetype,
-    dishStyle: dishStyle(base.displayName, base.breakdown, meal.archetype),
-    eligibleMealTypes: meal.eligible,
+    mealArchetype: archetype,
+    dishStyle: dishStyle(base.displayName, base.breakdown, archetype),
+    eligibleMealTypes: mealTimesForCourse(course),
     modificationOptions: [], readyMadePriority: "normal",
     dietaryTags: classified.dietary, allergenTags: classified.allergens,
     sauceFamilies: classified.sauces };
@@ -180,10 +176,24 @@ export function savedDishCandidate(dish: Dish): PlannerCandidate | null {
   const macros = sumDishMacros(dish.items);
   if (!items.length || macros.energy_kcal <= 0) return null;
   const price = priceItems(dish.items);
-  return finish({ id: `saved:${dish.id}`, source: "saved_dish", displayName: dish.name,
+  const generic = finish({ id: `saved:${dish.id}`, source: "saved_dish", displayName: dish.name,
     optimizerMacros: macros, calculatedIngredientMacros: macros, breakdown: items, price,
     macroConfidence: "calculated",
     exactDishIdentity: `saved:${dish.id}` });
+
+  // A saved copy of a Negrita dish is still that dish, so it keeps the curated
+  // classification rather than being re-derived from its name. Only the
+  // culinary facts are taken: the macros here are calculated from the saved
+  // items and may legitimately differ from the published ones.
+  const asMenu = menuRecipeForDish(dish);
+  const curated = asMenu ? NEGRITA_PLANNER_METADATA[asMenu.recipe_id] : undefined;
+  return curated ? { ...generic,
+    proteinFamily: curated.proteinFamily,
+    carbFamily: curated.carbFamily,
+    cuisineFamily: curated.cuisineFamily,
+    mealArchetype: curated.mealArchetype,
+    dishStyle: curated.dishStyle,
+    eligibleMealTypes: curated.eligibleMealTypes } : generic;
 }
 
 export function negritaMenuCandidate(recipe: MenuRecipe): PlannerCandidate | null {

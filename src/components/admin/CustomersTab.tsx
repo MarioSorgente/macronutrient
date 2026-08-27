@@ -52,6 +52,14 @@ export default function CustomersTab({
       sortBy: (r) => r.name.toLowerCase(),
     },
     {
+      key: "email",
+      header: "Email",
+      // How you actually reach the people the lapsed list is telling you to
+      // reach. Worth its column even though the table has to scroll for it.
+      cell: (r) => r.email,
+      sortBy: (r) => r.email,
+    },
+    {
       key: "segment",
       header: "Segment",
       cell: (r) => (
@@ -160,12 +168,22 @@ export default function CustomersTab({
                 key={row.uid}
                 className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b border-cream-deep/60 pb-1.5 last:border-0"
               >
-                <Link
-                  href={`/admin/customers/${row.uid}`}
-                  className="font-600 text-charcoal hover:text-tomato"
-                >
-                  {row.name}
-                </Link>
+                <span className="min-w-0">
+                  <Link
+                    href={`/admin/customers/${row.uid}`}
+                    className="font-600 text-charcoal hover:text-tomato"
+                  >
+                    {row.name}
+                  </Link>
+                  {row.email && (
+                    <a
+                      href={`mailto:${row.email}`}
+                      className="ml-2 text-xs text-charcoal-soft hover:text-tomato"
+                    >
+                      {row.email}
+                    </a>
+                  )}
+                </span>
                 <span className="text-xs text-charcoal-soft">
                   last ordered{" "}
                   {row.lastOrderWeek ? formatBaliDay(row.lastOrderWeek) : "—"} ·{" "}

@@ -57,10 +57,12 @@ describe("CustomersTab", () => {
     );
     const callout = screen.getByText("Worth a message").closest("div")!;
     expect(callout.textContent).toContain("2 customers have ordered before");
-    const names = [...callout.querySelectorAll("li")].map((li) =>
-      li.textContent?.split("last ordered")[0]
+    const names = [...callout.querySelectorAll("li")].map(
+      (li) => li.querySelector("a")?.textContent
     );
     expect(names).toEqual(["Big", "Small"]);
+    // The list exists to prompt outreach, so it carries the address too.
+    expect(callout.textContent).toContain("m@example.com");
   });
 
   it("hides the callout when nobody has drifted away", () => {
