@@ -126,20 +126,24 @@ export default function AccountMenu() {
             </p>
           </div>
 
-          <Link
-            href="/plan"
-            role="menuitem"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream"
-          >
-            <UserIcon size={15} className="text-charcoal-soft" /> My week
-          </Link>
-          <Link
-            href="/orders"
-            role="menuitem"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream"
-          >
-            <Receipt size={15} className="text-charcoal-soft" /> My orders
-          </Link>
+          {role === "client" && (
+            <>
+              <Link
+                href="/plan"
+                role="menuitem"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream"
+              >
+                <UserIcon size={15} className="text-charcoal-soft" /> My week
+              </Link>
+              <Link
+                href="/orders"
+                role="menuitem"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream"
+              >
+                <Receipt size={15} className="text-charcoal-soft" /> My orders
+              </Link>
+            </>
+          )}
 
           {isStaff(role) && (
             <Link

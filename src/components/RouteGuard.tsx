@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
-import { useAuth } from "@/lib/auth/AuthProvider";
+import { isStaff, useAuth } from "@/lib/auth/AuthProvider";
 import { authUrl } from "@/lib/auth/next";
 import { policyFor } from "@/lib/auth/routePolicy";
 import StaffAccessStatus from "@/components/StaffAccessStatus";
@@ -35,6 +35,13 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
   const policy = policyFor(pathname);
   const isPublic = policy.kind === "public";
   const staffIntent = policy.kind === "role" && policy.staffIntent;
+  const redirectStaff =
+    policy.kind === "role" &&
+    !policy.staffIntent &&
+    roleSettled &&
+    isStaff(role) &&
+    role !== null &&
+    !policy.allow.includes(role);
 
   useEffect(() => {
     if (isPublic || !enabled || loading || user) return;
@@ -52,6 +59,10 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
       })
     );
   }, [enabled, isPublic, loading, pathname, router, staffIntent, user]);
+
+  useEffect(() => {
+    if (redirectStaff) router.replace("/kitchen");
+  }, [redirectStaff, router]);
 
   if (isPublic) return <>{children}</>;
 
@@ -71,6 +82,11 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
 
   if (loading) return <Checking />;
   if (!user) return null; // redirecting
+
+  // Planning and customer orders have no useful access-request flow for a
+  // staff account. Send staff to their operational home without briefly
+  // revealing the customer screen or showing the staff onboarding gate.
+  if (redirectStaff) return null;
 
   if (policy.kind === "role") {
     // A new account's token is minted before /api/auth/sync stamps its claim.

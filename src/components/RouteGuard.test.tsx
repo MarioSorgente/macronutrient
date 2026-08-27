@@ -207,6 +207,37 @@ describe("RouteGuard", () => {
     });
   });
 
+  describe("customer areas", () => {
+    it.each(["/plan", "/plan/build", "/report/dish-1", "/orders/order-1"])(
+      "redirects restaurant staff away from %s",
+      async (path) => {
+        mocks.pathname = path;
+        mocks.auth = signedIn("restaurant");
+        guard();
+
+        expect(showsScreen()).toBe(false);
+        expect(screen.queryByText(/staff access panel/)).toBeNull();
+        await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/kitchen"));
+      }
+    );
+
+    it("redirects administrators unless View as makes their effective role client", async () => {
+      mocks.auth = signedIn("admin");
+      const view = guard();
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/kitchen"));
+
+      vi.clearAllMocks();
+      mocks.auth = signedIn("client");
+      view.rerender(
+        <RouteGuard>
+          <p>the protected screen</p>
+        </RouteGuard>
+      );
+      expect(showsScreen()).toBe(true);
+      expect(mocks.replace).not.toHaveBeenCalled();
+    });
+  });
+
   describe("a build with no Firebase configuration", () => {
     /**
      * Redirecting would loop: the login form cannot sign anybody in either.

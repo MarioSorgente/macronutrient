@@ -24,9 +24,16 @@ describe("policyFor", () => {
     "/orders",
     "/orders/order-1",
     "/report/dish-1",
-    "/account",
-  ])("requires an account for %s", (path) => {
-    expect(policyFor(path)).toEqual({ kind: "auth" });
+  ])("requires the client role for %s", (path) => {
+    expect(policyFor(path)).toEqual({
+      kind: "role",
+      allow: ["client"],
+      staffIntent: false,
+    });
+  });
+
+  it("requires an account for a role-neutral account page", () => {
+    expect(policyFor("/account")).toEqual({ kind: "auth" });
   });
 
   it.each([
@@ -56,7 +63,11 @@ describe("policyFor", () => {
   });
 
   it("is not fooled by a trailing slash or a capital letter", () => {
-    expect(policyFor("/plan/")).toEqual({ kind: "auth" });
+    expect(policyFor("/plan/")).toEqual({
+      kind: "role",
+      allow: ["client"],
+      staffIntent: false,
+    });
     expect(policyFor("/Kitchen").kind).toBe("role");
     expect(policyFor("/")).toEqual({ kind: "public" });
   });

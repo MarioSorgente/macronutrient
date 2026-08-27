@@ -19,6 +19,7 @@ export type RouteAccess =
   | { kind: "role"; allow: Role[]; staffIntent: boolean };
 
 const STAFF: Role[] = ["restaurant", "admin"];
+const CLIENT: Role[] = ["client"];
 
 /**
  * The complete public surface.
@@ -31,6 +32,9 @@ const PUBLIC_PREFIXES = ["/__/auth"];
 
 /** Staff areas. The admin-only screens keep their own stricter check inside. */
 const STAFF_PREFIXES = ["/kitchen", "/admin"];
+
+/** Screens belonging to the diner's planning and ordering journey. */
+const CLIENT_PREFIXES = ["/plan", "/report", "/orders"];
 
 function matches(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
@@ -52,6 +56,9 @@ export function policyFor(pathname: string): RouteAccess {
   }
   if (STAFF_PREFIXES.some((prefix) => matches(path, prefix))) {
     return { kind: "role", allow: STAFF, staffIntent: true };
+  }
+  if (CLIENT_PREFIXES.some((prefix) => matches(path, prefix))) {
+    return { kind: "role", allow: CLIENT, staffIntent: false };
   }
   return { kind: "auth" };
 }
