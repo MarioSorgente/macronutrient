@@ -30,6 +30,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/auth/AuthProvider", () => ({
   useAuth: () => mocks.auth,
+  isStaff: (role: Role | null) => role === "restaurant" || role === "admin",
 }));
 // The gate view is covered by its own suite; here it only needs to be
 // identifiable, and it must not reach for the network.
@@ -181,6 +182,18 @@ describe("RouteGuard", () => {
 
       expect(showsScreen()).toBe(true);
       expect(mocks.replace).not.toHaveBeenCalled();
+    });
+
+    it("lets a staff account reach the owner screen's own refusal", () => {
+      // Offering "Request staff access" to someone who already works here
+      // answers a question they did not ask, and hides the real one: this area
+      // belongs to the owner. Each admin screen says so itself.
+      mocks.pathname = "/admin";
+      mocks.auth = signedIn("restaurant");
+      guard();
+
+      expect(showsScreen()).toBe(true);
+      expect(screen.queryByText(/staff access panel/)).toBeNull();
     });
 
     it("do the same for /admin", () => {

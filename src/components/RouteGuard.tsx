@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
-import { useAuth } from "@/lib/auth/AuthProvider";
+import { isStaff, useAuth } from "@/lib/auth/AuthProvider";
 import { authUrl } from "@/lib/auth/next";
 import { policyFor } from "@/lib/auth/routePolicy";
 import StaffAccessStatus from "@/components/StaffAccessStatus";
@@ -105,6 +105,12 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
     // their brand-new account was rejected.
     if (!roleSettled) return <Checking />;
     if (role === null || !policy.allow.includes(role)) {
+      // Someone who already works here does not need to ask for staff access.
+      // Offering them that panel answered a question they had not asked, while
+      // hiding the real one: this area belongs to the owner. The admin screens
+      // each carry their own "Owner access only" notice, so letting them
+      // render says the accurate thing.
+      if (isStaff(role)) return <>{children}</>;
       return <StaffAccessStatus variant="gate" />;
     }
   }
