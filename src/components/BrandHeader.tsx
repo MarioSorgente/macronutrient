@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { UtensilsCrossed } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
+import { canManageHouseItems, canUseAdmin, canUseKitchen } from "@/lib/roles";
 import AccountMenu from "@/components/AccountMenu";
 import RoleBadge from "@/components/RoleBadge";
 
@@ -51,6 +52,9 @@ const ACCOUNT_LINKS: NavLink[] = [
  */
 const KITCHEN_LINKS: NavLink[] = [
   { href: "/kitchen", label: "Kitchen", match: (p) => p.startsWith("/kitchen") },
+];
+
+const HOUSE_ITEM_LINKS: NavLink[] = [
   {
     href: "/admin/house-items",
     label: "House items",
@@ -73,8 +77,9 @@ export default function BrandHeader() {
     ...LINKS,
     ...(user && role === "client" ? PLANNER_LINKS : []),
     ...(user && role === "client" ? ACCOUNT_LINKS : []),
-    ...(isStaff(role) ? KITCHEN_LINKS : []),
-    ...(role === "admin" ? ADMIN_LINKS : []),
+    ...(canUseKitchen(role) ? KITCHEN_LINKS : []),
+    ...(canManageHouseItems(role) ? HOUSE_ITEM_LINKS : []),
+    ...(canUseAdmin(role) ? ADMIN_LINKS : []),
   ];
 
   return (

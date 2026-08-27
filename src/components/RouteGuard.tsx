@@ -3,11 +3,12 @@
 import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
-import { isStaff, useAuth } from "@/lib/auth/AuthProvider";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import { authUrl } from "@/lib/auth/next";
 import { policyFor } from "@/lib/auth/routePolicy";
 import StaffAccessStatus from "@/components/StaffAccessStatus";
 import Card from "@/components/ui/Card";
+import { homeForRole } from "@/lib/roles";
 
 /**
  * The one place the app decides whether you may see a screen.
@@ -19,8 +20,9 @@ import Card from "@/components/ui/Card";
  * This is presentation, not the boundary. `firestore.rules` denies the reads
  * regardless of what renders here, and every role-changing operation is a
  * server one. What this buys is that a signed-out visitor never sees a screen
- * they cannot use, and that a customer who wanders into `/kitchen` is offered
- * the way in rather than a locked door.
+ * they cannot use, and that a signed-in role which cannot operate the kitchen
+ * is returned to its own useful home rather than shown a misleading access
+ * request screen.
  *
  * The order of the checks below is the whole design. In particular auth state
  * is never read before `loading` clears: Firebase reports "signed out" for the
@@ -35,13 +37,15 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
   const policy = policyFor(pathname);
   const isPublic = policy.kind === "public";
   const staffIntent = policy.kind === "role" && policy.staffIntent;
-  const redirectStaff =
+  const kitchenRoute =
+    pathname.toLowerCase() === "/kitchen" ||
+    pathname.toLowerCase().startsWith("/kitchen/");
+  const redirectDeniedRole =
     policy.kind === "role" &&
-    !policy.staffIntent &&
     roleSettled &&
-    isStaff(role) &&
     role !== null &&
-    !policy.allow.includes(role);
+    !policy.allow.includes(role) &&
+    (kitchenRoute || !policy.staffIntent);
 
   useEffect(() => {
     if (isPublic || !enabled || loading || user) return;
@@ -61,8 +65,8 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
   }, [enabled, isPublic, loading, pathname, router, staffIntent, user]);
 
   useEffect(() => {
-    if (redirectStaff) router.replace("/kitchen");
-  }, [redirectStaff, router]);
+    if (redirectDeniedRole && role) router.replace(homeForRole(role));
+  }, [redirectDeniedRole, role, router]);
 
   if (isPublic) return <>{children}</>;
 
@@ -86,7 +90,7 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
   // Planning and customer orders have no useful access-request flow for a
   // staff account. Send staff to their operational home without briefly
   // revealing the customer screen or showing the staff onboarding gate.
-  if (redirectStaff) return null;
+  if (redirectDeniedRole) return null;
 
   if (policy.kind === "role") {
     // A new account's token is minted before /api/auth/sync stamps its claim.

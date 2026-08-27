@@ -30,7 +30,6 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/auth/AuthProvider", () => ({
   useAuth: () => mocks.auth,
-  isStaff: (role: Role | null) => role === "restaurant" || role === "admin",
 }));
 // The gate view is covered by its own suite; here it only needs to be
 // identifiable, and it must not reach for the network.
@@ -153,26 +152,25 @@ describe("RouteGuard", () => {
   });
 
   describe("staff areas", () => {
-    it.each(["restaurant", "admin"] as const)("open for a %s", (role) => {
+    it("opens the kitchen for the restaurant operator", () => {
       mocks.pathname = "/kitchen";
-      mocks.auth = signedIn(role);
+      mocks.auth = signedIn("restaurant");
       guard();
 
       expect(showsScreen()).toBe(true);
     });
 
-    /**
-     * Not a locked door. A customer who works in the kitchen gets the way in,
-     * which is the whole reason staff onboarding is discoverable at all now.
-     */
-    it("offer a customer the access flow instead of the board", () => {
+    it.each([
+      ["client", "/plan"],
+      ["admin", "/admin"],
+    ] as const)("redirects a %s directly away from the kitchen", async (role, home) => {
       mocks.pathname = "/kitchen";
-      mocks.auth = signedIn("client");
+      mocks.auth = signedIn(role);
       guard();
 
       expect(showsScreen()).toBe(false);
-      expect(screen.getByText("staff access panel (gate)")).toBeTruthy();
-      expect(mocks.replace).not.toHaveBeenCalled();
+      expect(screen.queryByText(/staff access panel/)).toBeNull();
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(home));
     });
 
     it("do the same for /admin", () => {
@@ -224,7 +222,7 @@ describe("RouteGuard", () => {
     it("redirects administrators unless View as makes their effective role client", async () => {
       mocks.auth = signedIn("admin");
       const view = guard();
-      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/kitchen"));
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/admin"));
 
       vi.clearAllMocks();
       mocks.auth = signedIn("client");

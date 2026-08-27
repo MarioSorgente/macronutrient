@@ -36,19 +36,27 @@ describe("policyFor", () => {
     expect(policyFor("/account")).toEqual({ kind: "auth" });
   });
 
-  it.each([
-    "/kitchen",
-    "/kitchen/2026-01-05",
-    "/kitchen/orders",
-    "/admin",
-    "/admin/settings",
-    "/admin/house-items",
-    "/admin/customers/uid-1",
-  ])("requires a staff role for %s", (path) => {
+  it.each(["/kitchen", "/kitchen/2026-01-05", "/kitchen/orders"])(
+    "requires the restaurant operator role for %s",
+    (path) => {
     expect(policyFor(path)).toEqual({
       kind: "role",
-      allow: ["restaurant", "admin"],
+      allow: ["restaurant"],
       staffIntent: true,
+    });
+    }
+  );
+
+  it.each(["/admin", "/admin/settings", "/admin/customers/uid-1"])(
+    "requires the owner role for %s",
+    (path) => expect(policyFor(path)).toEqual({
+      kind: "role", allow: ["admin"], staffIntent: true,
+    })
+  );
+
+  it("keeps house-item management available to operator and owner", () => {
+    expect(policyFor("/admin/house-items")).toEqual({
+      kind: "role", allow: ["restaurant", "admin"], staffIntent: true,
     });
   });
 
