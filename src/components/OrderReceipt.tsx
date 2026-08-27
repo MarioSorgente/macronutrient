@@ -13,7 +13,7 @@ import type { Order } from "@/lib/storage/types";
 import ReportShell, { ReportMessage } from "@/components/ReportShell";
 import MacroSummary from "@/components/MacroSummary";
 import MacroChips from "@/components/MacroChips";
-import OrderStatusBadge from "@/components/OrderStatusBadge";
+import OrderStatusBadge, { ORDER_LABELS } from "@/components/OrderStatusBadge";
 
 /** A printable record of one submitted week, for the customer. */
 export default function OrderReceipt() {
@@ -99,6 +99,18 @@ export default function OrderReceipt() {
           {order.days.length === 1 ? "" : "s"} · sent{" "}
           {formatBaliDateTime(order.submittedAt)} ({BALI_LABEL})
         </p>
+        {order.statusHistory.length > 0 && (
+          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-charcoal-soft">
+            {order.statusHistory.map((entry) => (
+              <li key={`${entry.status}-${entry.at}`} className="tabular-nums">
+                <span className="font-600 text-charcoal">
+                  {ORDER_LABELS[entry.status].label}
+                </span>{" "}
+                {formatBaliDateTime(entry.at)}
+              </li>
+            ))}
+          </ul>
+        )}
         {order.restaurantNote && (
           <p className="mt-2 rounded-xl border border-cream-deep bg-cream px-3 py-2 text-sm text-charcoal">
             <b className="font-700">From Negrita:</b> {order.restaurantNote}

@@ -36,12 +36,13 @@ describe("policyFor", () => {
     expect(policyFor("/account")).toEqual({ kind: "auth" });
   });
 
+  // The owner oversees the kitchen as well as the operator who works it.
   it.each(["/kitchen", "/kitchen/2026-01-05", "/kitchen/orders"])(
-    "requires the restaurant operator role for %s",
+    "admits both kitchen roles to %s",
     (path) => {
     expect(policyFor(path)).toEqual({
       kind: "role",
-      allow: ["restaurant"],
+      allow: ["restaurant", "admin"],
       staffIntent: true,
     });
     }

@@ -15,7 +15,8 @@ describe("role capabilities", () => {
   it.each([
     ["client", false, false, false, "/plan"],
     ["restaurant", true, true, false, "/kitchen"],
-    ["admin", false, true, true, "/admin"],
+    // The owner oversees the kitchen too, but lands on their dashboard.
+    ["admin", true, true, true, "/admin"],
   ] as const)("encodes the %s role", (role, kitchen, houseItems, admin, home) => {
     expect(canUseKitchen(role)).toBe(kitchen);
     expect(canManageHouseItems(role)).toBe(houseItems);

@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   AlertTriangle,
   CalendarDays,
+  Clock,
   CalendarRange,
   FileText,
   Plus,
@@ -45,7 +46,9 @@ import { withRenamedSlots } from "@/lib/planSlots";
 import { menuRecipeForDish, planWithMenuIdentity } from "@/lib/menuIdentity";
 import { negritaMenuCandidate } from "@/lib/plannerCandidates";
 import { GRAM_UNIT_ID, type MenuRecipe } from "@/types/nutrition";
-import { baliToday, baliWeekStart, round0 } from "@/lib/format";
+import { BALI_LABEL, baliToday, baliWeekStart, formatBaliDay, round0 } from "@/lib/format";
+import { cutoffConfigOf, cutoffState, formatRemaining } from "@/lib/cutoff";
+import { weekStartDate } from "@/lib/orders";
 import MacroSummary from "@/components/MacroSummary";
 import AssignDishDialog from "@/components/AssignDishDialog";
 import PlanSettings from "@/components/PlanSettings";
@@ -71,7 +74,12 @@ export default function WeekPlanner() {
   useHouseRecipes((state) => state.version);
   const [storedPlan, setClient] = useState<Plan | null>(null);
   const [dishes, setDishes] = useState<Dish[]>([]);
-  const [pricingPolicy, setPricingPolicy] = useState<Pick<RestaurantConfig, "markupPct">>(DEFAULT_RESTAURANT_CONFIG);
+  const [config, setConfig] = useState<RestaurantConfig | null>(null);
+  // The markup is all the pricing helpers want; the same document also
+  // carries the ordering deadline, which used to be visible only on the
+  // submit screen — after a week had already been planned.
+  const pricingPolicy: Pick<RestaurantConfig, "markupPct"> =
+    config ?? DEFAULT_RESTAURANT_CONFIG;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dishesLoading, setDishesLoading] = useState(true);
@@ -166,9 +174,13 @@ export default function WeekPlanner() {
         if (active) setDishesLoading(false);
       });
 
-    loadRestaurantConfig().then((config) => {
-      if (active) setPricingPolicy(config);
-    });
+    loadRestaurantConfig()
+      .then((loaded) => {
+        if (active) setConfig(loaded);
+      })
+      // Settings are not worth blocking the planner over: without them the
+      // deadline line simply does not render.
+      .catch(() => undefined);
 
     return () => {
       active = false;
@@ -216,6 +228,28 @@ export default function WeekPlanner() {
    * what the notice below points at.
    */
   const weekLocked = Boolean(plan?.submittedWeeks?.includes(currentWeekSafe));
+
+  /**
+   * When ordering closes for the week on screen.
+   *
+   * Computed with the same functions the submit screen uses, so the two can
+   * never disagree about a deadline. Recomputed each minute so a countdown that
+   * says "12m left" does not sit there saying it for an hour.
+   */
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(tick);
+  }, []);
+
+  const cutoff = useMemo(() => {
+    if (!plan || !config) return null;
+    return cutoffState(
+      weekStartDate(plan, currentWeekSafe),
+      cutoffConfigOf(config),
+      new Date(now)
+    );
+  }, [plan, config, currentWeekSafe, now]);
   const startsInPast = Boolean(plan && plan.programStartDate < baliWeekStart());
   const weekSummary = useMemo(() => {
     if (!plan) return null;
@@ -652,6 +686,41 @@ export default function WeekPlanner() {
           <Wallet size={13} /> {showPrices ? "Hide prices" : "Show prices"}
         </button>
       </div>
+
+      {/* When this week stops being orderable. */}
+      {cutoff && !weekLocked && (
+        <p
+          data-testid="planner-cutoff"
+          className={
+            "mb-3 flex flex-wrap items-center gap-1.5 rounded-xl border px-3 py-2 text-sm " +
+            (cutoff.passed || config?.acceptingOrders === false
+              ? "border-tomato-dark/30 bg-tomato-soft/20 text-tomato-dark"
+              : "border-cream-deep bg-white text-charcoal")
+          }
+        >
+          <Clock size={15} />
+          {config?.acceptingOrders === false ? (
+            <span className="font-600">
+              Negrita is not taking orders at the moment. You can keep planning —
+              you will not be able to send this week until it reopens.
+            </span>
+          ) : cutoff.passed ? (
+            <span className="font-600">
+              Orders for week {currentWeekSafe} closed on{" "}
+              {formatBaliDay(cutoff.at.toISOString())}.
+            </span>
+          ) : (
+            <span>
+              Send week {currentWeekSafe} by{" "}
+              <b className="font-700">
+                {formatBaliDay(cutoff.at.toISOString())}, {config?.cutoffTime}
+              </b>{" "}
+              — {formatRemaining(cutoff.msRemaining)} left
+              <span className="text-charcoal-soft"> · {BALI_LABEL}</span>
+            </span>
+          )}
+        </p>
+      )}
 
       {/* Week switcher + view toggle */}
       <div className="mb-4 flex flex-wrap items-center gap-2">

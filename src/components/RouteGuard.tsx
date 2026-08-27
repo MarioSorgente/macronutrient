@@ -37,15 +37,22 @@ export default function RouteGuard({ children }: { children: ReactNode }) {
   const policy = policyFor(pathname);
   const isPublic = policy.kind === "public";
   const staffIntent = policy.kind === "role" && policy.staffIntent;
-  const kitchenRoute =
-    pathname.toLowerCase() === "/kitchen" ||
-    pathname.toLowerCase().startsWith("/kitchen/");
+  /**
+   * Send someone away, rather than showing them the staff-access gate.
+   *
+   * Only for a screen that has no access-request flow to offer: planning and
+   * customer orders mean nothing to a staff account, so those are a redirect.
+   * A staff area is not — a customer who opens the kitchen is told why they
+   * cannot enter and offered the way in, which is how an existing customer
+   * becomes staff. Redirecting them to /plan instead simply left them
+   * somewhere else with no explanation.
+   */
   const redirectDeniedRole =
     policy.kind === "role" &&
     roleSettled &&
     role !== null &&
     !policy.allow.includes(role) &&
-    (kitchenRoute || !policy.staffIntent);
+    !policy.staffIntent;
 
   useEffect(() => {
     if (isPublic || !enabled || loading || user) return;

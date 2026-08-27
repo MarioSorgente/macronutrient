@@ -99,6 +99,27 @@ export async function listAllOrders(max = 200): Promise<Order[]> {
 }
 
 /**
+ * Live updates for the order book, so two people working the pass stay in step.
+ *
+ * The prep board has had this since it was written; the order list did not, and
+ * only re-read after its own status change. One person accepting an order left
+ * the other looking at it as still waiting until they reloaded the page.
+ */
+export async function watchAllOrders(
+  onChange: (orders: Order[]) => void,
+  onError: (cause: unknown) => void,
+  max = 200
+): Promise<() => void> {
+  requireCloud("Watching the order book");
+  const { db, collection, limit, onSnapshot, orderBy, query } = await firestore();
+  return onSnapshot(
+    query(collection(db, ORDERS), orderBy("weekStartDate", "desc"), limit(max)),
+    (snap) => onChange(snap.docs.map((d) => d.data() as Order)),
+    onError
+  );
+}
+
+/**
  * Moves an order through its lifecycle.
  *
  * Server-side, because a cancelled or rejected order also has to clear the

@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ClipboardList, Flame } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, ClipboardList, Flame } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { listAllOrders, setOrderStatus } from "@/lib/storage/orders";
+import { listAllOrders, setOrderStatus, watchAllOrders } from "@/lib/storage/orders";
 import {
   menuPerformance,
   statusCounts,
@@ -74,7 +75,36 @@ export default function KitchenOrders() {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+
+    watchAllOrders(
+      (next) => {
+        if (!active) return;
+        setOrders(next);
+        setError(null);
+        setLoading(false);
+      },
+      (cause) => {
+        if (!active) return;
+        setError(authErrorMessage(cause));
+        setLoading(false);
+      }
+    )
+      .then((off) => {
+        if (active) unsubscribe = off;
+        else off();
+      })
+      // A live listener needs an index and permissions; fall back to a plain
+      // read so a missing one degrades to a static list, not an empty one.
+      .catch(() => {
+        if (active) void refresh();
+      });
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, [refresh]);
 
   const counts = useMemo(() => statusCounts(orders), [orders]);
@@ -298,8 +328,11 @@ export default function KitchenOrders() {
                   <li key={order.id}>
                     <Card className="p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h3 className="font-600 text-charcoal">
+                        <Link
+                          href={`/kitchen/orders/${order.id}`}
+                          className="min-w-0 rounded-lg hover:text-tomato"
+                        >
+                          <h3 className="font-600 text-charcoal hover:text-tomato">
                             {order.customer.name}
                           </h3>
                           <p className="text-xs text-charcoal-soft">
@@ -309,7 +342,10 @@ export default function KitchenOrders() {
                             {order.days.length === 1 ? "" : "s"} ·{" "}
                             {order.customer.email}
                           </p>
-                        </div>
+                          <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-600 text-tomato">
+                            See what to prepare <ChevronRight size={13} />
+                          </span>
+                        </Link>
                         <div className="flex shrink-0 items-center gap-2">
                           <OrderStatusBadge status={order.status} />
                           <span className="text-sm font-700 tabular-nums text-charcoal">

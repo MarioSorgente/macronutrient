@@ -93,10 +93,11 @@ describe("customer navigation", () => {
     expect(screen.queryByRole("menuitem", { name: /my week/i })).toBeNull();
   });
 
+  // The owner oversees the kitchen as well as the operator who works it.
   it.each([
     ["client", false],
     ["restaurant", true],
-    ["admin", false],
+    ["admin", true],
   ] as const)("shows the header Kitchen link for the %s capability", (role, visible) => {
     mocks.role = role;
     render(<BrandHeader />);
@@ -106,7 +107,7 @@ describe("customer navigation", () => {
   it.each([
     ["client", false],
     ["restaurant", true],
-    ["admin", false],
+    ["admin", true],
   ] as const)("shows the menu Kitchen item for the %s capability", (role, visible) => {
     mocks.role = role;
     openAccountMenu();

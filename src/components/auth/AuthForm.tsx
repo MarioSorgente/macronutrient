@@ -150,7 +150,14 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
         // Someone who arrived on the staff CTA and then chose "For myself" has
         // changed their mind: `next` still says /kitchen, and honouring it would
         // land them on the staff-access panel they just declined.
-        const customerNext = policyFor(next).kind === "role" ? DEFAULT_NEXT : next;
+        //
+        // Only a *staff* destination is discarded. This used to drop any route
+        // with a role policy, which was the same thing until the customer's own
+        // screens became role routes — after which asking for /orders, /plan or
+        // /report before signing in silently landed you on /plan instead.
+        const nextPolicy = policyFor(next);
+        const customerNext =
+          nextPolicy.kind === "role" && nextPolicy.staffIntent ? DEFAULT_NEXT : next;
         const to =
           intent === "staff"
             ? await resolveStaffDestination(requested)

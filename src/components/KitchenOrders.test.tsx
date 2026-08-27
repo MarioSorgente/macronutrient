@@ -71,6 +71,12 @@ vi.mock("@/components/ui/Toast", () => ({ useToast: () => ({ show: vi.fn() }) })
 vi.mock("@/lib/storage/orders", () => ({
   listAllOrders: () => Promise.resolve(mocks.orders),
   setOrderStatus: vi.fn(() => Promise.resolve()),
+  // The screen subscribes rather than polling, so the double stands in for a
+  // listener: it delivers once and hands back an unsubscribe.
+  watchAllOrders: (onChange: (orders: unknown[]) => void) => {
+    onChange(mocks.orders as unknown[]);
+    return Promise.resolve(() => {});
+  },
 }));
 
 import KitchenOrders from "@/components/KitchenOrders";
@@ -140,6 +146,20 @@ describe("KitchenOrders", () => {
     const card = screen.getByText("Popular lately").closest("div")!;
     expect(card.textContent).toContain("Sold before");
     expect(card.textContent).not.toContain("Not cooked yet");
+  });
+
+  it("opens the order, which staff had no way to reach at all", async () => {
+    await show([order({ id: "abc" })]);
+    const link = screen.getByText("Mario").closest("a")!;
+    expect(link.getAttribute("href")).toBe("/kitchen/orders/abc");
+    expect(screen.getByText("See what to prepare")).toBeTruthy();
+  });
+
+  it("keeps the status buttons out of the link", async () => {
+    // Accepting from the list must not navigate away from it.
+    await show([order({ status: "submitted" })]);
+    const accept = screen.getByRole("button", { name: "Accepted" });
+    expect(accept.closest("a")).toBeNull();
   });
 
   it("filters by customer name", async () => {

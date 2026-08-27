@@ -232,13 +232,32 @@ export default function SubmitWeek() {
   }
 
   const alreadySent = plan.submittedWeeks?.includes(week);
-  const blocked =
-    busy ||
-    alreadySent ||
-    days.length === 0 ||
-    problems.length > 0 ||
-    (cutoff?.passed ?? false) ||
-    !(config?.acceptingOrders ?? true);
+
+  /**
+   * Why the send button is not available, in the order a person would ask.
+   *
+   * This used to be a single `blocked` boolean covering six conditions, four of
+   * which rendered nothing at all: a closed kitchen or a passed cutoff simply
+   * greyed the button out and left the reader to guess. The server has a proper
+   * sentence for the closed case — "Negrita is not taking orders at the moment"
+   * — but it is unreachable, because a disabled button never sends the request
+   * that would return it.
+   */
+  const blockedReason: string | null = busy
+    ? null
+    : alreadySent
+      ? `Week ${week} has already been sent to the kitchen.`
+      : days.length === 0
+        ? "There is nothing planned for this week yet."
+        : !(config?.acceptingOrders ?? true)
+          ? "Negrita is not taking orders at the moment. Your week is saved — send it once they reopen."
+          : cutoff?.passed
+            ? `Orders for week ${week} closed on ${formatBaliDay(cutoff.at.toISOString())}.`
+            : problems.length > 0
+              ? problems[0]
+              : null;
+
+  const blocked = busy || blockedReason !== null;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
@@ -482,6 +501,15 @@ export default function SubmitWeek() {
             </p>
           )}
 
+          {/* Never leave the button dead and unexplained. `problems` and
+              `alreadySent` render their own richer blocks above, so this only
+              speaks for the reasons that had no voice. */}
+          {blockedReason && problems.length === 0 && !alreadySent && (
+            <p className="mt-3 rounded-xl border border-cream-deep bg-cream px-3 py-2 text-sm font-600 text-charcoal">
+              {blockedReason}
+            </p>
+          )}
+
           <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Link
               href="/plan"
@@ -492,6 +520,7 @@ export default function SubmitWeek() {
             <Button
               variant="primary"
               disabled={blocked}
+              title={blockedReason ?? undefined}
               onClick={send}
               icon={<Send size={16} />}
             >

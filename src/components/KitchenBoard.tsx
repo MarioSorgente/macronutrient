@@ -353,6 +353,13 @@ export default function KitchenBoard({ date }: { date?: string }) {
                           ))}
                         </ul>
 
+                        <Link
+                          href={`/kitchen/orders/${task.orderId}`}
+                          className="no-print mt-2 inline-flex text-[11px] font-600 text-charcoal-soft underline hover:text-tomato"
+                        >
+                          Whole order
+                        </Link>
+
                         {NEXT[task.status] && (
                           <button
                             type="button"

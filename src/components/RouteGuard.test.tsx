@@ -160,17 +160,27 @@ describe("RouteGuard", () => {
       expect(showsScreen()).toBe(true);
     });
 
-    it.each([
-      ["client", "/plan"],
-      ["admin", "/admin"],
-    ] as const)("redirects a %s directly away from the kitchen", async (role, home) => {
+    it("offers a customer the way into the kitchen rather than a locked door", () => {
+      // This is how an existing customer becomes staff. Bouncing them to /plan
+      // left them somewhere else with no explanation of why.
       mocks.pathname = "/kitchen";
-      mocks.auth = signedIn(role);
+      mocks.auth = signedIn("client");
       guard();
 
       expect(showsScreen()).toBe(false);
-      expect(screen.queryByText(/staff access panel/)).toBeNull();
-      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(home));
+      expect(screen.queryByText(/staff access panel/)).toBeTruthy();
+      expect(mocks.replace).not.toHaveBeenCalled();
+    });
+
+    it("lets the owner into the kitchen they oversee", async () => {
+      // The order book, the prep board and every order detail live under
+      // /kitchen; excluding the owner shut them out of their own pass.
+      mocks.pathname = "/kitchen";
+      mocks.auth = signedIn("admin");
+      guard();
+
+      expect(showsScreen()).toBe(true);
+      expect(mocks.replace).not.toHaveBeenCalled();
     });
 
     it("do the same for /admin", () => {
