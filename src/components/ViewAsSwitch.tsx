@@ -1,6 +1,7 @@
 "use client";
 
 import { Eye } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import type { Role } from "@/lib/storage/types";
 import { cn } from "@/components/ui/cn";
@@ -22,7 +23,20 @@ const OPTIONS: Role[] = ["client", "restaurant", "admin"];
  */
 export default function ViewAsSwitch({ className }: { className?: string }) {
   const { actualRole, viewAs, setViewAs } = useAuth();
+  const pathname = usePathname() ?? "/";
+  const router = useRouter();
   if (actualRole !== "admin") return null;
+
+  function selectRole(option: Role) {
+    setViewAs(option === "admin" ? null : option);
+
+    // Move before the effective role reaches RouteGuard. Otherwise choosing a
+    // customer while standing on /admin briefly replaces the dashboard with an
+    // access gate, with no customer navigation visible to get out again.
+    const destination =
+      option === "client" ? "/plan" : option === "restaurant" ? "/kitchen" : "/admin";
+    if (pathname !== destination) router.push(destination);
+  }
 
   return (
     <div className={className}>
@@ -40,7 +54,7 @@ export default function ViewAsSwitch({ className }: { className?: string }) {
             <button
               key={option}
               type="button"
-              onClick={() => setViewAs(option === "admin" ? null : option)}
+              onClick={() => selectRole(option)}
               aria-pressed={active}
               className={cn(
                 "flex-1 rounded-lg px-3 py-1.5 text-xs font-600 capitalize transition-colors",

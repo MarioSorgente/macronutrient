@@ -6,6 +6,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 import GuestDataClaim from "@/components/GuestDataClaim";
 import RouteGuard from "@/components/RouteGuard";
 import ViewAsBanner from "@/components/ViewAsBanner";
+import PreviewNavigation from "@/components/PreviewNavigation";
 import { Analytics } from "@vercel/analytics/next";
 
 const display = Fraunces({
@@ -41,6 +42,7 @@ export default function RootLayout({
                 globally — the landing page has no use for them. */}
             <GuestDataClaim />
             <ViewAsBanner />
+            <PreviewNavigation />
             {/* Every route except the landing page and the auth screens needs an
                 account. Gating here rather than per page is the point: a new
                 screen is protected by existing, not by remembering to ask. */}
