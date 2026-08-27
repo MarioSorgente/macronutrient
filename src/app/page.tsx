@@ -3,7 +3,6 @@ import {
   BadgeCheck,
   CalendarRange,
   ChefHat,
-  Scale,
   Send,
   Sparkles,
   Target,
@@ -11,21 +10,30 @@ import {
 import BrandHeader from "@/components/BrandHeader";
 import LandingCtas from "@/components/LandingCtas";
 import { databaseMeta, nutritionCatalog } from "@/lib/database";
+import {
+  LANDING_WEEK,
+  LANDING_WEEK_SLOTS,
+  LANDING_WEEK_TARGET,
+} from "@/lib/landingWeek";
 
 /**
  * Public landing page.
  *
- * The product's real edge is that its numbers are honest: most are verified
- * against USDA FoodData Central, the rest are visibly labelled as estimates,
- * and portions are counted the way a kitchen counts them. That is the centre of
- * the page rather than a footnote — and every figure is derived from the
- * shipped database, so the page cannot claim more than the app knows.
+ * The product's real edge is that a whole week of food plans itself against
+ * your numbers and then a restaurant cooks it, so the page shows that outcome
+ * rather than describing it: a genuine seven-day week of Negrita dishes,
+ * landing on a stated target. Everything numeric here is derived from the
+ * shipped database or checked against it in `landingWeek.test.ts`, so the page
+ * cannot claim more than the app actually knows.
  */
 export const metadata = {
   title: "Mamma Calories — Eat at Negrita, hit your macros",
   description:
     "Plan your week from the real Negrita menu with verified nutrition, then send it to the kitchen to prepare.",
 };
+
+/** Fixed locale so the server and the client render the same separators. */
+const num = (value: number) => value.toLocaleString("en-US");
 
 const STEPS = [
   {
@@ -55,19 +63,19 @@ const VERIFIED_COUNT = nutritionCatalog.counts.verifiedIngredients;
 
 const PROOF = [
   {
-    icon: Scale,
-    title: "Real portions",
-    body: "Count food the way a kitchen does — two large eggs, one pita, a tablespoon of oil — not grams you have to estimate.",
+    icon: Sparkles,
+    title: "A week in about a second",
+    body: "Auto-fill builds all seven days at once, searching the whole menu. Not keen on it? Shuffle gives you a different week that lands on the same numbers.",
+  },
+  {
+    icon: Target,
+    title: "Built to your numbers",
+    body: "Set calories and macros, or start from a split like high protein. If a slot cannot be filled honestly it is left empty and flagged, never padded to make the total look right.",
   },
   {
     icon: ChefHat,
-    title: "House recipes",
-    body: "Negrita's own sauces and blends are entered from the real batch, so a dish built on them is exact rather than estimated.",
-  },
-  {
-    icon: Sparkles,
-    title: "Auto-fill a week",
-    body: "Give it your targets and what you like. If a slot cannot be filled honestly it is left empty and flagged, never padded to make the total look right.",
+    title: "Negrita cooks it",
+    body: "Send the week and it lands on the kitchen prep board, dish by dish. Pickup or delivery, chosen per day.",
   },
 ];
 
@@ -128,65 +136,157 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Why the numbers hold up */}
+      {/* What one click actually produces */}
       <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
-          <div>
-            <h2 className="font-display text-2xl font-700 text-charcoal sm:text-3xl">
-              Numbers you can actually trust
-            </h2>
-            <p className="mt-3 leading-relaxed text-charcoal-soft">
-              Most macro apps guess, and never tell you when they are guessing.
-              Here, {VERIFIED_COUNT} of the {nutritionCatalog.counts.ingredients} ingredients
-              Negrita cooks with are verified against USDA FoodData Central. The
-              rest are marked <b className="text-gold">est</b> everywhere they
-              appear, so you always know which numbers are solid.
-            </p>
-            <dl className="mt-6 grid grid-cols-3 gap-4">
-              <div>
-                <dt className="text-[11px] font-600 uppercase tracking-wide text-charcoal-soft">
-                  USDA-verified
-                </dt>
-                <dd className="font-display text-2xl font-700 tabular-nums text-basil">
-                  {VERIFIED_COUNT}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[11px] font-600 uppercase tracking-wide text-charcoal-soft">
-                  Ingredients
-                </dt>
-                <dd className="font-display text-2xl font-700 tabular-nums text-tomato">
-                  {nutritionCatalog.counts.ingredients}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[11px] font-600 uppercase tracking-wide text-charcoal-soft">
-                  Menu dishes
-                </dt>
-                <dd className="font-display text-2xl font-700 tabular-nums text-tomato">
-                  {nutritionCatalog.counts.menuRecipes}
-                </dd>
-              </div>
-            </dl>
+        <div className="max-w-2xl">
+          <h2 className="font-display text-2xl font-700 text-charcoal sm:text-3xl">
+            One click fills the whole week
+          </h2>
+          <p className="mt-3 leading-relaxed text-charcoal-soft">
+            Tell it your calories and protein — or start from a split like high
+            protein or low carb. Auto-fill searches the entire Negrita menu and
+            builds all seven days in about a second. Then the kitchen cooks
+            every plate on it.
+          </p>
+        </div>
+
+        {/* A real week, checked against the live menu by landingWeek.test.ts. */}
+        <figure className="mt-8">
+          <figcaption className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <span className="text-[11px] font-600 uppercase tracking-wide text-charcoal-soft">
+              A week the planner built
+            </span>
+            <span className="text-sm text-charcoal-soft">
+              Target{" "}
+              <b className="font-600 tabular-nums text-charcoal">
+                {num(LANDING_WEEK_TARGET.energy_kcal)} kcal
+              </b>{" "}
+              ·{" "}
+              <b className="font-600 tabular-nums text-charcoal">
+                {LANDING_WEEK_TARGET.protein_g} g protein
+              </b>
+            </span>
+          </figcaption>
+
+          <div className="scroll-slim mt-3 overflow-x-auto pb-2">
+            <ol className="grid min-w-[48rem] grid-cols-7 gap-3">
+              {LANDING_WEEK.map((day) => (
+                <li
+                  key={day.day}
+                  className="flex flex-col rounded-xl2 border border-cream-deep bg-white/70 p-3 shadow-card"
+                >
+                  <h3 className="text-xs font-700 uppercase tracking-wide text-charcoal-soft">
+                    {day.day}
+                  </h3>
+                  <ul className="mt-2 flex-1 space-y-2">
+                    {LANDING_WEEK_SLOTS.map((slot) => {
+                      const meal = day.meals.find((item) => item.slot === slot);
+                      // An empty slot is shown rather than hidden: a day that
+                      // hits its numbers in three meals is a complete day, and
+                      // saying so is the point — nothing is added to fill a gap.
+                      if (!meal) {
+                        return (
+                          <li
+                            key={slot}
+                            className="rounded-lg border border-dashed border-cream-deep px-2 py-1.5 text-[11px] leading-snug text-charcoal-soft/70"
+                          >
+                            No {slot.toLowerCase()} needed
+                          </li>
+                        );
+                      }
+                      return (
+                        <li key={slot} className="leading-snug">
+                          <p className="text-[10px] font-600 uppercase tracking-wide text-charcoal-soft/70">
+                            {slot}
+                          </p>
+                          <p className="mt-0.5 text-[13px] font-600 text-charcoal">
+                            {meal.short}
+                          </p>
+                          <p className="text-[11px] font-600 tabular-nums text-tomato">
+                            {num(meal.energy_kcal)} kcal
+                          </p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="mt-3 border-t border-cream-deep pt-2 text-[11px] leading-snug text-charcoal-soft">
+                    <span className="font-display text-base font-700 tabular-nums text-charcoal">
+                      {num(day.energy_kcal)}
+                    </span>{" "}
+                    kcal
+                    <br />
+                    <span className="font-600 tabular-nums text-basil">
+                      {day.protein_g} g
+                    </span>{" "}
+                    protein
+                  </p>
+                </li>
+              ))}
+            </ol>
           </div>
 
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-            {PROOF.map((item) => {
-              const Icon = item.icon;
-              return (
-                <li
-                  key={item.title}
-                  className="flex gap-3 rounded-xl2 border border-cream-deep bg-white/70 p-4 shadow-card"
-                >
-                  <Icon size={18} className="mt-0.5 shrink-0 text-tomato" />
-                  <div>
-                    <h3 className="font-600 text-charcoal">{item.title}</h3>
-                    <p className="mt-0.5 text-sm text-charcoal-soft">{item.body}</p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <p className="mt-3 text-xs leading-relaxed text-charcoal-soft">
+            Every dish here is on the Negrita menu, at the macros the menu
+            publishes — none of it is illustrative. Swap anything you do not
+            fancy and the totals follow along.
+          </p>
+        </figure>
+
+        <ul className="mt-10 grid gap-4 sm:grid-cols-3">
+          {PROOF.map((item) => {
+            const Icon = item.icon;
+            return (
+              <li
+                key={item.title}
+                className="flex gap-3 rounded-xl2 border border-cream-deep bg-white/70 p-4 shadow-card"
+              >
+                <Icon size={18} className="mt-0.5 shrink-0 text-tomato" />
+                <div>
+                  <h3 className="font-600 text-charcoal">{item.title}</h3>
+                  <p className="mt-0.5 text-sm leading-relaxed text-charcoal-soft">
+                    {item.body}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+
+        {/* The data behind every number above. Supporting, not the headline. */}
+        <div className="mt-8 flex flex-col gap-5 rounded-xl2 border border-cream-deep bg-cream-deep/40 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-lg text-sm leading-relaxed text-charcoal-soft">
+            And the numbers underneath hold up. {VERIFIED_COUNT} of the{" "}
+            {nutritionCatalog.counts.ingredients} ingredients Negrita cooks with
+            are verified against USDA FoodData Central. The rest are marked{" "}
+            <b className="text-gold">est</b> everywhere they appear, so you
+            always know which numbers are solid.
+          </p>
+          <dl className="grid shrink-0 grid-cols-3 gap-5 sm:gap-8">
+            <div>
+              <dt className="text-[11px] font-600 uppercase tracking-wide text-charcoal-soft">
+                USDA-verified
+              </dt>
+              <dd className="font-display text-2xl font-700 tabular-nums text-basil">
+                {VERIFIED_COUNT}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-600 uppercase tracking-wide text-charcoal-soft">
+                Ingredients
+              </dt>
+              <dd className="font-display text-2xl font-700 tabular-nums text-tomato">
+                {nutritionCatalog.counts.ingredients}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-600 uppercase tracking-wide text-charcoal-soft">
+                Menu dishes
+              </dt>
+              <dd className="font-display text-2xl font-700 tabular-nums text-tomato">
+                {nutritionCatalog.counts.menuRecipes}
+              </dd>
+            </div>
+          </dl>
         </div>
       </section>
 
