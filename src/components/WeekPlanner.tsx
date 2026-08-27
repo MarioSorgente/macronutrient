@@ -38,14 +38,14 @@ import { formatIdr, formatPrice, priceItems } from "@/lib/pricing";
 import { usePlanView, useShowPrices } from "@/lib/planView";
 import { EMPTY_MACROS, scaleMacros, sumDishMacros } from "@/lib/calc";
 import { ZERO_PRICE } from "@/lib/pricing";
-import { loadCurrentPlan, savePlan } from "@/lib/currentPlan";
+import { loadCurrentPlan, programWeekForDate, savePlan } from "@/lib/currentPlan";
 import type { GeneratedDay } from "@/lib/mealPlanner";
 import { assignmentsFromGenerated, occupiedSlots } from "@/lib/planAssignments";
 import { withRenamedSlots } from "@/lib/planSlots";
 import { menuRecipeForDish, planWithMenuIdentity } from "@/lib/menuIdentity";
 import { negritaMenuCandidate } from "@/lib/plannerCandidates";
 import { GRAM_UNIT_ID, type MenuRecipe } from "@/types/nutrition";
-import { round0 } from "@/lib/format";
+import { baliToday, baliWeekStart, round0 } from "@/lib/format";
 import MacroSummary from "@/components/MacroSummary";
 import AssignDishDialog from "@/components/AssignDishDialog";
 import PlanSettings from "@/components/PlanSettings";
@@ -129,6 +129,7 @@ export default function WeekPlanner() {
         loadedFor.current = repos.uid;
         optimisticPlan.current = loaded;
         setClient(loaded);
+        setWeek(programWeekForDate(loaded, baliToday()) ?? 1);
         setSaveError(null);
         // The plan is self-contained: assignment snapshots and inline items
         // are enough to render it while the dish library catches up.
@@ -215,6 +216,7 @@ export default function WeekPlanner() {
    * what the notice below points at.
    */
   const weekLocked = Boolean(plan?.submittedWeeks?.includes(currentWeekSafe));
+  const startsInPast = Boolean(plan && plan.programStartDate < baliWeekStart());
   const weekSummary = useMemo(() => {
     if (!plan) return null;
     const totals = weekTotals(plan, currentWeekSafe, dishMap);
@@ -541,6 +543,28 @@ export default function WeekPlanner() {
             className="rounded-lg bg-tomato px-3 py-1.5 text-xs font-700 text-cream hover:bg-tomato-dark disabled:opacity-50"
           >
             {saving ? "Saving…" : "Try again"}
+          </button>
+        </div>
+      )}
+      {startsInPast && (
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border-2 border-gold bg-gold/10 px-4 py-3 text-sm text-charcoal">
+          <AlertTriangle size={18} className="shrink-0 text-gold-dark" />
+          <div className="min-w-0 flex-1">
+            <b className="font-700">This plan starts in a past week.</b>{" "}
+            Its dates have not been changed because it contains meals or submitted weeks.
+          </div>
+          <button
+            type="button"
+            className="rounded-lg bg-charcoal px-3 py-2 text-xs font-700 text-cream hover:opacity-90"
+            onClick={() => {
+              const confirmed = window.confirm(
+                "Start this plan from the current Bali week? Existing assignments keep their week and Monday-based day positions, but their service dates will move. Existing orders are not changed."
+              );
+              if (!confirmed) return;
+              void persist((current) => ({ ...current, programStartDate: baliWeekStart() }));
+            }}
+          >
+            Start from this week
           </button>
         </div>
       )}

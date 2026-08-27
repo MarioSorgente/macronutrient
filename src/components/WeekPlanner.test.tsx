@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Plan, Dish } from "@/lib/storage/types";
 
 const mocks = vi.hoisted(() => ({
@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   houseRecipeLoader: vi.fn((_props: { enabled: boolean }) => null),
 }));
 
-vi.mock("@/lib/currentPlan", () => ({
+vi.mock("@/lib/currentPlan", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/currentPlan")>(),
   loadCurrentPlan: mocks.loadCurrentPlan,
   savePlan: mocks.savePlan,
 }));
@@ -71,6 +72,55 @@ describe("WeekPlanner", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listDishes.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("opens the program week containing today in Bali", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-08-27T04:00:00.000Z"));
+    mocks.loadCurrentPlan.mockResolvedValue({
+      id: "plan-1", ownerUid: "", title: "August plan",
+      createdAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-01T00:00:00.000Z",
+      targets: null, targetMode: "preset", mealSlots: ["Lunch"],
+      programStartDate: "2026-08-17", weekCount: 4, status: "draft",
+      submittedWeeks: [], assignments: [],
+    } satisfies Plan);
+
+    render(<WeekPlanner />);
+
+    const weekTwo = await screen.findByRole("button", { name: "Week 2" });
+    expect(weekTwo.className).toContain("bg-charcoal");
+  });
+
+  it("warns instead of silently moving a populated past plan and confirms an explicit move", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-08-27T04:00:00.000Z"));
+    const populated = {
+      id: "plan-1", ownerUid: "", title: "August plan",
+      createdAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-01T00:00:00.000Z",
+      targets: null, targetMode: "preset", mealSlots: ["Lunch"],
+      programStartDate: "2026-08-17", weekCount: 2, status: "draft", submittedWeeks: [],
+      assignments: [{ id: "a1", week: 1, day: 6, slot: "Lunch", servings: 1,
+        snapshot: { name: "Sunday meal", totals: { energy_kcal: 1, protein_g: 1, carbs_g: 1, fat_g: 1, fiber_g: 1 } } }],
+    } satisfies Plan;
+    mocks.loadCurrentPlan.mockResolvedValue(populated);
+    mocks.savePlan.mockImplementation(async (_repo, _uid, plan: Plan) => plan);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<WeekPlanner />);
+    expect(await screen.findByText("This plan starts in a past week.")).toBeTruthy();
+    expect(mocks.savePlan).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Start from this week" }));
+
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("service dates will move"));
+    expect(mocks.savePlan).toHaveBeenCalledWith(expect.anything(), null,
+      expect.objectContaining({ programStartDate: "2026-08-24" }));
+    expect(mocks.savePlan.mock.calls[0][2].assignments[0].day).toBe(6);
   });
 
   it("shows the week before the dish library request settles", async () => {
