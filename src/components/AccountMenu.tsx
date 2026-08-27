@@ -10,8 +10,8 @@ import {
   ShieldCheck,
   User as UserIcon,
 } from "lucide-react";
-import { useAuth, isStaff } from "@/lib/auth/AuthProvider";
-import { roleLabel } from "@/lib/roles";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { canUseAdmin, canUseKitchen, roleLabel } from "@/lib/roles";
 import { authUrl } from "@/lib/auth/next";
 import { cn } from "@/components/ui/cn";
 import ViewAsSwitch from "@/components/ViewAsSwitch";
@@ -145,7 +145,7 @@ export default function AccountMenu() {
             </>
           )}
 
-          {isStaff(role) && (
+          {canUseKitchen(role) && (
             <Link
               href="/kitchen"
               role="menuitem"
@@ -155,7 +155,7 @@ export default function AccountMenu() {
             </Link>
           )}
 
-          {role === "admin" && (
+          {canUseAdmin(role) && (
             <Link
               href="/admin"
               role="menuitem"

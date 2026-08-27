@@ -1,4 +1,5 @@
 import type { Role } from "@/lib/storage/types";
+import { canManageHouseItems, canUseAdmin, canUseKitchen } from "@/lib/roles";
 
 /**
  * What each route requires, in one table.
@@ -18,8 +19,11 @@ export type RouteAccess =
   | { kind: "auth" }
   | { kind: "role"; allow: Role[]; staffIntent: boolean };
 
-const STAFF: Role[] = ["restaurant", "admin"];
 const CLIENT: Role[] = ["client"];
+const ROLES: Role[] = ["client", "restaurant", "admin"];
+const KITCHEN: Role[] = ROLES.filter(canUseKitchen);
+const HOUSE_ITEMS: Role[] = ROLES.filter(canManageHouseItems);
+const ADMIN: Role[] = ROLES.filter(canUseAdmin);
 
 /**
  * The complete public surface.
@@ -29,9 +33,6 @@ const CLIENT: Role[] = ["client"];
  */
 const PUBLIC_EXACT = new Set(["/", "/login", "/signup", "/reset"]);
 const PUBLIC_PREFIXES = ["/__/auth"];
-
-/** Staff areas. The admin-only screens keep their own stricter check inside. */
-const STAFF_PREFIXES = ["/kitchen", "/admin"];
 
 /** Screens belonging to the diner's planning and ordering journey. */
 const CLIENT_PREFIXES = ["/plan", "/report", "/orders"];
@@ -54,9 +55,13 @@ export function policyFor(pathname: string): RouteAccess {
   if (PUBLIC_PREFIXES.some((prefix) => matches(path, prefix))) {
     return { kind: "public" };
   }
-  if (STAFF_PREFIXES.some((prefix) => matches(path, prefix))) {
-    return { kind: "role", allow: STAFF, staffIntent: true };
-  }
+  if (matches(path, "/kitchen"))
+    return { kind: "role", allow: KITCHEN, staffIntent: true };
+  // This shared workspace must be checked before the broader admin prefix.
+  if (matches(path, "/admin/house-items"))
+    return { kind: "role", allow: HOUSE_ITEMS, staffIntent: true };
+  if (matches(path, "/admin"))
+    return { kind: "role", allow: ADMIN, staffIntent: true };
   if (CLIENT_PREFIXES.some((prefix) => matches(path, prefix))) {
     return { kind: "role", allow: CLIENT, staffIntent: false };
   }

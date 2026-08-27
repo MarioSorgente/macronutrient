@@ -92,4 +92,24 @@ describe("customer navigation", () => {
     openAccountMenu();
     expect(screen.queryByRole("menuitem", { name: /my week/i })).toBeNull();
   });
+
+  it.each([
+    ["client", false],
+    ["restaurant", true],
+    ["admin", false],
+  ] as const)("shows the header Kitchen link for the %s capability", (role, visible) => {
+    mocks.role = role;
+    render(<BrandHeader />);
+    expect(Boolean(screen.queryByRole("link", { name: /^Kitchen$/ }))).toBe(visible);
+  });
+
+  it.each([
+    ["client", false],
+    ["restaurant", true],
+    ["admin", false],
+  ] as const)("shows the menu Kitchen item for the %s capability", (role, visible) => {
+    mocks.role = role;
+    openAccountMenu();
+    expect(Boolean(screen.queryByRole("menuitem", { name: /kitchen/i }))).toBe(visible);
+  });
 });
