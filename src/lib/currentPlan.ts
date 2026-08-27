@@ -153,6 +153,22 @@ export function __resetPlanCache(): void {
   writes.clear();
 }
 
+/** Whether moving the program anchor cannot change any planned service date. */
+export function isUntouchedDraft(plan: Plan): boolean {
+  return plan.status === "draft" &&
+    plan.assignments.length === 0 &&
+    (plan.submittedWeeks?.length ?? 0) === 0;
+}
+
+/** The 1-based program week containing a Bali calendar date, if any. */
+export function programWeekForDate(plan: Plan, date: string): number | null {
+  const start = Date.parse(`${plan.programStartDate}T00:00:00Z`);
+  const target = Date.parse(`${date}T00:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(target)) return null;
+  const week = Math.floor((target - start) / (7 * 86_400_000)) + 1;
+  return week >= 1 && week <= plan.weekCount ? week : null;
+}
+
 /**
  * The plan to show at /plan: the most recently touched one, or a fresh one.
  *
@@ -187,15 +203,32 @@ export function loadCurrentPlan(
 
     // Newest wins, and on a tie ours does: it is at least as new, and if its
     // save failed it is the only copy of the week that exists anywhere.
-    if (mine && (!saved || mine.updatedAt >= saved.updatedAt)) return mine;
+    let loaded: Plan | null = null;
+    if (mine && (!saved || mine.updatedAt >= saved.updatedAt)) loaded = mine;
     if (saved) {
-      remember(key, saved);
-      return saved;
+      if (!loaded) loaded = saved;
     }
-    if (mine) return mine;
+    if (!loaded && mine) loaded = mine;
+
+    if (loaded) {
+      const thisWeek = baliWeekStart();
+      if (loaded.programStartDate < thisWeek && isUntouchedDraft(loaded)) {
+        loaded = await savePlan(repo, ownerUid, {
+          ...loaded,
+          programStartDate: thisWeek,
+        });
+      } else {
+        remember(key, loaded);
+      }
+      return loaded;
+    }
 
     const atPrimary = await repo.get(PRIMARY_PLAN_ID);
     if (atPrimary) {
+      const thisWeek = baliWeekStart();
+      if (atPrimary.programStartDate < thisWeek && isUntouchedDraft(atPrimary)) {
+        return savePlan(repo, ownerUid, { ...atPrimary, programStartDate: thisWeek });
+      }
       remember(key, atPrimary);
       return atPrimary;
     }

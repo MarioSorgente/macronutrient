@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PRIMARY_PLAN_ID,
   __resetPlanCache,
@@ -70,7 +70,10 @@ const planWith = (assignments: number, updatedAt: string): Plan => ({
   })),
 });
 
-afterEach(() => __resetPlanCache());
+afterEach(() => {
+  __resetPlanCache();
+  vi.useRealTimers();
+});
 
 describe("saving a plan", () => {
   it("serialises writes so an older plan cannot land after a newer one", async () => {
@@ -124,6 +127,43 @@ describe("saving a plan", () => {
 });
 
 describe("loading the current plan", () => {
+  it("rebases an empty August 17 draft to the current Bali week", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-27T04:00:00.000Z"));
+    const oldDraft = { ...planWith(0, "2026-08-17T00:00:00.000Z"), programStartDate: "2026-08-17" };
+    const repo = fakeRepository([oldDraft]);
+
+    const loaded = await loadCurrentPlan(repo, "u1");
+
+    expect(loaded.programStartDate).toBe("2026-08-24");
+    expect(repo.saved.at(-1)?.programStartDate).toBe("2026-08-24");
+  });
+
+  it("does not silently rebase a populated August 17 plan", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-27T04:00:00.000Z"));
+    const populated = { ...planWith(1, "2026-08-17T00:00:00.000Z"), programStartDate: "2026-08-17" };
+    const repo = fakeRepository([populated]);
+
+    expect((await loadCurrentPlan(repo, "u1")).programStartDate).toBe("2026-08-17");
+    expect(repo.saved).toEqual([]);
+  });
+
+  it("uses Bali's date at the UTC midnight boundary, with Sunday in the preceding week", async () => {
+    vi.useFakeTimers();
+    // Sunday 16:30 UTC is already Monday just after midnight in Bali.
+    vi.setSystemTime(new Date("2026-08-23T16:30:00.000Z"));
+    const mondayRepo = fakeRepository([{ ...planWith(0, "2026-08-17T00:00:00.000Z"), programStartDate: "2026-08-17" }]);
+    expect((await loadCurrentPlan(mondayRepo, "u1")).programStartDate).toBe("2026-08-24");
+
+    __resetPlanCache();
+    // One minute before Bali midnight is still Sunday, hence the Aug 17 week.
+    vi.setSystemTime(new Date("2026-08-23T15:59:00.000Z"));
+    const sundayRepo = fakeRepository([{ ...planWith(0, "2026-08-17T00:00:00.000Z"), programStartDate: "2026-08-17" }]);
+    expect((await loadCurrentPlan(sundayRepo, "u1")).programStartDate).toBe("2026-08-17");
+    expect(sundayRepo.saved).toEqual([]);
+  });
+
   it("waits for a write in flight before reading", async () => {
     const repo = fakeRepository();
     let release!: () => void;
