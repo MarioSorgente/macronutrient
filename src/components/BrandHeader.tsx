@@ -71,8 +71,8 @@ export default function BrandHeader() {
   const { user, role } = useAuth();
   const links = [
     ...LINKS,
-    ...(user ? PLANNER_LINKS : []),
-    ...(user ? ACCOUNT_LINKS : []),
+    ...(user && role === "client" ? PLANNER_LINKS : []),
+    ...(user && role === "client" ? ACCOUNT_LINKS : []),
     ...(isStaff(role) ? KITCHEN_LINKS : []),
     ...(role === "admin" ? ADMIN_LINKS : []),
   ];
