@@ -16,7 +16,7 @@ import {
 import { cutoffState } from "@/lib/cutoff";
 import { byId } from "@/lib/clients";
 import { planWithMenuIdentity } from "@/lib/menuIdentity";
-import { isOrderTransitionAllowed } from "@/lib/orderLifecycle";
+import { orderTransitionDecision } from "@/lib/orderLifecycle";
 import {
   buildOrderDays,
   DEFAULT_FULFILMENT,
@@ -34,6 +34,7 @@ import {
   type Fulfilment,
   type Order,
   type OrderStatus,
+  type PrepTask,
   type RestaurantConfig,
 } from "@/lib/storage/types";
 import { serviceTimeProblems } from "@/lib/fulfilmentTime";
@@ -351,26 +352,26 @@ export async function setOrderStatus(
       if (next !== "cancelled") throw new HttpError(403, "You can only cancel your own week.");
     }
 
-    if (!isOrderTransitionAllowed(order.status, next, isStaff ? "staff" : "client")) {
-      throw new HttpError(
-        409,
-        `An order cannot move from ${order.status} to ${next}.`
-      );
-    }
+    // Task documents are part of the aggregate. Reading them in this claim
+    // makes Firestore retry if a cook advances one concurrently.
+    const tasks = await transaction.get(
+      db.collection(`restaurants/${RESTAURANT_ID}/prepTasks`).where("orderId", "==", orderId)
+    );
+    const decision = orderTransitionDecision(
+      order.status, next, isStaff ? "staff" : "client",
+      tasks.docs.map((task) => task.data() as PrepTask)
+    );
+    if (!decision.allowed) throw new HttpError(409, decision.reason!);
 
     const becomingDead = DEAD.includes(next) && !DEAD.includes(order.status);
     const lockRef = reservationRef(db, order.userId, order.planId, order.weekNumber);
     const planRef = db.doc(`users/${order.userId}/plans/${order.planId}`);
-    const [tasks, plan, lock] = becomingDead
+    const [plan, lock] = becomingDead
       ? await Promise.all([
-          transaction.get(
-            db.collection(`restaurants/${RESTAURANT_ID}/prepTasks`)
-              .where("orderId", "==", orderId)
-          ),
           transaction.get(planRef),
           transaction.get(lockRef),
         ])
-      : [null, null, null];
+      : [null, null];
 
     const now = new Date().toISOString();
     // The note is shown to the diner as "From Negrita", so only Negrita may
@@ -392,7 +393,7 @@ export async function setOrderStatus(
     });
 
     if (becomingDead) {
-      for (const task of tasks!.docs) transaction.delete(task.ref);
+      for (const task of tasks.docs) transaction.delete(task.ref);
       if (plan!.exists) {
         const submitted: number[] = plan!.data()?.submittedWeeks ?? [];
         transaction.update(planRef, {

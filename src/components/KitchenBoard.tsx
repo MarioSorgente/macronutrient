@@ -23,6 +23,8 @@ import { mealsByDay } from "@/lib/orderStats";
 import { authErrorMessage } from "@/lib/auth/errors";
 import { addDays, BALI_LABEL, baliToday, formatBaliDay, round0 } from "@/lib/format";
 import type { PrepStatus, PrepTask } from "@/lib/storage/types";
+import type { Order } from "@/lib/storage/types";
+import { prepTaskTransitionDecision } from "@/lib/orderLifecycle";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import StatTile from "@/components/ui/StatTile";
@@ -65,6 +67,7 @@ export default function KitchenBoard({ date }: { date?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [groupBy, setGroupBy] = useState<GroupBy>("time");
   const [ahead, setAhead] = useState<{ date: string; meals: number }[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -115,7 +118,12 @@ export default function KitchenBoard({ date }: { date?: string }) {
   useEffect(() => {
     let active = true;
     listAllOrders()
-      .then((orders) => active && setAhead(mealsByDay(orders, day, 7)))
+      .then((loaded) => {
+        if (active) {
+          setOrders(loaded);
+          setAhead(mealsByDay(loaded, day, 7));
+        }
+      })
       .catch(() => active && setAhead([]));
     return () => {
       active = false;
@@ -360,7 +368,12 @@ export default function KitchenBoard({ date }: { date?: string }) {
                           Whole order
                         </Link>
 
-                        {NEXT[task.status] && (
+                        {NEXT[task.status] && (() => {
+                          const order = orders.find((candidate) => candidate.id === task.orderId);
+                          const decision = order
+                            ? prepTaskTransitionDecision(order.status, task.status, NEXT[task.status]!)
+                            : { allowed: false, reason: "Order status is still loading." };
+                          return decision.allowed ? (
                           <button
                             type="button"
                             onClick={() => advance(task)}
@@ -368,7 +381,10 @@ export default function KitchenBoard({ date }: { date?: string }) {
                           >
                             {ADVANCE_LABEL[task.status]}
                           </button>
-                        )}
+                          ) : (
+                            <p className="no-print mt-3 text-xs text-charcoal-soft">{decision.reason}</p>
+                          );
+                        })()}
                       </Card>
                     </li>
                   ))}

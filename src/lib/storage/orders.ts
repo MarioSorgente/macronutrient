@@ -166,6 +166,21 @@ export async function listPrepTasks(date: string): Promise<PrepTask[]> {
   return snap.docs.map((d) => d.data() as PrepTask);
 }
 
+/** All task state needed to decide aggregate order actions in the order book. */
+export async function listAllPrepTasks(): Promise<PrepTask[]> {
+  requireCloud("Reading prep progress");
+  const { db, collection, getDocs } = await firestore();
+  const snap = await getDocs(collection(db, PREP_TASKS));
+  return snap.docs.map((d) => d.data() as PrepTask);
+}
+
+export async function listOrderPrepTasks(orderId: string): Promise<PrepTask[]> {
+  requireCloud("Reading order prep progress");
+  const { db, collection, getDocs, query, where } = await firestore();
+  const snap = await getDocs(query(collection(db, PREP_TASKS), where("orderId", "==", orderId)));
+  return snap.docs.map((d) => d.data() as PrepTask);
+}
+
 /** Live updates for the board, so two people in the kitchen stay in step. */
 export async function watchPrepTasks(
   date: string,

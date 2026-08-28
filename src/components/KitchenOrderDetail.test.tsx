@@ -72,6 +72,7 @@ vi.mock("@/lib/auth/AuthProvider", () => ({
 vi.mock("@/components/ui/Toast", () => ({ useToast: () => ({ show: vi.fn() }) }));
 vi.mock("@/lib/storage/orders", () => ({
   getOrder: () => Promise.resolve(mocks.order),
+  listOrderPrepTasks: () => Promise.resolve([]),
   setOrderStatus: mocks.setOrderStatus,
 }));
 

@@ -14,13 +14,13 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { getOrder, setOrderStatus } from "@/lib/storage/orders";
+import { getOrder, listOrderPrepTasks, setOrderStatus } from "@/lib/storage/orders";
 import { miseEnPlace, prepTasksFor } from "@/lib/orders";
-import { ORDER_TRANSITIONS } from "@/lib/orderLifecycle";
+import { ORDER_TRANSITIONS, orderTransitionDecision } from "@/lib/orderLifecycle";
 import { authErrorMessage } from "@/lib/auth/errors";
 import { BALI_LABEL, formatBaliDay, formatBaliDateTime, round0 } from "@/lib/format";
 import { formatIdr } from "@/lib/pricing";
-import type { Order, OrderDay, OrderStatus } from "@/lib/storage/types";
+import type { Order, OrderDay, OrderStatus, PrepTask } from "@/lib/storage/types";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import Button from "@/components/ui/Button";
@@ -48,6 +48,7 @@ export default function KitchenOrderDetail() {
   const { show } = useToast();
 
   const [order, setOrder] = useState<Order | null>(null);
+  const [tasks, setTasks] = useState<PrepTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -55,7 +56,11 @@ export default function KitchenOrderDetail() {
   const load = useCallback(async () => {
     if (!orderId) return;
     try {
-      setOrder(await getOrder(orderId));
+      const [nextOrder, nextTasks] = await Promise.all([
+        getOrder(orderId), listOrderPrepTasks(orderId),
+      ]);
+      setOrder(nextOrder);
+      setTasks(nextTasks);
       setError(null);
     } catch (cause) {
       setError(authErrorMessage(cause));
@@ -133,7 +138,12 @@ export default function KitchenOrderDetail() {
     );
   }
 
-  const transitions = ORDER_TRANSITIONS[order.status].staff;
+  const decisions = ORDER_TRANSITIONS[order.status].staff.map((status) => ({
+    status,
+    decision: orderTransitionDecision(order.status, status, "staff", tasks),
+  }));
+  const transitions = decisions.filter(({ decision }) => decision.allowed);
+  const blocked = decisions.filter(({ decision }) => !decision.allowed);
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
@@ -234,7 +244,7 @@ export default function KitchenOrderDetail() {
 
         {transitions.length > 0 && (
           <div className="no-print mt-3 flex flex-wrap gap-2 border-t border-cream-deep pt-3">
-            {transitions.map((next) => (
+            {transitions.map(({ status: next }) => (
               <Button
                 key={next}
                 size="sm"
@@ -247,6 +257,11 @@ export default function KitchenOrderDetail() {
             ))}
           </div>
         )}
+        {blocked.map(({ status, decision }) => (
+          <p key={status} className="mt-2 text-xs text-charcoal-soft">
+            <b>{ORDER_LABELS[status].label}:</b> {decision.reason}
+          </p>
+        ))}
       </Card>
 
       {/* What to prepare, day by day. */}

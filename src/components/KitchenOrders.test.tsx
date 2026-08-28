@@ -70,6 +70,7 @@ vi.mock("@/lib/auth/AuthProvider", () => ({
 vi.mock("@/components/ui/Toast", () => ({ useToast: () => ({ show: vi.fn() }) }));
 vi.mock("@/lib/storage/orders", () => ({
   listAllOrders: () => Promise.resolve(mocks.orders),
+  listAllPrepTasks: () => Promise.resolve([]),
   setOrderStatus: vi.fn(() => Promise.resolve()),
   // The screen subscribes rather than polling, so the double stands in for a
   // listener: it delivers once and hands back an unsubscribe.
