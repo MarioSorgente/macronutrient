@@ -308,10 +308,10 @@ describe("4c. prep tasks are the kitchen's, and the meal is not theirs to rewrit
     );
   });
 
-  it("lets staff read and advance a task", async () => {
+  it("lets staff read but denies advancing a task", async () => {
     await seed(path, prepTaskDoc());
     await assertSucceeds(getDoc(doc(db("staff", claims.restaurant), path)));
-    await assertSucceeds(
+    await assertFails(
       updateDoc(doc(db("staff", claims.restaurant), path), { status: "done" })
     );
   });
@@ -332,9 +332,16 @@ describe("4c. prep tasks are the kitchen's, and the meal is not theirs to rewrit
     }
   );
 
-  it("lets staff delete a task", async () => {
+  it("denies staff deleting a task", async () => {
     await seed(path, prepTaskDoc());
-    await assertSucceeds(deleteDoc(doc(db("staff", claims.restaurant), path)));
+    await assertFails(deleteDoc(doc(db("staff", claims.restaurant), path)));
+  });
+
+  it("denies even an admin updating or deleting a task", async () => {
+    await seed(path, prepTaskDoc());
+    const ref = doc(db("admin", claims.admin), path);
+    await assertFails(updateDoc(ref, { status: "prepping" }));
+    await assertFails(deleteDoc(ref));
   });
 });
 

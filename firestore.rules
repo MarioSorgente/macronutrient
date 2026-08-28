@@ -7,9 +7,8 @@ rules_version = '2';
 //   1. Deny by default — the catch-all at the bottom.
 //   2. A plan is readable only by its owner; the restaurant never sees one.
 //   3. Nobody can write their own `role`. That is what stops self-promotion.
-//   4. Orders are read-only from a browser and prep tasks cannot be created
-//      there, so prices, the weekly cutoff and the kitchen's board are the
-//      server's alone.
+//   4. Orders and prep tasks are read-only from a browser, so prices, the
+//      weekly cutoff and the kitchen's board are the server's alone.
 // Everything else is intentionally permissive for trusted staff.
 
 service cloud.firestore {
@@ -65,15 +64,12 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
-      // Created by submitOrder alongside the order. Staff move them through
-      // the board; the meal itself is not theirs to rewrite.
+      // Created by submitOrder alongside the order and mutated only by server
+      // lifecycle routes. In particular, deletion is part of the atomic order
+      // cancellation/rejection cascade, never a standalone browser action.
       match /prepTasks/{taskId} {
         allow get, list: if isStaffOf(rid);
-        allow create: if false;
-        allow update: if isStaffOf(rid)
-                      && notTouching(['orderId', 'userId', 'items', 'servings',
-                                      'date', 'mealName', 'restaurantId']);
-        allow delete: if isStaffOf(rid);
+        allow create, update, delete: if false;
       }
     }
 
