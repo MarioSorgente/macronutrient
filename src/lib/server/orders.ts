@@ -54,6 +54,25 @@ import { validateRestaurantConfig } from "@/lib/server/restaurantConfig";
  */
 
 const MIN_RESUBMIT_MS = 60_000;
+const MAX_EMAIL_LENGTH = 254;
+const MAX_NAME_LENGTH = 120;
+const MAX_PHONE_LENGTH = 40;
+
+/** Normalize and validate the address asserted by Firebase's verified ID token. */
+function verifiedEmail(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new HttpError(400, "A verified email is required to submit an order.");
+  }
+  const email = value.trim().toLowerCase();
+  // Firestore will accept much larger strings, but downstream mail systems do
+  // not. Keep the conventional mailbox bound and reject rather than silently
+  // changing an identity asserted by the token.
+  if (email.length > MAX_EMAIL_LENGTH ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new HttpError(400, "The verified email on your account is invalid.");
+  }
+  return email;
+}
 
 interface LiveOrderReservation {
   orderId: string;
@@ -168,6 +187,10 @@ export async function submitOrder(
   input: SubmitInput,
   verified: VerifiedIdentity = {}
 ): Promise<SubmitResult> {
+  // Deliberately do this before any reads or writes: a writable profile email
+  // is never a fallback, and an account whose token has no usable email cannot
+  // create an order.
+  const email = verifiedEmail(verified.email);
   const db = adminDb();
 
   const { planId, weekNumber } = input;
@@ -270,13 +293,14 @@ export async function submitOrder(
       weekStartDate: startDate,
       status: "submitted",
       customer: {
-        // A name is the account holder's to choose, so the profile wins and the
-        // token is the fallback. An email is an identity the kitchen may act on,
-        // so it comes from the verified token and never from a document the
-        // account holder can write. A phone is theirs to give, but bounded.
-        name: String(profile.displayName ?? verified.name ?? "Guest").slice(0, 120),
-        email: String(verified.email ?? profile.email ?? ""),
-        ...(profile.phone ? { phone: String(profile.phone).slice(0, 40) } : {}),
+        // Display name and phone remain user-provided contact labels. Normalize
+        // and bound them, but do not present them as verified identity claims.
+        name: String(profile.displayName ?? verified.name ?? "Guest")
+          .trim().slice(0, MAX_NAME_LENGTH) || "Guest",
+        email,
+        ...(profile.phone && String(profile.phone).trim()
+          ? { phone: String(profile.phone).trim().slice(0, MAX_PHONE_LENGTH) }
+          : {}),
       },
       days,
       totals: summary.totals,
