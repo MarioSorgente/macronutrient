@@ -188,15 +188,11 @@ export async function watchPrepTasks(
 export async function setPrepStatus(
   taskId: string,
   status: PrepStatus,
-  byUid: string
+  _byUid: string
 ): Promise<void> {
-  const { db, doc, updateDoc } = await firestore();
-  const at = new Date().toISOString();
-  await updateDoc(doc(db, PREP_TASKS, taskId), {
-    status,
-    updatedAt: at,
-    ...(status === "done" ? { doneAt: at, doneByUid: byUid } : {}),
-  });
+  requireCloud("Updating a prep task");
+  const { callApi } = await import("@/lib/api");
+  await callApi("/api/prep-tasks/status", { taskId, status });
 }
 
 // --- Restaurant config ------------------------------------------------------
