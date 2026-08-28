@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { adminDb } from "@/lib/server/firebaseAdmin";
-import { setOrderStatus, submitOrder } from "@/lib/server/orders";
+import { setOrderStatus, submitOrder as submitOrderServer } from "@/lib/server/orders";
 import { setPrepTaskStatus } from "@/lib/server/prepTasks";
 import { HttpError } from "@/lib/server/auth";
 import {
@@ -28,6 +28,14 @@ import { negritaMenuCandidate } from "@/lib/plannerCandidates";
  */
 
 const PICKUP = { 0: { mode: "pickup", time: "12:00" } };
+
+// Most tests exercise unrelated order behavior with a representative verified
+// token claim. Identity-policy cases below call submitOrderServer directly.
+const submitOrder = (
+  ...args: Parameters<typeof submitOrderServer>
+): ReturnType<typeof submitOrderServer> => submitOrderServer(
+  args[0], args[1], args[2] ?? { email: "verified@example.com" }
+);
 
 async function aUser(): Promise<string> {
   return createUser(uniqueEmail("diner"));
@@ -167,6 +175,67 @@ describe("the happy path", () => {
       name: "Mario Rossi",
       phone: "+62 812 1111 2222",
     });
+  });
+});
+
+describe("customer contact provenance", () => {
+  it("never copies a forged profile email and requires a token email", async () => {
+    const uid = await aUser();
+    await adminDb().doc(`users/${uid}`).set({
+      uid, email: "attacker-controlled@example.com", displayName: "Diner",
+    });
+    await seedPlan(uid);
+
+    await expect(submitOrderServer(uid, {
+      planId: "p1", weekNumber: 1, fulfilment: PICKUP,
+    })).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringMatching(/verified email.*required/i),
+    });
+    expect(await listAt(`restaurants/${RID}/orders`)).toHaveLength(0);
+  });
+
+  it("normalizes the verified token email and lets it win over the profile", async () => {
+    const uid = await aUser();
+    await adminDb().doc(`users/${uid}`).set({
+      uid, email: "forged@example.com", displayName: "Diner",
+    });
+    await seedPlan(uid);
+
+    const { orderId } = await submitOrderServer(uid, {
+      planId: "p1", weekNumber: 1, fulfilment: PICKUP,
+    }, { email: "  Verified.Person@Example.COM  " });
+
+    const order = await docAt(`restaurants/${RID}/orders/${orderId}`);
+    expect(order?.customer).toMatchObject({ email: "verified.person@example.com" });
+  });
+
+  it("rejects an oversized verified token email before writing", async () => {
+    const uid = await aUser();
+    await seedPlan(uid);
+
+    await expect(submitOrderServer(uid, {
+      planId: "p1", weekNumber: 1, fulfilment: PICKUP,
+    }, { email: `${"a".repeat(250)}@example.com` })).rejects.toMatchObject({ status: 400 });
+    expect(await listAt(`restaurants/${RID}/orders`)).toHaveLength(0);
+  });
+
+  it("normalizes and bounds user-provided display name and phone", async () => {
+    const uid = await aUser();
+    await adminDb().doc(`users/${uid}`).set({
+      uid,
+      displayName: `  ${"N".repeat(140)}  `,
+      phone: `  ${"1".repeat(60)}  `,
+    });
+    await seedPlan(uid);
+
+    const { orderId } = await submitOrderServer(uid, {
+      planId: "p1", weekNumber: 1, fulfilment: PICKUP,
+    }, { email: "verified@example.com" });
+    const order = await docAt(`restaurants/${RID}/orders/${orderId}`);
+    const customer = order?.customer as { name: string; phone: string };
+    expect(customer.name).toHaveLength(120);
+    expect(customer.phone).toHaveLength(40);
   });
 });
 
