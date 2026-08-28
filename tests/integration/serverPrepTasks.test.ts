@@ -7,6 +7,9 @@ const PATH = `restaurants/${RID}/prepTasks/t1`;
 const staff = { uid: "cook", role: "restaurant", rid: RID };
 
 async function seedTask(over: Record<string, unknown> = {}) {
+  await adminDb().doc(`restaurants/${RID}/orders/o1`).set({
+    id: "o1", restaurantId: RID, status: "accepted",
+  });
   await adminDb().doc(PATH).set({
     id: "t1",
     restaurantId: RID,

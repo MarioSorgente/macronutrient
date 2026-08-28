@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { adminDb } from "@/lib/server/firebaseAdmin";
 import { setOrderStatus, submitOrder } from "@/lib/server/orders";
+import { setPrepTaskStatus } from "@/lib/server/prepTasks";
 import { HttpError } from "@/lib/server/auth";
 import {
   RID,
@@ -437,6 +438,10 @@ describe("moving an order through its lifecycle", () => {
 
   const staff = { uid: "staff", role: "restaurant", rid: RID };
 
+  async function tasksFor(orderId: string) {
+    return (await listAt(`restaurants/${RID}/prepTasks`)).filter((task) => task.orderId === orderId);
+  }
+
   it.each(["cancelled", "rejected"] as const)(
     "clears every prep task when an order becomes %s",
     async (status) => {
@@ -570,6 +575,10 @@ describe("moving an order through its lifecycle", () => {
     if (from !== "submitted") {
       await adminDb().doc(`restaurants/${RID}/orders/${orderId}`).update({ status: from });
     }
+    const tasks = await tasksFor(orderId);
+    if (to === "in_prep") await adminDb().doc(`restaurants/${RID}/prepTasks/${tasks[0].id}`).update({ status: "prepping" });
+    if (to === "ready") await Promise.all(tasks.map((task) => adminDb().doc(`restaurants/${RID}/prepTasks/${task.id}`).update({ status: "ready" })));
+    if (to === "completed") await Promise.all(tasks.map((task) => adminDb().doc(`restaurants/${RID}/prepTasks/${task.id}`).update({ status: "done" })));
 
     await expect(setOrderStatus(
       actor === "staff" ? staff : { uid, role: "client" },
@@ -577,6 +586,56 @@ describe("moving an order through its lifecycle", () => {
       to
     )).resolves.toMatchObject({ status: to });
     expect(await docAt(`restaurants/${RID}/orders/${orderId}`)).toMatchObject({ status: to });
+  });
+
+  it("blocks partial preparation, then permits all-ready and all-done aggregates", async () => {
+    const { orderId } = await anOrder();
+    await setOrderStatus(staff, orderId, "accepted");
+    const tasks = await tasksFor(orderId);
+
+    await expect(setOrderStatus(staff, orderId, "in_prep")).rejects.toThrow(/start at least one/i);
+    await setPrepTaskStatus(staff, { taskId: String(tasks[0].id), status: "prepping" });
+    await setOrderStatus(staff, orderId, "in_prep");
+    await setPrepTaskStatus(staff, { taskId: String(tasks[0].id), status: "ready" });
+    await expect(setOrderStatus(staff, orderId, "ready")).rejects.toThrow(/every prep task/i);
+    await adminDb().doc(`restaurants/${RID}/prepTasks/${tasks[1].id}`).update({ status: "ready" });
+    await setOrderStatus(staff, orderId, "ready");
+    await expect(setOrderStatus(staff, orderId, "completed")).rejects.toThrow(/done/i);
+    await Promise.all(tasks.map((task) => adminDb().doc(`restaurants/${RID}/prepTasks/${task.id}`).update({ status: "done" })));
+    await expect(setOrderStatus(staff, orderId, "completed")).resolves.toMatchObject({ status: "completed" });
+  });
+
+  it("serializes concurrent task and aggregate changes", async () => {
+    const { orderId } = await anOrder();
+    await setOrderStatus(staff, orderId, "accepted");
+    const [first] = await tasksFor(orderId);
+    const outcomes = await Promise.allSettled([
+      setPrepTaskStatus(staff, { taskId: String(first.id), status: "prepping" }),
+      setOrderStatus(staff, orderId, "in_prep"),
+    ]);
+    // Either the order observes the committed start, or it is rejected; it can
+    // never commit in_prep while every task remains todo.
+    const order = await docAt(`restaurants/${RID}/orders/${orderId}`);
+    const tasks = await tasksFor(orderId);
+    if (order?.status === "in_prep") expect(tasks.some((task) => task.status !== "todo")).toBe(true);
+    else expect(outcomes.some((outcome) => outcome.status === "rejected")).toBe(true);
+  });
+
+  it("uses every task across a multi-day order", async () => {
+    const { orderId } = await anOrder();
+    await adminDb().doc(`restaurants/${RID}/orders/${orderId}`).update({ status: "in_prep" });
+    const tasks = await tasksFor(orderId);
+    await adminDb().doc(`restaurants/${RID}/prepTasks/${tasks[0].id}`).update({ status: "ready" });
+    await expect(setOrderStatus(staff, orderId, "ready")).rejects.toThrow(/every prep task/i);
+  });
+
+  it.each(["rejected", "cancelled"] as const)("does not allow tasks on a %s order", async (status) => {
+    const { orderId } = await anOrder();
+    const [task] = await tasksFor(orderId);
+    // Preserve a corrupt leftover task to prove the task service guards the aggregate.
+    await adminDb().doc(`restaurants/${RID}/orders/${orderId}`).update({ status });
+    await expect(setPrepTaskStatus(staff, { taskId: String(task.id), status: "prepping" }))
+      .rejects.toThrow(/closed/i);
   });
 
   it.each([

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, ClipboardList, Flame } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { listAllOrders, setOrderStatus, watchAllOrders } from "@/lib/storage/orders";
+import { listAllOrders, listAllPrepTasks, setOrderStatus, watchAllOrders } from "@/lib/storage/orders";
 import {
   menuPerformance,
   statusCounts,
@@ -14,7 +14,7 @@ import {
 import { authErrorMessage } from "@/lib/auth/errors";
 import { addDays, baliWeekStart, formatBaliDay } from "@/lib/format";
 import { formatIdr } from "@/lib/pricing";
-import type { Order, OrderStatus } from "@/lib/storage/types";
+import type { Order, OrderStatus, PrepTask } from "@/lib/storage/types";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import StatTile from "@/components/ui/StatTile";
@@ -23,7 +23,7 @@ import Button from "@/components/ui/Button";
 import Input, { Select } from "@/components/ui/Input";
 import OrderStatusBadge, { ORDER_LABELS } from "@/components/OrderStatusBadge";
 import { useToast } from "@/components/ui/Toast";
-import { ORDER_TRANSITIONS } from "@/lib/orderLifecycle";
+import { ORDER_TRANSITIONS, orderTransitionDecision } from "@/lib/orderLifecycle";
 
 const FILTERS: { value: string; label: string }[] = [
   { value: "all", label: "All orders" },
@@ -58,6 +58,7 @@ export default function KitchenOrders() {
   const { show } = useToast();
 
   const [orders, setOrders] = useState<Order[]>([]);
+  const [tasks, setTasks] = useState<PrepTask[]>([]);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -65,7 +66,9 @@ export default function KitchenOrders() {
 
   const refresh = useCallback(async () => {
     try {
-      setOrders(await listAllOrders());
+      const [nextOrders, nextTasks] = await Promise.all([listAllOrders(), listAllPrepTasks()]);
+      setOrders(nextOrders);
+      setTasks(nextTasks);
       setError(null);
     } catch (cause) {
       setError(authErrorMessage(cause));
@@ -106,6 +109,12 @@ export default function KitchenOrders() {
       unsubscribe?.();
     };
   }, [refresh]);
+
+  useEffect(() => {
+    // Order snapshots and task snapshots are independent; server-side
+    // transaction validation remains authoritative if this view is briefly stale.
+    listAllPrepTasks().then(setTasks).catch((cause) => setError(authErrorMessage(cause)));
+  }, [orders]);
 
   const counts = useMemo(() => statusCounts(orders), [orders]);
   const load = useMemo(() => weeklyLoad(orders, 3, 3), [orders]);
@@ -356,7 +365,11 @@ export default function KitchenOrders() {
 
                       {ORDER_TRANSITIONS[order.status].staff.length > 0 && (
                         <div className="mt-3 flex flex-wrap gap-2 border-t border-cream-deep pt-3">
-                          {ORDER_TRANSITIONS[order.status].staff.map((next) => (
+                          {ORDER_TRANSITIONS[order.status].staff.map((next) => {
+                            const decision = orderTransitionDecision(
+                              order.status, next, "staff", tasks.filter((task) => task.orderId === order.id)
+                            );
+                            return decision.allowed ? (
                             <Button
                               key={next}
                               size="sm"
@@ -365,7 +378,12 @@ export default function KitchenOrders() {
                             >
                               {ORDER_LABELS[next].label}
                             </Button>
-                          ))}
+                            ) : (
+                              <p key={next} className="w-full text-xs text-charcoal-soft">
+                                <b>{ORDER_LABELS[next].label}:</b> {decision.reason}
+                              </p>
+                            );
+                          })}
                         </div>
                       )}
                     </Card>
