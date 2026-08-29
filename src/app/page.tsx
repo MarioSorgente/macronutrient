@@ -27,9 +27,9 @@ import {
  * cannot claim more than the app actually knows.
  */
 export const metadata = {
-  title: "Mamma Calories — Eat at Negrita, hit your macros",
+  title: "Mamma Calories — Eat at your restaurant, hit your macros",
   description:
-    "Plan your week from the real Negrita menu with verified nutrition, then send it to the kitchen to prepare.",
+    "Plan your week from the real menu with verified nutrition, then send it to the kitchen to prepare.",
 };
 
 /** Fixed locale so the server and the client render the same separators. */
@@ -39,7 +39,7 @@ const STEPS = [
   {
     icon: Target,
     title: "Set your targets",
-    body: "Calories and macros for a normal day. Set them once and they stay on your account, or plan on feel and check the numbers after.",
+    body: "Calories and macros for a whole plan.",
   },
   {
     icon: CalendarRange,
@@ -49,7 +49,7 @@ const STEPS = [
   {
     icon: Send,
     title: "Send it to the kitchen",
-    body: "Submit your week and Negrita preps it, day by day — pickup or delivery, whichever suits each day.",
+    body: "Submit your weeks to have your meals ready",
   },
 ];
 
@@ -70,11 +70,11 @@ const PROOF = [
   {
     icon: Target,
     title: "Built to your numbers",
-    body: "Set calories and macros, or start from a split like high protein. If a slot cannot be filled honestly it is left empty and flagged, never padded to make the total look right.",
+    body: "Set calories and macros, or start from a split like high protein. DIY meals are supported.",
   },
   {
     icon: ChefHat,
-    title: "Negrita cooks it",
+    title: "The Restaurant cooks it",
     body: "Send the week and it lands on the kitchen prep board, dish by dish. Pickup or delivery, chosen per day.",
   },
 ];
@@ -91,12 +91,12 @@ export default function LandingPage() {
             <BadgeCheck size={13} /> Verified nutrition data
           </span>
           <h1 className="mt-4 font-display text-4xl font-700 leading-tight text-charcoal sm:text-5xl">
-            Eat at Negrita.
+            Eat at the Restaurant.
             <br />
             Hit your macros.
           </h1>
           <p className="mt-4 max-w-xl text-lg leading-relaxed text-charcoal-soft">
-            Plan a week of real food from the Negrita menu, see exactly what it
+            Plan a week of real food from the menu, see exactly what it
             delivers, and have the kitchen prepare it. No weighing, no logging,
             no cooking.
           </p>
@@ -143,10 +143,9 @@ export default function LandingPage() {
             One click fills the whole week
           </h2>
           <p className="mt-3 leading-relaxed text-charcoal-soft">
-            Tell it your calories and protein — or start from a split like high
-            protein or low carb. Auto-fill searches the entire Negrita menu and
-            builds all seven days in about a second. Then the kitchen cooks
-            every plate on it.
+            Tell it your calories and protein, or start from a split like high
+            protein or low carb. Auto-fill searches the entire menu and
+            builds all seven days in about a second.
           </p>
         </div>
 
@@ -226,9 +225,8 @@ export default function LandingPage() {
           </div>
 
           <p className="mt-3 text-xs leading-relaxed text-charcoal-soft">
-            Every dish here is on the Negrita menu, at the macros the menu
-            publishes — none of it is illustrative. Swap anything you do not
-            fancy and the totals follow along.
+            Every dish here is on the menu, at the macros the menu
+            publishes.
           </p>
         </figure>
 
@@ -255,11 +253,7 @@ export default function LandingPage() {
         {/* The data behind every number above. Supporting, not the headline. */}
         <div className="mt-8 flex flex-col gap-5 rounded-xl2 border border-cream-deep bg-cream-deep/40 p-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="max-w-lg text-sm leading-relaxed text-charcoal-soft">
-            And the numbers underneath hold up. {VERIFIED_COUNT} of the{" "}
-            {nutritionCatalog.counts.ingredients} ingredients Negrita cooks with
-            are verified against USDA FoodData Central. The rest are marked{" "}
-            <b className="text-gold">est</b> everywhere they appear, so you
-            always know which numbers are solid.
+           The ingredients Negrita cooks with are verified against USDA FoodData Central.
           </p>
           <dl className="grid shrink-0 grid-cols-3 gap-5 sm:gap-8">
             <div>
@@ -307,10 +301,7 @@ export default function LandingPage() {
       </section>
 
       <footer className="mx-auto max-w-6xl px-4 py-8 text-xs text-charcoal-soft sm:px-6">
-        <p>
-          Nutrition data: {databaseMeta.name} (v{databaseMeta.version}). Verified
-          entries were checked against USDA FoodData Central; estimated entries
-          are flagged as such throughout the app.
+        <p>. 
         </p>
       </footer>
     </div>
