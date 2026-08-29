@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarRange, Receipt } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { listMyOrders } from "@/lib/storage/orders";
 import { formatBaliDay } from "@/lib/format";
 import { formatIdr } from "@/lib/pricing";
-import { authErrorMessage } from "@/lib/auth/errors";
+import { ordersQueryErrorMessage } from "@/lib/auth/errors";
 import type { Order } from "@/lib/storage/types";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
@@ -21,30 +21,37 @@ export default function MyOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const request = useRef(0);
+  const automaticallyLoadedUser = useRef<string | null>(null);
+  const userId = user?.uid;
+
+  const loadOrders = useCallback(async () => {
+    if (!userId) return;
+    const attempt = ++request.current;
+    setError(null);
+    setLoading(true);
+
+    try {
+      const loaded = await listMyOrders(userId);
+      if (attempt === request.current) setOrders(loaded);
+    } catch (cause) {
+      if (attempt === request.current) setError(ordersQueryErrorMessage(cause));
+    } finally {
+      if (attempt === request.current) setLoading(false);
+    }
+  }, [userId]);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) {
+    if (!userId) {
+      automaticallyLoadedUser.current = null;
       setLoading(false);
       return;
     }
-    let active = true;
-
-    listMyOrders(user.uid)
-      .then((loaded) => {
-        if (active) setOrders(loaded);
-      })
-      .catch((cause) => {
-        if (active) setError(authErrorMessage(cause));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [user, authLoading]);
+    if (automaticallyLoadedUser.current === userId) return;
+    automaticallyLoadedUser.current = userId ?? null;
+    void loadOrders();
+  }, [userId, authLoading, loadOrders]);
 
   if (loading || authLoading) {
     return <p className="text-sm text-charcoal-soft">Loading your orders…</p>;
@@ -67,6 +74,15 @@ export default function MyOrders() {
         icon={<Receipt size={22} />}
         title="We could not load your orders"
         hint={error}
+        action={
+          <button
+            type="button"
+            onClick={() => void loadOrders()}
+            className="inline-flex rounded-xl bg-tomato px-4 py-2 text-sm font-700 text-cream hover:bg-tomato-dark"
+          >
+            Retry
+          </button>
+        }
       />
     );
   }
