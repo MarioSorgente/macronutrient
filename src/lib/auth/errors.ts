@@ -26,7 +26,6 @@ const MESSAGES: Record<string, string> = {
     "This domain is not authorised for sign-in. Add it in the Firebase console.",
   "permission-denied": "You do not have access to that.",
   unauthenticated: "Please sign in and try again.",
-  "failed-precondition": "That is not possible right now.",
 };
 
 function codeOf(cause: unknown): string | null {
@@ -61,4 +60,23 @@ export function authErrorMessage(cause: unknown): string {
   if (code) console.error("Unmapped auth error:", code, cause);
   else console.error("Auth error:", cause);
   return "Something went wrong. Please try again.";
+}
+
+/**
+ * Formats failures from a customer-facing Firestore order query.
+ *
+ * A failed precondition commonly means production has not finished building a
+ * composite index. Keep that operational detail out of the customer message,
+ * but make the console report specific enough to diagnose the deployment.
+ */
+export function ordersQueryErrorMessage(cause: unknown): string {
+  if (codeOf(cause) === "failed-precondition") {
+    console.error(
+      "Orders query failed: a required Firestore composite index may be missing or still building.",
+      cause
+    );
+    return "Orders are temporarily unavailable. Retry in a moment.";
+  }
+
+  return authErrorMessage(cause);
 }

@@ -110,6 +110,19 @@ describe("composite index coverage", () => {
 });
 
 describe("the index file itself", () => {
+  it("exactly declares the listOrdersByUser query index", () => {
+    const index = config.indexes.find(
+      (candidate) => candidate.collectionGroup === "orders" &&
+        candidate.fields.some((field) => field.fieldPath === "userId") &&
+        candidate.fields.some((field) => field.fieldPath === "submittedAt")
+    );
+    expect(index?.queryScope).toBe("COLLECTION");
+    expect(index?.fields).toEqual([
+      { fieldPath: "userId", order: "ASCENDING" },
+      { fieldPath: "submittedAt", order: "DESCENDING" },
+    ]);
+  });
+
   it("declares COLLECTION scope for every index", () => {
     // A COLLECTION_GROUP index is a different (and more expensive) thing; none
     // of these queries is a collection-group query.
