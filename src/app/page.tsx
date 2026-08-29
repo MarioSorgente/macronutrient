@@ -109,22 +109,25 @@ export default function LandingPage() {
             How it works
           </h2>
 
-          <ol className="mt-8 grid gap-6 sm:grid-cols-3">
+          <ol className="mt-8 grid gap-5 sm:grid-cols-3">
             {STEPS.map((step, index) => {
               const Icon = step.icon;
 
               return (
-                <li key={step.title} className="flex flex-col gap-3">
-                  <span className="grid h-11 w-11 place-items-center rounded-xl2 bg-tomato text-cream shadow-card">
-                    <Icon size={20} strokeWidth={2.2} />
+                <li
+                  key={step.title}
+                  className="rounded-xl2 border border-cream-deep bg-white p-6 shadow-card"
+                >
+                  <span className="grid h-12 w-12 place-items-center rounded-xl bg-tomato text-cream shadow-card">
+                    <Icon size={21} strokeWidth={2.2} />
                   </span>
 
-                  <h3 className="font-display text-lg font-700 text-charcoal">
+                  <h3 className="mt-5 font-display text-lg font-700 text-charcoal">
                     <span className="text-tomato">{index + 1}.</span>{" "}
                     {step.title}
                   </h3>
 
-                  <p className="text-sm leading-relaxed text-charcoal-soft">
+                  <p className="mt-3 text-sm leading-relaxed text-charcoal-soft">
                     {step.body}
                   </p>
                 </li>
