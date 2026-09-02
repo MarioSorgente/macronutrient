@@ -103,7 +103,11 @@ export async function updateRestaurantConfig(
   caller: RestaurantCaller,
   input: unknown
 ): Promise<{ updated: true }> {
-  if (caller.role !== "admin") {
+  // Scope as well as role. An admin claim minted for a different restaurant is
+  // not an admin of this one, and these settings are this restaurant's -- its
+  // cutoff, its markup, its service hours. `syncAccount` re-stamps `rid` on
+  // every reconciliation, so a legitimate owner always carries it.
+  if (caller.role !== "admin" || caller.rid !== RESTAURANT_ID) {
     throw new HttpError(403, "You cannot configure this restaurant.");
   }
   const config = validateRestaurantConfig(input);

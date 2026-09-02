@@ -25,12 +25,16 @@ describe("LandingCtas", () => {
     /**
      * "Get started" pointed at /plan, which assumed everybody was a diner and
      * left staff onboarding reachable only by guessing the /signup URL.
+     *
+     * The staff link was relabelled "For Staff" upstream (5a59c62) without these
+     * locators being updated, which is why they name it that now. What the test
+     * is actually pinning is the destination, not the wording.
      */
     it("offers the two journeys by name, both through authentication", () => {
       render(<LandingCtas />);
 
       expect(href(/plan my meals/i)).toBe("/signup?intent=customer&next=%2Fplan");
-      expect(href(/i work at negrita/i)).toBe("/signup?intent=staff&next=%2Fkitchen");
+      expect(href(/for staff/i)).toBe("/signup?intent=staff&next=%2Fkitchen");
     });
 
     it("does not offer a way into the planner that skips signing up", () => {
@@ -68,7 +72,7 @@ describe("LandingCtas", () => {
         mocks.auth = { user: { uid: "u1" }, role, loading: false };
         render(<LandingCtas />);
 
-        expect(href(/i work at negrita/i)).toBe("/kitchen");
+        expect(href(/for staff/i)).toBe("/kitchen");
       }
     );
   });

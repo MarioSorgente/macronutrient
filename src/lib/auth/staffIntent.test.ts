@@ -5,11 +5,18 @@ const mocks = vi.hoisted(() => ({
   getApi: vi.fn(),
   callApi: vi.fn(),
   getIdToken: vi.fn(),
+  /** What the current token claims. The refresh decision compares against it. */
+  tokenRole: null as Role | null,
 }));
 
 vi.mock("@/lib/api", () => ({ getApi: mocks.getApi, callApi: mocks.callApi }));
 vi.mock("@/lib/storage/firebaseAuth", () => ({
-  getAuthClient: () => ({ currentUser: { getIdToken: mocks.getIdToken } }),
+  getAuthClient: () => ({
+    currentUser: {
+      getIdToken: mocks.getIdToken,
+      getIdTokenResult: async () => ({ claims: { role: mocks.tokenRole ?? undefined } }),
+    },
+  }),
 }));
 
 const { resolveStaffDestination } = await import("@/lib/auth/staffIntent");
@@ -42,6 +49,9 @@ describe("resolveStaffDestination", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getIdToken.mockResolvedValue("token");
+    // The token already agrees with the server unless a test says otherwise, so
+    // the default case exercises "no refresh needed".
+    mocks.tokenRole = null;
   });
 
   it.each(["restaurant", "admin"] as const)(
@@ -85,11 +95,30 @@ describe("resolveStaffDestination", () => {
     expect(mocks.getIdToken).toHaveBeenCalledWith(true);
   });
 
-  it("does not force a refresh when nothing changed", async () => {
+  it("does not force a refresh when the token already proves the role", async () => {
     reconcilesTo("restaurant");
+    mocks.tokenRole = "restaurant";
 
     await resolveStaffDestination("/kitchen");
     expect(mocks.getIdToken).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The gap `changed` alone left open.
+   *
+   * `changed` reports what the server wrote on this call, not what the token
+   * carries. An owner granted admin on an earlier call, whose next page load
+   * raced the refresh, was told "admin" with `changed: false` — and then made
+   * every admin request with a token still claiming "client", which the server
+   * answered 403. The screen had already decided they were the owner, so it
+   * read as "Could not load staff requests" on their own dashboard.
+   */
+  it("refreshes when the server and the token disagree, even with nothing changed", async () => {
+    reconcilesTo("admin");
+    mocks.tokenRole = "client";
+
+    await resolveStaffDestination("/kitchen");
+    expect(mocks.getIdToken).toHaveBeenCalledWith(true);
   });
 
   describe("somebody who is not staff yet", () => {

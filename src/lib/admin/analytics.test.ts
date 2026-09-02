@@ -19,17 +19,39 @@ import type { Order, OrderStatus, UserProfile } from "@/lib/storage/types";
  * either counting money that never arrived or ignoring work already done.
  */
 
+const EMPTY_MACROS = { energy_kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 };
+
+/**
+ * One day holding `meals` single-serving line items.
+ *
+ * The fixture used to pass `days: []` alongside a `mealCount`, which is a shape
+ * no real order has -- every meal an order carries lives in `days`. Meals are
+ * counted from there now, so a fixture that leaves it empty would assert against
+ * a field nothing reads.
+ */
+function dayOf(meals: number, servings = 1) {
+  return [{
+    date: "2026-08-24",
+    fulfilment: { mode: "pickup" as const, time: "12:00" },
+    meals: Array.from({ length: meals }, (_, i) => ({
+      assignmentId: `a${i}`, slot: "Lunch", name: "Meal", servings,
+      items: [], totals: EMPTY_MACROS, priceIdr: 0,
+    })),
+  }];
+}
+
 function order(over: Partial<Order> = {}): Order {
+  const mealCount = over.mealCount ?? 5;
   return {
     id: "o1", createdAt: "", updatedAt: "",
     restaurantId: "negrita", userId: "u1", planId: "p1",
     weekNumber: 1, weekStartDate: "2026-08-24",
     status: "submitted",
     customer: { name: "Mario", email: "m@example.com" },
-    days: [],
-    totals: { energy_kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 },
+    days: dayOf(mealCount),
+    totals: EMPTY_MACROS,
     priceIdr: 100_000,
-    mealCount: 5,
+    mealCount,
     payment: { status: "unpaid", method: "cash", amountIdr: 100_000 },
     submittedAt: "2026-08-20T00:00:00.000Z",
     lockedAt: "2026-08-22T10:00:00.000Z",
@@ -134,6 +156,40 @@ describe("revenueByWeek", () => {
       1
     );
     expect(weeks.reduce((n, w) => n + w.idr, 0)).toBe(0);
+  });
+});
+
+/**
+ * "Meals" used to mean two things at once. `summarizeOrder` counted line items
+ * and stored that on the order; the kitchen board, the week header and every
+ * menu roll-up summed servings. One meal for three showed as "1 meal" beside a
+ * subtotal of 3, and the owner dashboard put a Meals tile next to a Servings
+ * tile, computed from the same orders, showing different numbers.
+ *
+ * Servings won, because it is what gets cooked and what gets paid for. Counting
+ * it from `days` rather than changing the stored field is what makes orders
+ * placed before that decision read correctly too.
+ */
+describe("meals are counted as servings, everywhere", () => {
+  const forThree = order({
+    id: "party", priceIdr: 300_000, mealCount: 2, days: dayOf(2, 3),
+  });
+
+  it("counts servings, not line items, in the weekly roll-up", () => {
+    const weeks = revenueByWeek([{ ...forThree, weekStartDate: baliWeekStart() }], 1, 0);
+    const thisWeek = weeks.find((w) => w.weekStart === baliWeekStart());
+    // Two line items of three servings each. The stored mealCount says 2.
+    expect(forThree.mealCount).toBe(2);
+    expect(thisWeek?.meals).toBe(6);
+  });
+
+  it("agrees with itself across the dashboard", () => {
+    const scoped = [forThree];
+    const people = [user({ uid: "u1" })];
+    const stats = periodStats(people, scoped, scoped, periodRange("all"), baliToday());
+    const rows = customerRollup(people, scoped, scoped, baliToday());
+    expect(stats.meals).toBe(6);
+    expect(rows[0].meals).toBe(6);
   });
 });
 

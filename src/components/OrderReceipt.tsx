@@ -14,6 +14,7 @@ import ReportShell, { ReportMessage } from "@/components/ReportShell";
 import MacroSummary from "@/components/MacroSummary";
 import MacroChips from "@/components/MacroChips";
 import OrderStatusBadge, { ORDER_LABELS } from "@/components/OrderStatusBadge";
+import { orderServings } from "@/lib/orders";
 
 /** A printable record of one submitted week, for the customer. */
 export default function OrderReceipt() {
@@ -94,8 +95,8 @@ export default function OrderReceipt() {
           <OrderStatusBadge status={order.status} />
         </div>
         <p className="mt-1 text-sm text-charcoal-soft">
-          For {order.customer.name} · {order.mealCount} meal
-          {order.mealCount === 1 ? "" : "s"} across {order.days.length} day
+          For {order.customer.name} · {orderServings(order)} meal
+          {orderServings(order) === 1 ? "" : "s"} across {order.days.length} day
           {order.days.length === 1 ? "" : "s"} · sent{" "}
           {formatBaliDateTime(order.submittedAt)} ({BALI_LABEL})
         </p>

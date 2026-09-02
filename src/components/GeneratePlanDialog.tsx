@@ -25,7 +25,7 @@ import {
   PROTEIN_SOURCES,
 } from "@/lib/preferences";
 import { getIngredient } from "@/lib/database";
-import { generatePlanWithTargets, type GeneratedPlan } from "@/lib/mealPlanner";
+import { generatePlanWithTargets, seedSweep, type GeneratedPlan } from "@/lib/mealPlanner";
 import { searchShuffleAlternatives } from "@/lib/plannerShuffle";
 import { formatIdr, formatPrice } from "@/lib/pricing";
 import { formatMacroGrams, round0 } from "@/lib/format";
@@ -160,7 +160,7 @@ export default function GeneratePlanDialog({
       if (shuffle && preview) {
         const result = await searchShuffleAlternatives({
           current: preview, generation: generationOptions, firstSeed: nextSeed,
-          generate: generatePlanWithTargets, signal: controller.signal,
+          generate: seedSweep, signal: controller.signal,
         });
         if (controller.signal.aborted || requestRef.current?.id !== id) return;
         if (result.changed) {

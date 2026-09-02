@@ -10,7 +10,12 @@ export async function POST(request: Request) {
     const caller = await requireAdmin(request);
     const body = await request.json().catch(() => ({}));
     return NextResponse.json(await updateRestaurantConfig(
-      { uid: caller.uid, role: caller.role as string | undefined },
+      {
+        uid: caller.uid,
+        role: caller.role as string | undefined,
+        // Passed through, or the tenancy check below refuses every real admin.
+        rid: caller.rid as string | undefined,
+      },
       body
     ));
   } catch (cause) {

@@ -9,9 +9,16 @@ const mocks = vi.hoisted(() => ({
   cleared: false,
 }));
 
-function planRepo(store: Plan[]) {
+/** When set, every guest `list()` waits for this — the interleave lever. */
+let holdGuestList: Promise<void> | null = null;
+
+function planRepo(store: Plan[], hold?: () => Promise<void> | null) {
   return {
-    list: async () => store,
+    list: async () => {
+      const wait = hold?.();
+      if (wait) await wait;
+      return store;
+    },
     latest: async () => store[0] ?? null,
     get: async (id: string) => store.find((p) => p.id === id) ?? null,
     save: async (p: Plan) => {
@@ -42,7 +49,7 @@ vi.mock("@/lib/storage", () => ({
   getPlanRepository: () => planRepo(mocks.cloudPlans),
   getDishRepository: () => dishRepo(mocks.cloudDishes),
   guestStores: {
-    plans: () => planRepo(mocks.guestPlans),
+    plans: () => planRepo(mocks.guestPlans, () => holdGuestList),
     dishes: () => dishRepo(mocks.guestDishes),
     clear: () => {
       mocks.cleared = true;
@@ -51,6 +58,7 @@ vi.mock("@/lib/storage", () => ({
 }));
 
 import { claimGuestData } from "@/lib/storage/claim";
+import { __resetPlanCache, loadCurrentPlan } from "@/lib/currentPlan";
 
 function makePlan(id: string, assignments: number): Plan {
   return {
@@ -126,6 +134,41 @@ describe("claimGuestData", () => {
     expect(existing, "the account's own plan survives").toBeDefined();
     const total = mocks.cloudPlans.flatMap((p) => p.assignments).length;
     expect(total, "the guest week is kept too, not silently dropped").toBe(23);
+  });
+
+  /**
+   * The one that cost somebody their week.
+   *
+   * Both this and the planner react to the same sign-in. The claim reads, decides
+   * the guest week may take the fixed `primary` id, writes it, and only then
+   * clears localStorage — while `loadCurrentPlan`, finding nothing yet, creates
+   * an empty plan at that same id with a plain replace. Interleaved the wrong
+   * way round, the empty plan lands on top of the claimed week moments after the
+   * only other copy of it was deleted.
+   */
+  it("is not overwritten by the planner creating an empty plan at the same id", async () => {
+    __resetPlanCache();
+    mocks.guestPlans = [makePlan("primary", 7)];
+
+    // Hold the claim open at its first read, so the planner is guaranteed to see
+    // an empty account — the losing order, made deterministic.
+    let release = () => {};
+    holdGuestList = new Promise<void>((resolve) => { release = resolve; });
+
+    const claiming = claimGuestData("uid-1");
+    const loading = loadCurrentPlan(planRepo(mocks.cloudPlans), "uid-1");
+
+    release();
+    holdGuestList = null;
+    const [moved, loaded] = await Promise.all([claiming, loading]);
+
+    expect(moved.plans).toBe(1);
+    expect(loaded.assignments, "the loader must not serve an empty week").toHaveLength(7);
+    expect(
+      mocks.cloudPlans.flatMap((p) => p.assignments),
+      "the claimed week survives in the account"
+    ).toHaveLength(7);
+    expect(mocks.cleared).toBe(true);
   });
 
   it("does nothing when there is nothing on the device", async () => {

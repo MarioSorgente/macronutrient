@@ -5,10 +5,11 @@ import {
   assignmentName,
   assignmentPrice,
   assignmentsFor,
+  planDateIso,
 } from "@/lib/clients";
 import { EMPTY_MACROS, addMacros } from "@/lib/calc";
 import { optionalSlots } from "@/lib/slotSuitability";
-import { parseCalendarDate } from "@/lib/format";
+import { isWallClockTime } from "@/lib/fulfilmentTime";
 import type {
   Dish,
   Fulfilment,
@@ -30,14 +31,17 @@ import type { RestaurantPricingPolicy } from "@/lib/pricing";
  * not if the server had its own copy of these rules.
  */
 
-/** ISO yyyy-mm-dd for a day of a plan week, computed as a calendar date. */
+/**
+ * ISO yyyy-mm-dd for a day of a plan week, computed as a calendar date.
+ *
+ * Throws where the planner's `dateFor` returns null, because this one runs on
+ * the server building an order: a start date that cannot be parsed must stop the
+ * submit, not quietly produce a date. Same arithmetic underneath either way.
+ */
 export function planDate(plan: Plan, week: number, day: number): string {
-  const start = parseCalendarDate(plan.programStartDate);
-  if (!start) throw new RangeError(`Invalid calendar date: ${plan.programStartDate}`);
-  const offset = (week - 1) * 7 + day;
-  return new Date(start.valueOf() + offset * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  const iso = planDateIso(plan, week, day);
+  if (!iso) throw new RangeError(`Invalid calendar date: ${plan.programStartDate}`);
+  return iso;
 }
 
 /** The Monday a plan week begins on. */
@@ -69,15 +73,22 @@ export function buildOrderDays(
     const assignments = assignmentsFor(plan, week).filter((a) => a.day === day);
     if (assignments.length === 0) continue;
 
-    const meals: OrderMeal[] = assignments.map((assignment) => ({
-      assignmentId: assignment.id,
-      slot: assignment.slot,
-      name: assignmentName(assignment, dishes),
-      servings: assignment.servings,
-      items: assignmentItems(assignment, dishes) ?? [],
-      totals: assignmentMacros(assignment, dishes),
-      priceIdr: assignmentPrice(assignment, dishes, pricingPolicy).totalIdr,
-    }));
+    const meals: OrderMeal[] = assignments.map((assignment) => {
+      const price = assignmentPrice(assignment, dishes, pricingPolicy);
+      return {
+        assignmentId: assignment.id,
+        slot: assignment.slot,
+        name: assignmentName(assignment, dishes),
+        servings: assignment.servings,
+        items: assignmentItems(assignment, dishes) ?? [],
+        totals: assignmentMacros(assignment, dishes),
+        priceIdr: price.totalIdr,
+        // Not stored on the order -- the server rejects an incomplete price, so a
+        // stored order can never carry one. It exists so the screen that quotes
+        // the total can tell the customer before the server has to.
+        priced: price.complete,
+      };
+    });
 
     days.push({
       date: planDate(plan, week, day),
@@ -92,24 +103,65 @@ export function buildOrderDays(
 export interface OrderSummary {
   totals: Macros;
   priceIdr: number;
+  /**
+   * Meals as line items -- one entry per planned slot, whatever its servings.
+   *
+   * Stored on the order document, so it is kept as it always was. Do not show it
+   * as "meals": see `orderServings` below for the number a kitchen and a bill
+   * actually mean.
+   */
   mealCount: number;
+  /** Meals as portions. What is cooked, what is collected, what is charged. */
+  servingCount: number;
   dayCount: number;
+  /**
+   * Meals whose price could not be fully resolved.
+   *
+   * The server refuses to accept an order containing one, so the submit screen
+   * has to know before it quotes a total it is about to have rejected.
+   */
+  unpricedMeals: number;
 }
 
 export function summarizeOrder(days: OrderDay[]): OrderSummary {
   let totals: Macros = { ...EMPTY_MACROS };
   let priceIdr = 0;
   let mealCount = 0;
+  let servingCount = 0;
+  let unpricedMeals = 0;
 
   for (const day of days) {
     for (const meal of day.meals) {
       totals = addMacros(totals, meal.totals);
       priceIdr += meal.priceIdr;
       mealCount += 1;
+      servingCount += meal.servings;
+      if (meal.priced === false) unpricedMeals += 1;
     }
   }
 
-  return { totals, priceIdr, mealCount, dayCount: days.length };
+  return { totals, priceIdr, mealCount, servingCount, dayCount: days.length, unpricedMeals };
+}
+
+/**
+ * Meals in an order, counted as servings.
+ *
+ * "Meals" meant two different things on the same card: `mealCount` counts line
+ * items, while the kitchen board, the week header and every menu roll-up sum
+ * servings. One meal for three showed as "1 meal" next to a subtotal of 3.
+ * Servings is the honest one -- it is what gets cooked and what gets paid for --
+ * and deriving it here rather than changing the stored field means orders placed
+ * before this read correctly too.
+ */
+export function orderServings(order: Pick<Order, "days">): number {
+  let servings = 0;
+  // Tolerant of a malformed document, because it replaced a plain field read
+  // that could not throw. A stored order always carries `days[].meals`, but a
+  // customer opening their order list is the wrong place to find out otherwise.
+  for (const day of order.days ?? []) {
+    for (const meal of day?.meals ?? []) servings += meal.servings ?? 0;
+  }
+  return servings;
 }
 
 /**
@@ -143,7 +195,7 @@ export function emptySlots(
 export function fulfilmentProblems(days: OrderDay[]): string[] {
   const problems: string[] = [];
   for (const day of days) {
-    if (!/^\d{2}:\d{2}$/.test(day.fulfilment.time)) {
+    if (!isWallClockTime(day.fulfilment.time)) {
       problems.push(`${day.date}: pick a time.`);
     }
     if (day.fulfilment.mode === "delivery" && !day.fulfilment.address?.trim()) {

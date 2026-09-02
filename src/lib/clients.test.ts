@@ -20,6 +20,7 @@ import {
 } from "@/lib/clients";
 import type { Macros } from "@/types/nutrition";
 import type { Assignment, Dish, Plan } from "@/lib/storage/types";
+import { planDate } from "@/lib/orders";
 
 /**
  * Plan roll-ups. The rule that matters throughout: a live dish wins whenever it
@@ -226,8 +227,37 @@ describe("dateFor", () => {
   const p = plan([]);
 
   it("walks forward by week and day", () => {
-    expect(dateFor(p, 1, 0)?.getDate()).toBe(24);
-    expect(dateFor(p, 2, 0)?.getDate()).toBe(31);
+    // UTC, because a program day is a calendar date rather than an instant --
+    // the same day for everyone looking at it.
+    expect(dateFor(p, 1, 0)?.getUTCDate()).toBe(24);
+    expect(dateFor(p, 2, 0)?.getUTCDate()).toBe(31);
+  });
+
+  /**
+   * The planner grid and the kitchen board used to compute this separately: one
+   * built a local-time Date and formatted it with no time zone, the other did
+   * calendar arithmetic in UTC and rendered in Bali. Same screen, two calendars,
+   * for anybody not sitting in Bali. There is one implementation now, and this
+   * is what holds it that way.
+   */
+  it("agrees with the date the kitchen is given, for every day of the program", () => {
+    for (let week = 1; week <= 4; week += 1) {
+      for (let day = 0; day < 7; day += 1) {
+        expect(dateFor(p, week, day)?.toISOString().slice(0, 10), `week ${week} day ${day}`)
+          .toBe(planDate(p, week, day));
+      }
+    }
+  });
+
+  it("renders the calendar day whatever zone the viewer is in", () => {
+    // Formatted in UTC, so this is the assertion in any zone the runner uses.
+    expect(formatShortDate(dateFor(p, 1, 0))).toBe("Aug 24");
+    expect(formatShortDate(dateFor(p, 2, 6))).toBe("Sep 6");
+  });
+
+  it("refuses a date that only looks like one, rather than rolling it forward", () => {
+    // JavaScript would turn February 31 into March 3 without a word.
+    expect(dateFor({ ...p, programStartDate: "2026-02-31" }, 1, 0)).toBeNull();
   });
 
   it("returns null for a malformed start date instead of an Invalid Date", () => {

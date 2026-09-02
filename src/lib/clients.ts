@@ -3,6 +3,7 @@ import { EMPTY_MACROS, addMacros, scaleMacros, sumDishMacros } from "@/lib/calc"
 import { ZERO_PRICE, addPrices, priceAssignment, type PriceResult, type RestaurantPricingPolicy } from "@/lib/pricing";
 import { publishedMenuMacros } from "@/lib/database";
 import { assignmentMenuRecipe } from "@/lib/menuIdentity";
+import { addDays, parseCalendarDate } from "@/lib/format";
 import type {
   Assignment,
   Plan,
@@ -239,21 +240,46 @@ export const TARGET_FIELDS: {
 ];
 
 /**
- * Calendar date for a given week/day of the program. Parsed as a local date so
- * the displayed day never shifts across timezones.
+ * The calendar date a program week and day fall on, as yyyy-mm-dd.
+ *
+ * The one implementation. `orders.planDate` builds service dates for the order
+ * and the kitchen from this, and the planner grid renders from it, so the two
+ * cannot describe the same day differently. They very nearly did: this used to
+ * build a local-time `Date` and hand it to a bare `toLocaleDateString`, which is
+ * precisely what `format.ts` documents as forbidden, while the cutoff line two
+ * elements away was rendered in Bali.
+ *
+ * Null rather than a throw, because a malformed start date reaches this during
+ * render. `2026-02-31` is malformed: `parseCalendarDate` rejects it instead of
+ * quietly normalising it to March 3.
  */
-export function dateFor(plan: Plan, week: number, day: number): Date | null {
-  const parts = plan.programStartDate?.split("-").map(Number);
-  if (!parts || parts.length !== 3 || parts.some(Number.isNaN)) return null;
-  const [year, month, dayOfMonth] = parts;
-  const date = new Date(year, month - 1, dayOfMonth);
-  date.setDate(date.getDate() + (week - 1) * 7 + day);
-  return date;
+export function planDateIso(plan: Plan, week: number, day: number): string | null {
+  const start = parseCalendarDate(plan.programStartDate);
+  if (!start) return null;
+  return addDays(plan.programStartDate, (week - 1) * 7 + day);
 }
 
+/** The same date as an instant at UTC midnight, for callers that want a Date. */
+export function dateFor(plan: Plan, week: number, day: number): Date | null {
+  const iso = planDateIso(plan, week, day);
+  return iso ? new Date(`${iso}T00:00:00.000Z`) : null;
+}
+
+/**
+ * "Aug 24" for a calendar date.
+ *
+ * Formatted in UTC because the value is a calendar date, not an instant: a
+ * program day is the same day whoever is looking at it. Rendering it in the
+ * viewer zone made the planner disagree with the kitchen board about which day a
+ * meal was for, for anybody not sitting in Bali.
+ */
 export function formatShortDate(date: Date | null): string {
   if (!date) return "";
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(date);
 }
 
 /** Stable id for a new assignment. */

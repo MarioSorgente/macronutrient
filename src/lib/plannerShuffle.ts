@@ -4,7 +4,16 @@ import type { GenerateOptions, GeneratedMeal, GeneratedPlan } from "@/lib/mealPl
 export const SHUFFLE_SEARCH_MS = 4_800;
 export const SHUFFLE_MAX_CANDIDATES = 24;
 
-export type PlannerGenerator = (options: GenerateOptions) => GeneratedPlan;
+/**
+ * How the search obtains a week for a seed.
+ *
+ * A factory, not a plain generator, and deliberately so. The planner reads the
+ * seed only in its final tie-break, so preparing once and calling the returned
+ * function per seed does the same work the old per-candidate `generate` did --
+ * minus roughly fifty beam searches per candidate. Expressing that in the type
+ * is what stops the loop quietly regressing to the expensive shape.
+ */
+export type PlannerGenerator = (options: GenerateOptions) => (seed: number) => GeneratedPlan;
 
 export interface ShuffleSearchOptions {
   current: GeneratedPlan;
@@ -94,6 +103,10 @@ export async function searchShuffleAlternatives(options: ShuffleSearchOptions): 
   const now = options.now ?? (() => performance.now());
   const yieldToBrowser = options.yieldToBrowser ?? (() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
   const started = now();
+  // Prepared at most once, and lazily, so an already-aborted search still does
+  // no work at all -- which is what the abort check below used to guarantee
+  // when the first generation happened inside the loop.
+  let planForSeed: ((seed: number) => GeneratedPlan) | null = null;
   let best: { plan: GeneratedPlan; seed: number; rank: number[] } | null = null;
   let evaluated = 0;
 
@@ -102,7 +115,8 @@ export async function searchShuffleAlternatives(options: ShuffleSearchOptions): 
     await yieldToBrowser();
     if (options.signal?.aborted) break;
     const seed = options.firstSeed + offset;
-    const candidate = options.generate({ ...options.generation, seed });
+    planForSeed ??= options.generate(options.generation);
+    const candidate = planForSeed(seed);
     evaluated += 1;
     const difference = meaningfulDifference(options.current, candidate);
     if (!difference || !equivalentWeek(options.current, candidate, options.generation)) continue;

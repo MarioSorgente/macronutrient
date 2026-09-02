@@ -36,6 +36,13 @@ const config = JSON.parse(
 /**
  * Every composite query the app runs, as (collection, equality filters,
  * ordering) — which is exactly what Firestore needs an index for.
+ *
+ * This list is the load-bearing half of the check below, and it had gone stale:
+ * it still declared a duplicate-submit query citing `functions/src/submitOrder.ts`,
+ * a file that no longer exists in a directory that is no longer deployed, plus
+ * two status-filtered queries that are now filtered in memory. Three indexes
+ * were being kept alive by their own guard rail. Anything added here has to be
+ * a `where()` you can point at in `src/`.
  */
 const QUERIES = [
   {
@@ -45,27 +52,9 @@ const QUERIES = [
     orderBy: [{ fieldPath: "submittedAt", order: "DESCENDING" }],
   },
   {
-    where: "functions/src/submitOrder.ts — the duplicate-submit check",
-    collectionGroup: "orders",
-    equality: ["userId", "planId", "weekNumber"],
-    orderBy: [],
-  },
-  {
-    where: "src/components/KitchenOrders.tsx — order book filtered by status",
-    collectionGroup: "orders",
-    equality: ["status"],
-    orderBy: [{ fieldPath: "weekStartDate", order: "DESCENDING" }],
-  },
-  {
     where: "src/lib/storage/orders.ts listPrepTasks / watchPrepTasks — one day's board",
     collectionGroup: "prepTasks",
     equality: ["date"],
-    orderBy: [{ fieldPath: "readyBy", order: "ASCENDING" }],
-  },
-  {
-    where: "src/components/KitchenBoard.tsx — the board filtered to outstanding work",
-    collectionGroup: "prepTasks",
-    equality: ["date", "status"],
     orderBy: [{ fieldPath: "readyBy", order: "ASCENDING" }],
   },
 ] as const;

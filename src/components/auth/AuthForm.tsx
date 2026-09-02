@@ -26,6 +26,7 @@ import {
 } from "@/lib/auth/next";
 import { policyFor } from "@/lib/auth/routePolicy";
 import { resolveStaffDestination } from "@/lib/auth/staffIntent";
+import { markCredentialSignIn } from "@/lib/auth/signInMark";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Field from "@/components/ui/Field";
@@ -224,6 +225,11 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
           email.trim(),
           password
         );
+        // Before anything else that awaits. Creating the account fires the auth
+        // observer immediately, and the provider reconciles off the back of it —
+        // a mark left after the profile writes would arrive too late to be
+        // claimed, and the first sign-in of every new account would go uncounted.
+        markCredentialSignIn();
         if (name.trim()) {
           await updateProfile(credential.user, { displayName: name.trim() });
           // The profile document is stamped the instant the account exists,
@@ -247,6 +253,7 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
         }
       } else {
         await signInWithEmailAndPassword(client, email.trim(), password);
+        markCredentialSignIn();
       }
       await land();
     });
@@ -255,6 +262,7 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
   function google() {
     void withBusy(async () => {
       await signInWithPopup(getAuthClient(), new GoogleAuthProvider());
+      markCredentialSignIn();
       await land();
     });
   }

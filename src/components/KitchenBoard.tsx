@@ -22,8 +22,7 @@ import { miseEnPlace } from "@/lib/orders";
 import { mealsByDay } from "@/lib/orderStats";
 import { authErrorMessage } from "@/lib/auth/errors";
 import { addDays, BALI_LABEL, baliToday, formatBaliDay, round0 } from "@/lib/format";
-import type { PrepStatus, PrepTask } from "@/lib/storage/types";
-import type { Order } from "@/lib/storage/types";
+import type { Order, PrepStatus, PrepTask } from "@/lib/storage/types";
 import { prepTaskTransitionDecision } from "@/lib/orderLifecycle";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
@@ -65,8 +64,21 @@ export default function KitchenBoard({ date }: { date?: string }) {
   const [tasks, setTasks] = useState<PrepTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Whether the board is actually receiving updates.
+   *
+   * The fallback below turns a failed listener into a plain read so a missing
+   * index degrades to a static board rather than a blank one -- which is right,
+   * but it said nothing. The board looked exactly like a live one and then never
+   * changed again, so two cooks working the same pass drifted apart silently.
+   * That is worse than an error, because nobody goes looking for it.
+   */
+  const [live, setLive] = useState(true);
   const [groupBy, setGroupBy] = useState<GroupBy>("time");
-  const [ahead, setAhead] = useState<{ date: string; meals: number }[]>([]);
+  /**
+   * The order book behind the week-ahead strip, and behind the per-task order
+   * lookup. Read once and re-sliced as the day moves, rather than re-fetched.
+   */
   const [orders, setOrders] = useState<Order[]>([]);
 
   useEffect(() => {
@@ -74,6 +86,7 @@ export default function KitchenBoard({ date }: { date?: string }) {
     let unsubscribe: (() => void) | undefined;
     setLoading(true);
     setError(null);
+    setLive(true);
 
     watchPrepTasks(
       day,
@@ -95,9 +108,16 @@ export default function KitchenBoard({ date }: { date?: string }) {
       .catch((cause) => {
         if (!active) return;
         // A live listener needs an index and permissions; fall back to a plain
-        // read so a missing index degrades to a static board, not a blank one.
+        // read so a missing index degrades to a static board, not a blank one --
+        // and say so, because a board that has quietly stopped updating is the
+        // one thing the kitchen must not have to guess at.
+        console.error("The prep board could not open a live listener:", cause);
         listPrepTasks(day)
-          .then((loaded) => active && setTasks(loaded))
+          .then((loaded) => {
+            if (!active) return;
+            setTasks(loaded);
+            setLive(false);
+          })
           .catch(() => active && setError(authErrorMessage(cause)))
           .finally(() => active && setLoading(false));
       });
@@ -114,21 +134,23 @@ export default function KitchenBoard({ date }: { date?: string }) {
    * Deliberately best-effort and separate from the task listener: this is a
    * planning aid, and the board is what the kitchen actually cooks from. If the
    * order read fails the strip simply does not appear.
+   *
+   * Read once per mount, not once per day. `listAllOrders` fetches up to two
+   * hundred documents, and this used to re-run on every arrow click -- two
+   * hundred reads to redraw seven bars from data already in hand. The window
+   * moves in memory instead.
    */
   useEffect(() => {
     let active = true;
     listAllOrders()
-      .then((loaded) => {
-        if (active) {
-          setOrders(loaded);
-          setAhead(mealsByDay(loaded, day, 7));
-        }
-      })
-      .catch(() => active && setAhead([]));
+      .then((loaded) => active && setOrders(loaded))
+      .catch(() => active && setOrders([]));
     return () => {
       active = false;
     };
-  }, [day]);
+  }, []);
+
+  const ahead = useMemo(() => mealsByDay(orders, day, 7), [orders, day]);
 
   const counts = useMemo(() => {
     const by = { todo: 0, prepping: 0, ready: 0, done: 0 };
@@ -249,6 +271,15 @@ export default function KitchenBoard({ date }: { date?: string }) {
           className="mb-4 rounded-xl border border-tomato-dark/30 bg-tomato-soft/20 px-3 py-2 text-sm font-600 text-tomato-dark"
         >
           {error}
+        </p>
+      )}
+
+      {!live && !error && (
+        <p
+          role="status"
+          className="mb-4 rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-sm font-600 text-charcoal"
+        >
+          This board is not updating live. Reload to see the latest prep.
         </p>
       )}
 

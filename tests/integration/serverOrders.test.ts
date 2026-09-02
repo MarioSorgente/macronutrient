@@ -339,7 +339,10 @@ describe("the cutoff is enforced", () => {
     await seedPlan(uid, "p1", {
       programStartDate: mondayAhead(-1),
       weekCount: 6,
-      assignments: [meal({ week: 1 }), meal({ week: 4 })],
+      // Distinct ids: `meal()` defaults to "a1", and a plan carrying the same
+      // assignment id twice is rejected as malformed -- correctly, but it meant
+      // this test was exercising the duplicate check rather than the cutoff.
+      assignments: [meal({ id: "a1", week: 1 }), meal({ id: "a2", week: 4 })],
     });
 
     await expect(
@@ -442,18 +445,46 @@ describe("fulfilment is validated before it reaches the kitchen", () => {
     });
   });
 
+  /**
+   * These four used to assert that a malformed choice was dropped, and the
+   * assertion was the bug written down. Dropping a day leaves `buildOrderDays`
+   * with no choice for it, and its fallback is a pickup at noon -- so a customer
+   * who asked for a delivery with a time the server would not accept received a
+   * pickup order, their address discarded, a 200 and a success toast. Nothing
+   * told them, and `fulfilmentProblems` could not: it only demands an address of
+   * a day whose mode is "delivery", and the mode had just been changed.
+   *
+   * A choice the client sent that the server cannot read is a bug in the client
+   * or a tampered payload. Either way the honest answer is to refuse it.
+   */
   it.each([
     ["an out-of-range day index", { 9: { mode: "pickup", time: "12:00" } }],
     ["a bogus mode", { 0: { mode: "teleport", time: "12:00" } }],
     ["a malformed time", { 0: { mode: "pickup", time: "25:99" } }],
     ["a non-numeric day key", { monday: { mode: "pickup", time: "12:00" } }],
-  ])("drops %s and falls back to the default pickup", async (_label, fulfilment) => {
+  ])("refuses %s rather than quietly making it a pickup", async (_label, fulfilment) => {
     const uid = await aUser();
     await seedPlan(uid);
-    const { orderId } = await submitOrder(uid, { planId: "p1", weekNumber: 1, fulfilment });
+    await expect(
+      submitOrder(uid, { planId: "p1", weekNumber: 1, fulfilment })
+    ).rejects.toMatchObject({ status: 400 });
+    // And nothing was written: a refused submit must not leave a half order.
+    const orders = await adminDb().collection(`restaurants/${RID}/orders`).get();
+    expect(orders.empty).toBe(true);
+  });
+
+  it("still keeps a well-formed delivery exactly as it was chosen", async () => {
+    const uid = await aUser();
+    await seedPlan(uid);
+    const { orderId } = await submitOrder(uid, {
+      planId: "p1", weekNumber: 1,
+      fulfilment: { 0: { mode: "delivery", time: "18:30", address: "Jl. Raya 1" } },
+    });
     const order = await docAt(`restaurants/${RID}/orders/${orderId}`);
-    const days = order?.days as { fulfilment: { mode: string; time: string } }[];
-    expect(days[0].fulfilment).toMatchObject({ mode: "pickup", time: "12:00" });
+    const days = order?.days as { fulfilment: Record<string, unknown> }[];
+    expect(days[0].fulfilment).toMatchObject({
+      mode: "delivery", time: "18:30", address: "Jl. Raya 1",
+    });
   });
 
   it("caps a long address rather than storing it whole", async () => {

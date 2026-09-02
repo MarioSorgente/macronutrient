@@ -12,6 +12,8 @@ import {
 } from "react";
 import type { User } from "firebase/auth";
 import { RESTAURANT_ID, isFirebaseConfigured } from "@/lib/firebaseEnv";
+import { ApiError } from "@/lib/api";
+import { takeCredentialSignIn } from "@/lib/auth/signInMark";
 import type { Role } from "@/lib/storage/types";
 
 export interface AuthState {
@@ -75,6 +77,17 @@ const AuthContext = createContext<AuthState | null>(null);
 /** Tab-scoped, so a preview ends with the tab. */
 const VIEW_AS_KEY = "mamma-calories:view-as";
 
+/** The saved admin preview, if the tab holds one. Never throws. */
+function readStoredViewAs(): Role | null {
+  try {
+    const saved = window.sessionStorage.getItem(VIEW_AS_KEY);
+    return saved === "client" || saved === "restaurant" ? saved : null;
+  } catch {
+    // Private browsing can refuse sessionStorage. No preview, no problem.
+    return null;
+  }
+}
+
 /**
  * Runs the reconciliation again once before giving up.
  *
@@ -90,7 +103,11 @@ const VIEW_AS_KEY = "mamma-calories:view-as";
 async function withOneRetry<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
-  } catch {
+  } catch (cause) {
+    // A 4xx is the server deciding, not the network failing. "This is the last
+    // owner" and "that claim key is not allowed" are the same answer twice, and
+    // asking again only doubles the work and the sign-in stamp.
+    if (cause instanceof ApiError && cause.status < 500) throw cause;
     await new Promise((resolve) => setTimeout(resolve, 1_200));
     return work();
   }
@@ -118,7 +135,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const [user, setUser] = useState<User | null>(null);
   const [actualRole, setActualRole] = useState<Role | null>(null);
-  const [viewAs, setViewAsState] = useState<Role | null>(null);
+  /**
+   * Read at mount rather than restored by an effect.
+   *
+   * The effect version could not win the race it needed to. It only ran once
+   * `actualRole` had landed, and it lives on the provider, so React flushed
+   * RouteGuard below it first — which saw an admin on a customer-only page,
+   * redirected to /admin, and only then was the preview restored, on a page the
+   * admin had just been bounced off. Refreshing while previewing as a customer
+   * therefore always threw the preview away.
+   *
+   * Reading it here is safe without knowing the role yet: `role` and `viewAs`
+   * below both ignore this value unless `actualRole` is "admin", so a non-admin
+   * with a stale key gets nothing from it. That is also what keeps hydration
+   * clean -- `actualRole` is null on the server and on the first client render
+   * alike, so nothing this value feeds reaches the DOM before they agree.
+   */
+  const [viewAs, setViewAsState] = useState<Role | null>(readStoredViewAs);
   const [loading, setLoading] = useState(enabled);
   const [syncError, setSyncError] = useState<string | null>(null);
   /** Whether the first reconciliation for the current account has finished. */
@@ -132,14 +165,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let disposed = false;
     const teardown: Array<() => void> = [];
 
+    /**
+     * Reads the role off the token, and never throws.
+     *
+     * This is awaited inside the auth observer, immediately before `loading` is
+     * cleared. An unguarded rejection here — offline, a revoked refresh token,
+     * clock skew — threw straight out of the observer, so `loading` stayed true
+     * and every protected route rendered "Checking your access..." for the rest
+     * of the session. There is no recovery from that except a reload, and it
+     * looks exactly like a hung app.
+     *
+     * Failing quietly is right: the reconciliation below asks the server for the
+     * role anyway, and it reports its own errors on /account.
+     */
     async function readRole(current: User | null) {
       if (!current) {
         setActualRole(null);
         return;
       }
-      const token = await current.getIdTokenResult();
-      if (!disposed) {
-        setActualRole((token.claims.role as Role | undefined) ?? null);
+      try {
+        const token = await current.getIdTokenResult();
+        if (!disposed) {
+          setActualRole((token.claims.role as Role | undefined) ?? null);
+        }
+      } catch (cause) {
+        console.error("Could not read the role from the ID token:", cause);
       }
     }
 
@@ -177,8 +227,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
 
           setUser(current);
-          await readRole(current);
-          if (!disposed) setLoading(false);
+          try {
+            await readRole(current);
+          } finally {
+            if (!disposed) setLoading(false);
+          }
         })
       );
 
@@ -212,10 +265,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const runSync = useCallback(async (current: User): Promise<Role | null> => {
     const { callApi } = await import("@/lib/api");
     const { role, changed } = await callApi<{ role: Role; changed: boolean }>(
-      "/api/auth/sync"
+      "/api/auth/sync",
+      // Reconciliation runs on every page load, so it is not evidence of a
+      // sign-in. It only reports one when a credential handler left the mark.
+      { signIn: takeCredentialSignIn() }
     );
-    if (changed) {
-      // The claim is on the account but not yet on this token.
+
+    /**
+     * Refresh when the token cannot prove the role, not only when the server
+     * just changed one.
+     *
+     * `changed` means the server wrote something on this call. It says nothing
+     * about what this token carries. An owner granted admin on a previous call,
+     * whose next page load raced the refresh, got `changed: false` and a role of
+     * "admin" set from the server's word alone -- while `getIdToken()` still
+     * handed out a token claiming "client". Every admin request then 403ed while
+     * the UI showed the owner their own dashboard: "Could not load staff
+     * requests", from a screen that had already decided they were the owner.
+     *
+     * Comparing against the claim on the token closes that gap for good, and
+     * costs one cached read when they already agree.
+     */
+    const onToken = (await current.getIdTokenResult()).claims.role as Role | undefined;
+    if (changed || (onToken ?? null) !== role) {
       await current.getIdTokenResult(true);
     }
     setActualRole(role);
@@ -351,18 +423,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [actualRole]
   );
 
-  // Restore a preview after a reload, once we know the viewer really is admin.
+  /**
+   * Drop a preview the viewer turns out not to be entitled to.
+   *
+   * The restore half of this used to live here too, and racing RouteGuard is why
+   * it does not. `null` is deliberately not a demotion: it is also what the role
+   * is for the first frames of every page load, and clearing on it threw the
+   * preview away before the role had a chance to arrive -- which is the very
+   * thing reading sessionStorage at mount was meant to stop. Signing out clears
+   * the preview at the auth boundary, so nothing depends on this to do it.
+   */
   useEffect(() => {
-    if (actualRole !== "admin") {
-      setViewAsState(null);
-      return;
-    }
-    try {
-      const saved = window.sessionStorage.getItem(VIEW_AS_KEY) as Role | null;
-      if (saved === "client" || saved === "restaurant") setViewAsState(saved);
-    } catch {
-      // Nothing to restore.
-    }
+    if (actualRole !== null && actualRole !== "admin") setViewAsState(null);
   }, [actualRole]);
 
   const signOut = useCallback(async () => {

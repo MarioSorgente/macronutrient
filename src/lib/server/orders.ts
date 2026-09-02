@@ -37,7 +37,7 @@ import {
   type PrepTask,
   type RestaurantConfig,
 } from "@/lib/storage/types";
-import { serviceTimeProblems } from "@/lib/fulfilmentTime";
+import { isWallClockTime, serviceTimeProblems } from "@/lib/fulfilmentTime";
 import { validateRestaurantConfig } from "@/lib/server/restaurantConfig";
 
 /**
@@ -110,20 +110,32 @@ const ORDER_STATUSES: OrderStatus[] = [
   "cancelled",
 ];
 
-function isValidTime(value: unknown): value is string {
-  return typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
-}
-
-/** Rejects anything that is not a well-formed choice before it reaches the plan. */
+/**
+ * Rejects anything that is not a well-formed choice before it reaches the plan.
+ *
+ * Rejects, rather than skips. Dropping a bad day looked defensive and was the
+ * opposite: `buildOrderDays` falls back to DEFAULT_FULFILMENT for a day it has
+ * no choice for, so a delivery the customer had asked for came out the far end
+ * as a pickup at noon with the address discarded — and the request answered 200.
+ * Nobody was told. A day the client sent that cannot be read is a bug in the
+ * client or a tampered payload, and either way the honest answer is 400.
+ */
 export function readFulfilment(raw: unknown): FulfilmentByDay {
   const out: FulfilmentByDay = {};
-  if (!raw || typeof raw !== "object") return out;
+  if (raw === undefined || raw === null) return out;
+  if (typeof raw !== "object") throw new HttpError(400, "Fulfilment choices are invalid.");
 
   for (const [key, value] of Object.entries(raw as Record<string, Fulfilment>)) {
     const day = Number(key);
-    if (!Number.isInteger(day) || day < 0 || day > 6) continue;
-    if (!value || (value.mode !== "pickup" && value.mode !== "delivery")) continue;
-    if (!isValidTime(value.time)) continue;
+    if (!Number.isInteger(day) || day < 0 || day > 6) {
+      throw new HttpError(400, `"${key}" is not a day of the week.`);
+    }
+    if (!value || (value.mode !== "pickup" && value.mode !== "delivery")) {
+      throw new HttpError(400, `Day ${day} needs pickup or delivery.`);
+    }
+    if (!isWallClockTime(value.time)) {
+      throw new HttpError(400, `Day ${day} needs a time of day, as HH:MM.`);
+    }
 
     out[day] = {
       mode: value.mode,
@@ -146,7 +158,19 @@ async function loadConfig(db: Firestore): Promise<RestaurantConfig> {
     try {
       const stored = snap.data() ?? {};
       return {
-        ...validateRestaurantConfig(stored),
+        // Layered over the defaults, deliberately, and only on this path.
+        //
+        // The same validator guards an admin submitting new settings, where
+        // strictness is the whole point. Reading a document is a different
+        // question: a restaurant record written before `serviceSlots`,
+        // `serviceOpen`, `serviceClose` and `deliveryZones` existed is not
+        // corrupt, it is old -- and rejecting it turned every order submission
+        // into "Restaurant settings are invalid. Ask an admin to review them."
+        // until somebody happened to open the settings page and press Save. A
+        // field that is present but wrong is still refused; only absence is
+        // filled. The browser already read the config this way, so this also
+        // stops the two sides disagreeing about the same document.
+        ...validateRestaurantConfig({ ...DEFAULT_RESTAURANT_CONFIG, ...stored }),
         createdAt: typeof stored.createdAt === "string" ? stored.createdAt : now,
         updatedAt: typeof stored.updatedAt === "string" ? stored.updatedAt : now,
       };
@@ -243,7 +267,7 @@ export async function submitOrder(
     // These bounds guard every date/week calculation below, independently of
     // the more extensive plan integrity validation that follows.
     validatePlanSchedule(plan, week);
-    validatePlanForOrder(plan, week, dishes);
+    validatePlanForOrder(plan, week, dishes, config);
     const startDate = weekStartDate(plan, week);
     const { at: cutoff, passed } = cutoffState(startDate, {
       timezone: config.timezone,
@@ -302,7 +326,13 @@ export async function submitOrder(
           ? { phone: String(profile.phone).trim().slice(0, MAX_PHONE_LENGTH) }
           : {}),
       },
-      days,
+      // `priced` is a preview concern and must not reach the document: the
+      // validation above has already refused anything that is not fully priced,
+      // so storing the flag would only be a field that is always true.
+      days: days.map(({ meals, ...day }) => ({
+        ...day,
+        meals: meals.map(({ priced: _priced, ...meal }) => meal),
+      })),
       totals: summary.totals,
       priceIdr: summary.priceIdr,
       mealCount: summary.mealCount,

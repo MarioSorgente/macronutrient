@@ -1,6 +1,7 @@
 import type { Order, UserProfile } from "@/lib/storage/types";
 import { addDays, baliToday, baliWeekStart } from "@/lib/format";
 import { isLiveOrder, type PeriodRange } from "@/lib/orderStats";
+import { orderServings } from "@/lib/orders";
 
 /**
  * The owner's numbers, computed from orders and profiles in the browser.
@@ -100,7 +101,7 @@ export function revenueByWeek(
     if (!bucket) continue; // outside the window
     bucket.idr += order.priceIdr;
     bucket.orders += 1;
-    bucket.meals += order.mealCount;
+    bucket.meals += orderServings(order);
     const people = seen.get(week)!;
     people.add(order.userId);
     bucket.customers = people.size;
@@ -218,7 +219,7 @@ export function customerRollup(
         lastLoginAt: user.lastLoginAt,
         logins: user.loginCount ?? 0,
         orders: theirs.length,
-        meals: theirs.reduce((n, o) => n + o.mealCount, 0),
+        meals: theirs.reduce((n, o) => n + orderServings(o), 0),
         spendIdr,
         lifetimeIdr: theirsEver.reduce((n, o) => n + o.priceIdr, 0),
         avgOrderIdr: theirs.length ? Math.round(spendIdr / theirs.length) : 0,
@@ -296,7 +297,7 @@ export function periodStats(
     revenueIdr,
     orders: live.length,
     avgOrderIdr: live.length ? Math.round(revenueIdr / live.length) : 0,
-    meals: live.reduce((n, o) => n + o.mealCount, 0),
+    meals: live.reduce((n, o) => n + orderServings(o), 0),
     onTheBooksIdr: allOrders
       .filter((o) => isLiveOrder(o) && baliWeekStart(o.weekStartDate) >= thisWeek)
       .reduce((n, o) => n + o.priceIdr, 0),

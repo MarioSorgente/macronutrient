@@ -40,6 +40,7 @@ import { usePlanView, useShowPrices } from "@/lib/planView";
 import { EMPTY_MACROS, scaleMacros, sumDishMacros } from "@/lib/calc";
 import { ZERO_PRICE } from "@/lib/pricing";
 import { loadCurrentPlan, programWeekForDate, savePlan } from "@/lib/currentPlan";
+import { useMinuteTick } from "@/lib/useMinuteTick";
 import type { GeneratedDay } from "@/lib/mealPlanner";
 import { assignmentsFromGenerated, occupiedSlots } from "@/lib/planAssignments";
 import { withRenamedSlots } from "@/lib/planSlots";
@@ -236,11 +237,7 @@ export default function WeekPlanner() {
    * never disagree about a deadline. Recomputed each minute so a countdown that
    * says "12m left" does not sit there saying it for an hour.
    */
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(tick);
-  }, []);
+  const now = useMinuteTick();
 
   const cutoff = useMemo(() => {
     if (!plan || !config) return null;

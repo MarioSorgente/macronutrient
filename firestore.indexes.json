@@ -1,5 +1,5 @@
 {
-  "//": "Composite indexes for the queries this app actually runs. Firestore creates single-field indexes automatically, so only multi-field queries appear here. Deploy with: firebase deploy --only firestore:indexes",
+  "//": "Composite indexes for the queries this app actually runs. Three more lived here for queries that had been deleted -- the board and the order book both filter status in memory, and the duplicate-submit check became a reservation document -- costing write amplification on every order and prep task. Firestore creates single-field indexes automatically, so only multi-field queries appear here. Deploy with: firebase deploy --only firestore:indexes",
   "indexes": [
     {
       "//": "Kitchen board: one day's work, in the order it must be ready.",
@@ -11,41 +11,12 @@
       ]
     },
     {
-      "//": "Kitchen board filtered to what is still outstanding.",
-      "collectionGroup": "prepTasks",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "date", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "readyBy", "order": "ASCENDING" }
-      ]
-    },
-    {
       "//": "A customer's own orders. The userId filter is also what the security rules require before they will serve the list at all.",
       "collectionGroup": "orders",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "submittedAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "//": "submitOrder's duplicate check. Three equality filters would otherwise be served by a zigzag merge across single-field indexes, which is markedly slower on the one query that sits in the submit path.",
-      "collectionGroup": "orders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "userId", "order": "ASCENDING" },
-        { "fieldPath": "planId", "order": "ASCENDING" },
-        { "fieldPath": "weekNumber", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "//": "Kitchen order book filtered by status, newest service week first.",
-      "collectionGroup": "orders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "weekStartDate", "order": "DESCENDING" }
       ]
     }
   ],

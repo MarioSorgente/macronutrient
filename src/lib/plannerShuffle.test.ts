@@ -45,22 +45,25 @@ describe("bounded shuffle search", () => {
 
   it("checks a deterministic bound without relying on wall-clock time", async () => {
     let tick = 0;
-    const generate = vi.fn(({ seed }: GenerateOptions) => plan(`meal-${seed}`));
+    const forSeed = vi.fn((seed: number) => plan(`meal-${seed}`));
+    const generate = vi.fn((_: GenerateOptions) => forSeed);
     const result = await searchShuffleAlternatives({ current: plan("original"), generation, firstSeed: 2,
       generate, maxCandidates: 100, maxDurationMs: 5, now: () => tick++, yieldToBrowser: async () => {} });
     expect(result.evaluated).toBeLessThanOrEqual(4);
-    expect(generate).toHaveBeenCalledTimes(result.evaluated);
+    expect(forSeed).toHaveBeenCalledTimes(result.evaluated);
+    // The seed-independent search is prepared once, however many seeds are tried.
+    expect(generate).toHaveBeenCalledTimes(1);
   });
 
   it("cancels between candidates and rejects changed adherence, exclusions, and budget", async () => {
     const controller = new AbortController();
     let calls = 0;
-    const generate = (options: GenerateOptions) => {
+    const generate = (_: GenerateOptions) => (seed: number) => {
       calls += 1;
       if (calls === 1) return plan("new", 50, "Within tolerance");
       if (calls === 2) return plan("forbidden");
       controller.abort();
-      return plan(`meal-${options.seed}`, 101);
+      return plan(`meal-${seed}`, 101);
     };
     const result = await searchShuffleAlternatives({ current: plan("original"),
       generation: { ...generation, preferences: { ...DEFAULT_PREFERENCES, avoidIngredientIds: ["forbidden"] } },
@@ -71,7 +74,7 @@ describe("bounded shuffle search", () => {
   });
 
   it("supports repeated shuffles and deterministic seed tie-breaking", async () => {
-    const generate = ({ seed }: GenerateOptions) => plan(seed! % 2 ? "odd" : "even");
+    const generate = (_: GenerateOptions) => (seed: number) => plan(seed % 2 ? "odd" : "even");
     const first = await searchShuffleAlternatives({ current: plan("original"), generation,
       firstSeed: 10, generate, maxCandidates: 4, yieldToBrowser: async () => {} });
     const second = await searchShuffleAlternatives({ current: first.plan, generation,

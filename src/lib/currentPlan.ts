@@ -147,10 +147,50 @@ export function whenPlanWritesSettle(ownerUid: string | null): Promise<void> {
   return writes.get(planOwnerKey(ownerUid))?.tail ?? Promise.resolve();
 }
 
+/**
+ * A claim of device work, in progress, that the loader below must not race.
+ *
+ * `claimGuestData` reads the account plans, decides the guest week can take the
+ * fixed `primary` id, writes it, and only then clears localStorage. Both it and
+ * the planner react to the same sign-in, and the loader creates at `primary`
+ * with a plain replace. Interleaved, the loader read empty before the claim
+ * wrote, and its empty plan landed on top of the guest week seconds after the
+ * only other copy was deleted. Losing somebody's week at the moment they commit
+ * to an account is the worst possible time to lose it.
+ *
+ * A barrier rather than a lock: the claim is the writer that has to go first,
+ * and the loader simply waits for it, the same way it already waits for our own
+ * queued writes.
+ */
+const claims = new Map<string, Promise<void>>();
+
+/**
+ * Holds the loader off for this owner until `work` settles.
+ *
+ * Failure releases the barrier rather than propagating: a claim that could not
+ * write must not stop the planner opening.
+ */
+export function whileClaiming<T>(ownerUid: string, work: () => Promise<T>): Promise<T> {
+  const key = planOwnerKey(ownerUid);
+  const running = work();
+  const barrier = running.then(() => undefined, () => undefined);
+  claims.set(key, barrier);
+  return running.finally(() => {
+    // Identity, not presence: a later claim may already own this key.
+    if (claims.get(key) === barrier) claims.delete(key);
+  });
+}
+
+/** Resolves once any in-flight claim for this owner has settled, ok or not. */
+function whenClaimSettles(ownerUid: string | null): Promise<void> {
+  return claims.get(planOwnerKey(ownerUid)) ?? Promise.resolve();
+}
+
 /** Test seam. Session state is module-level by design; tests need it cleared. */
 export function __resetPlanCache(): void {
   inFlight.clear();
   writes.clear();
+  claims.clear();
 }
 
 /** Whether moving the program anchor cannot change any planned service date. */
@@ -193,7 +233,9 @@ export function loadCurrentPlan(
   const pending = (async () => {
     // A write we issued this session is newer than anything a read can return.
     // Draining first is what stops a tab switch mid-save from showing the
-    // pre-apply week.
+    // pre-apply week. A claim of device work is a write we have not issued yet,
+    // and creating at `primary` before it lands would overwrite it.
+    await whenClaimSettles(ownerUid);
     await whenPlanWritesSettle(ownerUid);
 
     // `latest` reads one document rather than the whole collection, which is

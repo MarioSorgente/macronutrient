@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
@@ -56,7 +56,8 @@ export default function StaffAccessStatus({
 }: {
   variant?: "account" | "gate";
 }) {
-  const { user, actualRole, syncAccount, refreshRole } = useAuth();
+  const { user, actualRole, roleSettled, viewAs, setViewAs, syncAccount, refreshRole } =
+    useAuth();
   const router = useRouter();
   // Read once on mount instead of through useSearchParams, which would drag a
   // Suspense boundary along wherever this is mounted — including the guard.
@@ -71,6 +72,16 @@ export default function StaffAccessStatus({
   const autoActivated = useRef(false);
 
   const staff = isStaff(actualRole);
+  /**
+   * An owner or cook looking at the gate through an admin preview.
+   *
+   * RouteGuard decides what to render from the *effective* role, so previewing
+   * as a customer sends a real admin here; this component decides from the
+   * *actual* role, and used to bail out with `null` on the way in. Two answers
+   * to "who am I" one render apart, and the visible result was an entirely blank
+   * /kitchen. It is a preview, not a denial, so say that instead.
+   */
+  const previewingGate = variant === "gate" && staff;
 
   useEffect(() => {
     const search = new URLSearchParams(window.location.search);
@@ -90,9 +101,12 @@ export default function StaffAccessStatus({
   }, []);
 
   useEffect(() => {
-    if (!user || staff) return;
+    // `actualRole` is null for the first frames of a fresh sign-up, which made
+    // every new account fire this request and then unmount the body that wanted
+    // it. Waiting for the role to settle costs nothing and saves the round trip.
+    if (!user || staff || !roleSettled) return;
     void loadRequest();
-  }, [loadRequest, staff, user]);
+  }, [loadRequest, roleSettled, staff, user]);
 
   /**
    * Pulls a granted role onto this token.
@@ -166,7 +180,24 @@ export default function StaffAccessStatus({
     }
   }
 
-  if (!user || staff) return null;
+  if (!user) return null;
+
+  if (previewingGate) {
+    return (
+      <Shell>
+        <p className="mt-1 text-sm text-charcoal-soft">
+          You are previewing Mamma Calories as a{" "}
+          {viewAs === "restaurant" ? "staff member" : "customer"}, and this area
+          needs staff access. Your own account still has it.
+        </p>
+        <Button className="mt-3" size="sm" onClick={() => setViewAs(null)}>
+          Leave preview
+        </Button>
+      </Shell>
+    );
+  }
+
+  if (staff) return null;
 
   const busy =
     requestState.status === "loading" ||
@@ -289,35 +320,43 @@ export default function StaffAccessStatus({
     </>
   );
 
-  if (variant === "gate") {
-    return (
-      <main className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
-        <Card className="border-gold/50 bg-gold/10 p-5">
-          <h1 className="flex items-center gap-2 font-display text-xl font-700 text-charcoal">
-            <ShieldAlert size={20} className="text-gold" />
-            Restaurant staff access is required
-          </h1>
-          {body}
-          <p className="mt-5 text-xs text-charcoal-soft">
-            Meanwhile,{" "}
-            <Link href="/plan" className="font-600 text-tomato hover:underline">
-              plan your own week
-            </Link>{" "}
-            or open{" "}
-            <Link href="/account" className="font-600 text-tomato hover:underline">
-              Account &amp; access
-            </Link>
-            .
-          </p>
-        </Card>
-      </main>
-    );
-  }
+  if (variant === "gate") return <Shell>{body}</Shell>;
 
   return (
     <Card className="mt-5 border-gold/50 bg-gold/10 p-4">
       <p className="text-sm font-700 text-charcoal">Restaurant access</p>
       {body}
     </Card>
+  );
+}
+
+/**
+ * The full-page frame the gate wears.
+ *
+ * Extracted so every reason this page can be reached wears the same frame. The
+ * one that was missing it rendered nothing at all.
+ */
+function Shell({ children }: { children: ReactNode }) {
+  return (
+    <main className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
+      <Card className="border-gold/50 bg-gold/10 p-5">
+        <h1 className="flex items-center gap-2 font-display text-xl font-700 text-charcoal">
+          <ShieldAlert size={20} className="text-gold" />
+          Restaurant staff access is required
+        </h1>
+        {children}
+        <p className="mt-5 text-xs text-charcoal-soft">
+          Meanwhile,{" "}
+          <Link href="/plan" className="font-600 text-tomato hover:underline">
+            plan your own week
+          </Link>{" "}
+          or open{" "}
+          <Link href="/account" className="font-600 text-tomato hover:underline">
+            Account &amp; access
+          </Link>
+          .
+        </p>
+      </Card>
+    </main>
   );
 }

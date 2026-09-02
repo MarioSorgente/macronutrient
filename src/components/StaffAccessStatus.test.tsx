@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
     emailVerified: boolean;
   },
   actualRole: "client" as Role | null,
+  roleSettled: true,
+  viewAs: null as Role | null,
+  setViewAs: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -27,6 +30,9 @@ vi.mock("@/lib/auth/AuthProvider", () => ({
   useAuth: () => ({
     user: mocks.user,
     actualRole: mocks.actualRole,
+    roleSettled: mocks.roleSettled,
+    viewAs: mocks.viewAs,
+    setViewAs: mocks.setViewAs,
     syncAccount: mocks.syncAccount,
     refreshRole: mocks.refreshRole,
   }),
@@ -56,6 +62,8 @@ describe("StaffAccessStatus", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.actualRole = "client";
+    mocks.roleSettled = true;
+    mocks.viewAs = null;
     mocks.user = {
       uid: "customer-1",
       email: "customer@example.com",
@@ -233,11 +241,44 @@ describe("StaffAccessStatus", () => {
     });
   });
 
-  it("renders nothing for an account that already has staff access", () => {
+  it("renders no access card on the account page for somebody who already has access", () => {
     mocks.actualRole = "restaurant";
-    const { container } = render(<StaffAccessStatus variant="gate" />);
+    const { container } = render(<StaffAccessStatus />);
 
     expect(container.textContent).toBe("");
+    expect(mocks.getApi).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The gate is reached from the *effective* role and used to answer from the
+   * *actual* one, so an owner previewing as a customer opened /kitchen and got a
+   * completely blank page: the guard rendered this, and this returned null.
+   * A preview is not a denial, and either way the page has to say something.
+   */
+  it("explains the preview instead of rendering a blank page", async () => {
+    mocks.actualRole = "admin";
+    mocks.viewAs = "client";
+    render(<StaffAccessStatus variant="gate" />);
+
+    expect(
+      await screen.findByRole("heading", { name: /restaurant staff access is required/i })
+    ).toBeTruthy();
+    expect(screen.getByText(/previewing Mamma Calories as a customer/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Leave preview" }));
+    expect(mocks.setViewAs).toHaveBeenCalledWith(null);
+    // Still their own account: no staff request is offered or filed.
+    expect(screen.queryByRole("button", { name: /request staff access/i })).toBeNull();
+    expect(mocks.getApi).not.toHaveBeenCalled();
+  });
+
+  it("waits for the role to settle before asking the server about a request", () => {
+    mocks.actualRole = null;
+    mocks.roleSettled = false;
+    render(<StaffAccessStatus />);
+
+    // A fresh sign-up has no claim for its first frames. Asking then meant a
+    // round trip whose answer the component immediately unmounted.
     expect(mocks.getApi).not.toHaveBeenCalled();
   });
 });

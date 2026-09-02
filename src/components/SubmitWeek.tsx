@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { readStoredProfile } from "@/lib/auth/profile";
 import { useRepos } from "@/lib/storage/repos";
 import { loadCurrentPlan } from "@/lib/currentPlan";
+import { useMinuteTick } from "@/lib/useMinuteTick";
 import { byId, DAY_NAMES } from "@/lib/clients";
 import {
   DEFAULT_FULFILMENT,
@@ -22,7 +23,7 @@ import { cutoffConfigOf, cutoffState, formatRemaining } from "@/lib/cutoff";
 import { loadRestaurantConfig, submitWeek } from "@/lib/storage/orders";
 import { authErrorMessage } from "@/lib/auth/errors";
 import { BALI_LABEL, formatBaliDay } from "@/lib/format";
-import { formatIdr } from "@/lib/pricing";
+import { formatPrice } from "@/lib/pricing";
 import { round0 } from "@/lib/format";
 import type {
   Dish,
@@ -144,10 +145,19 @@ export default function SubmitWeek() {
     };
   }, [user]);
 
+  /**
+   * Recomputed each minute, with the instant passed in.
+   *
+   * Without this the deadline was fixed at mount: someone who opened this screen
+   * before the cutoff kept a live countdown and an enabled Send button after it,
+   * and found out from a 409. The planner already ticked; the screen that gates
+   * the submit is the one that did not.
+   */
+  const now = useMinuteTick();
   const cutoff = useMemo(() => {
     if (!plan || !config) return null;
-    return cutoffState(weekStartDate(plan, week), cutoffConfigOf(config));
-  }, [plan, config, week]);
+    return cutoffState(weekStartDate(plan, week), cutoffConfigOf(config), new Date(now));
+  }, [plan, config, week, now]);
 
   const setDay = useCallback(
     (day: number, patch: Partial<Fulfilment>) => {
@@ -253,9 +263,11 @@ export default function SubmitWeek() {
           ? "Negrita is not taking orders at the moment. Your week is saved — send it once they reopen."
           : cutoff?.passed
             ? `Orders for week ${week} closed on ${formatBaliDay(cutoff.at.toISOString())}.`
-            : problems.length > 0
-              ? problems[0]
-              : null;
+            : summary.unpricedMeals > 0
+              ? `${summary.unpricedMeals} meal${summary.unpricedMeals === 1 ? " has" : "s have"} an ingredient Negrita does not price. Swap it, or ask the restaurant to add a price.`
+              : problems.length > 0
+                ? problems[0]
+                : null;
 
   const blocked = busy || blockedReason !== null;
 
@@ -360,12 +372,17 @@ export default function SubmitWeek() {
                         {DAY_NAMES[index]}
                       </h3>
                       <p className="text-xs text-charcoal-soft">
-                        {formatBaliDay(day.date)} · {day.meals.length} meal
-                        {day.meals.length === 1 ? "" : "s"}
+                        {formatBaliDay(day.date)} ·{" "}
+                        {day.meals.reduce((n, m) => n + m.servings, 0)} meal
+                        {day.meals.reduce((n, m) => n + m.servings, 0) === 1 ? "" : "s"}
                       </p>
                     </div>
                     <span className="text-sm font-600 tabular-nums text-charcoal">
-                      {formatIdr(day.meals.reduce((n, m) => n + m.priceIdr, 0))}
+                      {formatPrice({
+                        totalIdr: day.meals.reduce((n, m) => n + m.priceIdr, 0),
+                        unpricedCount: day.meals.filter((m) => m.priced === false).length,
+                        complete: day.meals.every((m) => m.priced !== false),
+                      })}
                     </span>
                   </div>
 
@@ -444,7 +461,7 @@ export default function SubmitWeek() {
                   Meals
                 </dt>
                 <dd className="font-700 tabular-nums text-charcoal">
-                  {summary.mealCount}
+                  {summary.servingCount}
                 </dd>
               </div>
               <div>
@@ -460,7 +477,11 @@ export default function SubmitWeek() {
                   Total
                 </dt>
                 <dd className="font-700 tabular-nums text-tomato">
-                  {formatIdr(summary.priceIdr)}
+                  {formatPrice({
+                    totalIdr: summary.priceIdr,
+                    unpricedCount: summary.unpricedMeals,
+                    complete: summary.unpricedMeals === 0,
+                  })}
                 </dd>
               </div>
             </dl>

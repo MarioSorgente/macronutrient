@@ -22,6 +22,7 @@ import StatTile from "@/components/ui/StatTile";
 import Badge from "@/components/ui/Badge";
 import OrderStatusBadge from "@/components/OrderStatusBadge";
 import MacroChips from "@/components/MacroChips";
+import { orderServings } from "@/lib/orders";
 
 /** One customer: how they came in, what they ordered, what it was worth. */
 export default function CustomerDetail() {
@@ -133,7 +134,7 @@ export default function CustomerDetail() {
         <StatTile label="Orders" value={String(orders.length)} />
         <StatTile
           label="Meals"
-          value={String(orders.reduce((n, o) => n + o.mealCount, 0))}
+          value={String(orders.reduce((n, o) => n + orderServings(o), 0))}
         />
         <StatTile
           label="Lifetime"
@@ -192,7 +193,7 @@ export default function CustomerDetail() {
                       Week of {formatBaliDay(order.weekStartDate)}
                     </h3>
                     <p className="text-xs text-charcoal-soft">
-                      {order.mealCount} meals · sent{" "}
+                      {orderServings(order)} meals · sent{" "}
                       {formatBaliDateTime(order.submittedAt)}
                     </p>
                   </div>

@@ -27,7 +27,7 @@ const ROLES: Role[] = ["client", "restaurant", "admin"];
 
 /** Restaurant settings and who can see what. Owner only. */
 export default function AdminSettings() {
-  const { role, user } = useAuth();
+  const { role, actualRole, roleSettled, user } = useAuth();
   const { show } = useToast();
 
   const [config, setConfig] = useState<RestaurantConfig | null>(null);
@@ -63,7 +63,19 @@ export default function AdminSettings() {
     }
   }, []);
 
+  /**
+   * Nothing here is asked for until the owner claim is on the token.
+   *
+   * Both reads are admin-only -- the staff requests route calls `requireAdmin`,
+   * and the rules only let an admin list `users`. Signing in and coming straight
+   * here raced the token refresh that carries a freshly granted owner claim, so
+   * the request would 403 and land in a terminal error state that nothing
+   * retried: "Could not load staff requests", with an Approve button that never
+   * appeared and no way to get it back except a reload. Waiting for the role,
+   * and re-running when it changes, is the whole fix.
+   */
   useEffect(() => {
+    if (!roleSettled || actualRole !== "admin") return;
     let active = true;
     void refreshRequests();
     Promise.all([loadRestaurantConfig(), listUsers().catch(() => [])])
@@ -77,7 +89,7 @@ export default function AdminSettings() {
     return () => {
       active = false;
     };
-  }, [refreshRequests]);
+  }, [actualRole, roleSettled, refreshRequests]);
 
   function patch(next: Partial<RestaurantConfig>) {
     setConfig((current) => (current ? { ...current, ...next } : current));

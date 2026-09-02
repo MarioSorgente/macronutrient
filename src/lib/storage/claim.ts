@@ -5,6 +5,7 @@ import {
   isCloudBackend,
 } from "@/lib/storage";
 import { touch } from "@/lib/storage/entity";
+import { whileClaiming } from "@/lib/currentPlan";
 import type { Plan } from "@/lib/storage/types";
 
 export interface ClaimResult {
@@ -31,9 +32,17 @@ function isEmpty(plan: Plan): boolean {
  * by skipping: an empty plan is replaced, a real one is kept and the guest's
  * week is filed alongside it under a fresh id.
  */
-export async function claimGuestData(uid: string): Promise<ClaimResult> {
-  if (!uid || !isCloudBackend()) return { plans: 0, dishes: 0 };
+export function claimGuestData(uid: string): Promise<ClaimResult> {
+  if (!uid || !isCloudBackend()) return Promise.resolve({ plans: 0, dishes: 0 });
+  // Held from before the read to after the last write. `loadCurrentPlan` creates
+  // at the same fixed `primary` id with a plain replace, and it reacts to the
+  // same sign-in this does — so without the barrier its empty plan could land on
+  // top of the claimed week, moments after `guestStores.clear()` below deleted
+  // the only other copy of it.
+  return whileClaiming(uid, () => claim(uid));
+}
 
+async function claim(uid: string): Promise<ClaimResult> {
   const [guestPlans, guestDishes] = await Promise.all([
     guestStores.plans().list(),
     guestStores.dishes().list(),

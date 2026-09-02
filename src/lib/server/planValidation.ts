@@ -1,6 +1,8 @@
 import { nutritionCatalog } from "@/lib/database";
 import { assignmentPrice } from "@/lib/clients";
+import { withMenuIdentity } from "@/lib/menuIdentity";
 import type { Dish, DishItem, OrderDay, Plan } from "@/lib/storage/types";
+import type { RestaurantPricingPolicy } from "@/lib/pricing";
 import { HttpError } from "@/lib/server/auth";
 import { parseCalendarDate } from "@/lib/format";
 import { MAX_PROGRAM_WEEKS } from "@/lib/storage/types";
@@ -72,7 +74,15 @@ function validateItem(value: unknown, label: string): asserts value is DishItem 
 }
 
 /** Validates the untrusted Firestore plan before any planner/order calculations run. */
-export function validatePlanForOrder(raw: unknown, week: number, dishes: Map<string, Dish>): asserts raw is Plan {
+export function validatePlanForOrder(
+  raw: unknown,
+  week: number,
+  dishes: Map<string, Dish>,
+  // The policy the order will actually be built with. Validating at a flat 0%
+  // while `buildOrderDays` applied the restaurant markup meant the bound below
+  // was checked against a different number from the one being stored.
+  pricingPolicy: RestaurantPricingPolicy = { markupPct: 0 }
+): asserts raw is Plan {
   validateFiniteNumbers(raw);
   validatePlanSchedule(raw, week);
   if (!record(raw)) bad("the plan is not an object.");
@@ -122,7 +132,20 @@ export function validatePlanForOrder(raw: unknown, week: number, dishes: Map<str
         bad(`${label} price is incomplete or invalid.`);
       }
     }
-    const price = assignmentPrice(assignment as never, dishes);
+    /**
+     * Priced exactly as the order will be built, or this refuses orders it is
+     * about to accept.
+     *
+     * Two ways it did not match. The menu identity is stamped by
+     * `planWithMenuIdentity` on the way into `buildOrderDays`, and validating
+     * before that meant a week planned before menu identity existed was priced
+     * from its raw components -- Rp 15,000 of ingredients for a dish the menu
+     * sells at Rp 89,000, several of which carry no price at all, so a perfectly
+     * good order was rejected as "incomplete". And the policy defaulted to a 0%
+     * markup here while the order was built with the restaurant's real one.
+     */
+    const identified = withMenuIdentity(assignment as never, dishes);
+    const price = assignmentPrice(identified, dishes, pricingPolicy);
     if (!price.complete || !Number.isFinite(price.totalIdr) || price.totalIdr < 0 || price.totalIdr > MAX_PRICE_IDR) bad(`${label} price is incomplete or invalid.`);
   }
 }

@@ -1,5 +1,5 @@
 import { bench, describe } from "vitest";
-import { generatePlan } from "@/lib/mealPlanner";
+import { generatePlan, seedSweep } from "@/lib/mealPlanner";
 import { DEFAULT_PREFERENCES, type Assignment, type Plan } from "@/lib/storage/types";
 import { byId, dayPrice, dayTotals, assignmentsFor } from "@/lib/clients";
 import { searchIngredients, getRecipe, menuRecipes } from "@/lib/database";
@@ -48,20 +48,44 @@ function fullPlan(): Plan {
 const PLAN = fullPlan();
 const DISHES = byId([]);
 
+const GENERATION = {
+  days: [0, 1, 2, 3, 4, 5, 6],
+  slots: SLOTS,
+  targets: { energy_kcal: 2200, protein_g: 160, carbs_g: 220, fat_g: 70 },
+  savedDishes: [],
+  includeSavedDishes: false,
+  includeMenuDishes: true,
+  includeComposed: true,
+  dailyBudgetIdr: null,
+  preferences: DEFAULT_PREFERENCES,
+  seed: 42,
+} as Parameters<typeof generatePlan>[0];
+
+/** What Shuffle asks for: several equivalent weeks over one set of options. */
+const SHUFFLE_CANDIDATES = 8;
+
 describe("planner", () => {
   bench("generatePlan — 7 days x 4 slots", () => {
-    generatePlan({
-      days: [0, 1, 2, 3, 4, 5, 6],
-      slots: SLOTS,
-      targets: { energy_kcal: 2200, protein_g: 160, carbs_g: 220, fat_g: 70 },
-      savedDishes: [],
-      includeSavedDishes: false,
-      includeMenuDishes: true,
-      includeComposed: true,
-      dailyBudgetIdr: null,
-      preferences: DEFAULT_PREFERENCES,
-      seed: 42,
-    } as Parameters<typeof generatePlan>[0]);
+    generatePlan(GENERATION);
+  });
+
+  /**
+   * The two shapes of a seed sweep, which is what Shuffle runs.
+   *
+   * The seed reaches one line of the planner, so preparing the search once and
+   * sweeping is the same answer for a fraction of the work. Both are measured so
+   * the difference is a number rather than a claim, and so a regression that
+   * reintroduces per-seed preparation shows up here.
+   */
+  bench(`seed sweep — ${SHUFFLE_CANDIDATES} candidates, prepared once`, () => {
+    const sweep = seedSweep(GENERATION);
+    for (let seed = 1; seed <= SHUFFLE_CANDIDATES; seed += 1) sweep(seed);
+  });
+
+  bench(`seed sweep — ${SHUFFLE_CANDIDATES} candidates, regenerated each time`, () => {
+    for (let seed = 1; seed <= SHUFFLE_CANDIDATES; seed += 1) {
+      generatePlan({ ...GENERATION, seed });
+    }
   });
 });
 

@@ -24,6 +24,7 @@ import Input, { Select } from "@/components/ui/Input";
 import OrderStatusBadge, { ORDER_LABELS } from "@/components/OrderStatusBadge";
 import { useToast } from "@/components/ui/Toast";
 import { ORDER_TRANSITIONS, orderTransitionDecision } from "@/lib/orderLifecycle";
+import { orderServings } from "@/lib/orders";
 
 const FILTERS: { value: string; label: string }[] = [
   { value: "all", label: "All orders" },
@@ -32,6 +33,10 @@ const FILTERS: { value: string; label: string }[] = [
   { value: "in_prep", label: "In the kitchen" },
   { value: "ready", label: "Ready" },
   { value: "completed", label: "Collected" },
+  // Both were missing, so a rejected or cancelled order could only be found by
+  // scrolling "All orders" -- which is exactly when somebody is looking for one.
+  { value: "rejected", label: "Rejected" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 /** How far back "popular lately" looks, in service weeks. */
@@ -63,6 +68,10 @@ export default function KitchenOrders() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** False once the order book has fallen back to a one-shot read. */
+  const [live, setLive] = useState(true);
+  /** The transition in flight, so one click cannot become two requests. */
+  const [moving, setMoving] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -99,9 +108,15 @@ export default function KitchenOrders() {
         else off();
       })
       // A live listener needs an index and permissions; fall back to a plain
-      // read so a missing one degrades to a static list, not an empty one.
-      .catch(() => {
-        if (active) void refresh();
+      // read so a missing one degrades to a static list, not an empty one. The
+      // cause used to be discarded here and `refresh` clears `error` on success,
+      // so a permissions problem was unreportable and the list silently stopped
+      // updating while still looking live.
+      .catch((cause) => {
+        if (!active) return;
+        console.error("The order book could not open a live listener:", cause);
+        setLive(false);
+        void refresh();
       });
 
     return () => {
@@ -174,12 +189,21 @@ export default function KitchenOrders() {
   const total = groups.reduce((n, group) => n + group.orders.length, 0);
 
   async function move(order: Order, status: OrderStatus) {
+    // Without the guard a double-click sent the transition twice, and the second
+    // one lost the race and put a 409 in the error banner.
+    if (moving) return;
+    setMoving(order.id);
     try {
       await setOrderStatus(order, status, user?.uid ?? "");
       show(`Order marked ${ORDER_LABELS[status].label.toLowerCase()}.`);
-      await refresh();
+      // The live listener delivers this change on its own. Re-reading here cost
+      // two hundred document reads per click for a list we already have; only a
+      // board that is no longer live has to ask.
+      if (!live) await refresh();
     } catch (cause) {
       setError(authErrorMessage(cause));
+    } finally {
+      setMoving(null);
     }
   }
 
@@ -238,6 +262,15 @@ export default function KitchenOrders() {
           className="mb-4 rounded-xl border border-tomato-dark/30 bg-tomato-soft/20 px-3 py-2 text-sm font-600 text-tomato-dark"
         >
           {error}
+        </p>
+      )}
+
+      {!live && !error && (
+        <p
+          role="status"
+          className="mb-4 rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-sm font-600 text-charcoal"
+        >
+          This order book is not updating live. Reload to see new orders.
         </p>
       )}
 
@@ -345,8 +378,8 @@ export default function KitchenOrders() {
                             {order.customer.name}
                           </h3>
                           <p className="text-xs text-charcoal-soft">
-                            {order.mealCount} meal
-                            {order.mealCount === 1 ? "" : "s"} ·{" "}
+                            {orderServings(order)} meal
+                            {orderServings(order) === 1 ? "" : "s"} ·{" "}
                             {order.days.length} day
                             {order.days.length === 1 ? "" : "s"} ·{" "}
                             {order.customer.email}
@@ -374,6 +407,7 @@ export default function KitchenOrders() {
                               key={next}
                               size="sm"
                               variant={next === "rejected" ? "danger" : "primary"}
+                              disabled={moving !== null}
                               onClick={() => move(order, next)}
                             >
                               {ORDER_LABELS[next].label}

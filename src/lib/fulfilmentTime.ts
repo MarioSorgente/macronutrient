@@ -11,6 +11,18 @@ export interface ServiceWindow {
 
 const WALL_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
+/**
+ * A well-formed 24-hour wall-clock time.
+ *
+ * The single validator, because there used to be three. The client gate was the
+ * loosest of them (`/^\d{2}:\d{2}$/`, which accepts 99:99), so anything in the
+ * gap passed the submit screen and was then rejected by the server — silently,
+ * as it turned out. Same rule everywhere, or the gap comes back.
+ */
+export function isWallClockTime(value: unknown): value is string {
+  return typeof value === "string" && WALL_TIME.test(value);
+}
+
 function wallClockMinutes(value: string): number | null {
   const match = WALL_TIME.exec(value);
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;

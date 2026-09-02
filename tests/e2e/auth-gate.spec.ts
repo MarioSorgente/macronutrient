@@ -44,7 +44,7 @@ test.describe("the landing page", () => {
     await page.goto("/");
 
     const customer = page.getByRole("link", { name: /plan my meals/i }).first();
-    const staff = page.getByRole("link", { name: /i work at negrita/i }).first();
+    const staff = page.getByRole("link", { name: /for staff/i }).first();
     await expect(customer).toBeVisible();
     await expect(staff).toBeVisible();
     await expect(customer).toHaveAttribute("href", "/signup?intent=customer&next=%2Fplan");
@@ -277,7 +277,7 @@ test.describe("staff onboarding", () => {
     await signOut(page);
 
     await page.goto("/");
-    await page.getByRole("link", { name: /i work at negrita/i }).first().click();
+    await page.getByRole("link", { name: /for staff/i }).first().click();
     await expect(page).toHaveURL(/\/signup\?intent=staff/);
 
     // They already have an account, so they take the Sign in link — which must

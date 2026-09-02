@@ -14,6 +14,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import SignInPrompt from "@/components/SignInPrompt";
 import OrderStatusBadge from "@/components/OrderStatusBadge";
 import MacroChips from "@/components/MacroChips";
+import { orderServings } from "@/lib/orders";
 
 /** The weeks a person has sent to the kitchen, newest first. */
 export default function MyOrders() {
@@ -117,7 +118,7 @@ export default function MyOrders() {
                     Week of {formatBaliDay(order.weekStartDate)}
                   </h2>
                   <p className="text-xs text-charcoal-soft">
-                    {order.mealCount} meal{order.mealCount === 1 ? "" : "s"} ·{" "}
+                    {orderServings(order)} meal{orderServings(order) === 1 ? "" : "s"} ·{" "}
                     {order.days.length} day{order.days.length === 1 ? "" : "s"} ·
                     sent {formatBaliDay(order.submittedAt)}
                   </p>

@@ -27,6 +27,7 @@ import Button from "@/components/ui/Button";
 import OrderStatusBadge, { ORDER_LABELS } from "@/components/OrderStatusBadge";
 import MacroChips from "@/components/MacroChips";
 import { useToast } from "@/components/ui/Toast";
+import { orderServings } from "@/lib/orders";
 
 /**
  * One order, as the kitchen needs to read it.
@@ -166,7 +167,7 @@ export default function KitchenOrderDetail() {
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-charcoal-soft">
             <span>Week of {formatBaliDay(order.weekStartDate)}</span>
             <span>
-              {order.mealCount} meal{order.mealCount === 1 ? "" : "s"} ·{" "}
+              {orderServings(order)} meal{orderServings(order) === 1 ? "" : "s"} ·{" "}
               {days.length} day{days.length === 1 ? "" : "s"}
             </span>
             <span className="font-700 tabular-nums text-charcoal">

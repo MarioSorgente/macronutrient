@@ -234,6 +234,15 @@ export interface OrderMeal {
   /** Recomputed on the server; never taken from the client. */
   totals: Macros;
   priceIdr: number;
+  /**
+   * Whether `priceIdr` covers the whole meal.
+   *
+   * Preview-only, and never written to Firestore: the server refuses an order
+   * containing an unpriced meal, so a stored one is always fully priced. The
+   * submit screen needs the distinction before it quotes a total, because
+   * rendering a confident figure and then being 400ed is the worst of both.
+   */
+  priced?: boolean;
 }
 
 export interface OrderDay {

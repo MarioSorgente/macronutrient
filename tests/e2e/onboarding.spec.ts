@@ -57,7 +57,7 @@ test.describe("the owner", () => {
     await expect(page.getByRole("heading", { name: /hit your macros/i })).toBeVisible();
     // Two named doors, and both of them go through authentication.
     await expect(page.getByRole("link", { name: /plan my meals/i }).first()).toBeVisible();
-    await expect(page.getByRole("link", { name: /i work at negrita/i }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /for staff/i }).first()).toBeVisible();
 
     await onboardOwner(page);
 

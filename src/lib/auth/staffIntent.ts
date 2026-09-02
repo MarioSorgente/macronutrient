@@ -1,6 +1,7 @@
 "use client";
 
 import { callApi, getApi } from "@/lib/api";
+import { takeCredentialSignIn } from "@/lib/auth/signInMark";
 import type { Role, StaffAccessRequest } from "@/lib/storage/types";
 
 /** Where a staff-intent sign-in lands while approval is still outstanding. */
@@ -21,13 +22,21 @@ export const STAFF_DESTINATION = "/kitchen";
 async function reconcile(): Promise<Role | null> {
   try {
     const { role, changed } = await callApi<{ role: Role; changed: boolean }>(
-      "/api/auth/sync"
+      "/api/auth/sync",
+      // Whichever reconciliation runs first claims the sign-in mark, so a staff
+      // sign-in is counted once even though the provider reconciles too.
+      { signIn: takeCredentialSignIn() }
     );
-    if (changed) {
-      // Put the claim on the token before routing, so the guard at the far end
-      // does not deny a role the server has just granted.
-      const { getAuthClient } = await import("@/lib/storage/firebaseAuth");
-      await getAuthClient().currentUser?.getIdToken(true);
+    // Put the claim on the token before routing, so the guard at the far end
+    // does not deny a role the server has just granted -- and so the first
+    // admin-only request from that page is not made with a token that still
+    // says "client". `changed` alone was not enough: it reports what the server
+    // wrote on this call, not what this token carries.
+    const { getAuthClient } = await import("@/lib/storage/firebaseAuth");
+    const user = getAuthClient().currentUser;
+    const onToken = user ? (await user.getIdTokenResult()).claims.role : undefined;
+    if (user && (changed || (onToken ?? null) !== role)) {
+      await user.getIdToken(true);
     }
     return role;
   } catch {

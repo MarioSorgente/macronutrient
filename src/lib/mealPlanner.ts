@@ -1296,7 +1296,7 @@ interface WeekState {
  * the set was terrible. A second beam over the whole week lets a slightly
  * different Monday pay for a much more varied Tuesday through Sunday.
  */
-function solveWeek(pool: DayPlan[], dayCount: number, seed: number): DayPlan[] {
+function solveWeek(pool: readonly DayPlan[], dayCount: number, seed: number): DayPlan[] {
   if (!pool.length) return [];
   let beam: WeekState[] = [{
     picks: [], counts: new Map(), previous: new Set(), cost: 0, pathKey: "",
@@ -1804,22 +1804,63 @@ function materializeDay(
   };
 }
 
-export function generatePlanWithTargets(options: GenerateOptions): GeneratedPlan {
-  const search = prepareDaySearch(options);
-  const pool = buildDayPool(search, options);
-  const week = solveWeek(pool, options.days.length, options.seed ?? 1);
+/**
+ * The seed-independent half of a generation, held so a seed sweep can reuse it.
+ *
+ * `options.seed` is read in exactly one place in this module: the final
+ * tie-break in `solveWeek`. Everything up to and including the day pool is
+ * therefore identical for every seed over one set of options -- and that half is
+ * the expensive one, roughly fifty beam searches. Shuffle used to rebuild all of
+ * it per candidate, twenty-four times, to change which of several equivalent
+ * weeks came back.
+ *
+ * Only valid for the options it was prepared from. The seed may vary; nothing
+ * else may, and `days.length` in particular is baked into the pool.
+ */
+export interface PreparedGeneration {
+  readonly search: DaySearch;
+  readonly pool: readonly DayPlan[];
+}
 
+/** Runs the expensive, seed-independent search once. */
+export function prepareGeneration(options: GenerateOptions): PreparedGeneration {
+  const search = prepareDaySearch(options);
+  return { search, pool: buildDayPool(search, options) };
+}
+
+/** The cheap tail: pick between equivalent weeks, then materialize the winner. */
+export function planFromPrepared(
+  prepared: PreparedGeneration,
+  options: GenerateOptions,
+  seed: number
+): GeneratedPlan {
+  const { search, pool } = prepared;
+  const week = solveWeek(pool, options.days.length, seed);
   const usage = createWeeklyVarietyUsage();
-  const generated = options.days.map((day, index) =>
-    materializeDay(day, week[index], search, usage));
 
   return {
-    days: generated,
+    days: options.days.map((day, index) => materializeDay(day, week[index], search, usage)),
     resolvedTarget: search.target,
     targetSource: search.resolution.source,
     targetStyle: search.resolution.selectedStyle,
     targetExplanation: search.resolution.explanation,
   };
+}
+
+/**
+ * Sweeps seeds over one set of options without repeating the search.
+ *
+ * Handing callers this rather than the raw pool is the point: holding it, you
+ * cannot re-enter the expensive half by accident, which is the mistake the
+ * shuffle loop was making.
+ */
+export function seedSweep(options: GenerateOptions): (seed: number) => GeneratedPlan {
+  const prepared = prepareGeneration(options);
+  return (seed) => planFromPrepared(prepared, options, seed);
+}
+
+export function generatePlanWithTargets(options: GenerateOptions): GeneratedPlan {
+  return planFromPrepared(prepareGeneration(options), options, options.seed ?? 1);
 }
 
 export function generatePlan(options: GenerateOptions): GeneratedDay[] {
